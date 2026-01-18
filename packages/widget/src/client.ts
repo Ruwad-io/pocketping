@@ -1,0 +1,363 @@
+import type {
+  PocketPingConfig,
+  Message,
+  Session,
+  ConnectResponse,
+  SendMessageResponse,
+  PresenceResponse,
+  WebSocketEvent,
+} from './types';
+
+type Listener<T> = (data: T) => void;
+
+export class PocketPingClient {
+  private config: PocketPingConfig;
+  private session: Session | null = null;
+  private ws: WebSocket | null = null;
+  private isOpen = false;
+  private listeners: Map<string, Set<Listener<unknown>>> = new Map();
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(config: PocketPingConfig) {
+    this.config = config;
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Public API
+  // ─────────────────────────────────────────────────────────────────
+
+  async connect(): Promise<Session> {
+    const visitorId = this.getOrCreateVisitorId();
+    const storedSessionId = this.getStoredSessionId();
+
+    const response = await this.fetch<ConnectResponse>('/connect', {
+      method: 'POST',
+      body: JSON.stringify({
+        visitorId,
+        sessionId: storedSessionId,
+        metadata: {
+          url: window.location.href,
+          referrer: document.referrer,
+          userAgent: navigator.userAgent,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          language: navigator.language,
+        },
+      }),
+    });
+
+    this.session = {
+      sessionId: response.sessionId,
+      visitorId: response.visitorId,
+      operatorOnline: response.operatorOnline ?? false,
+      messages: response.messages ?? [],
+    };
+
+    // Store session
+    this.storeSessionId(response.sessionId);
+
+    // Connect WebSocket for real-time updates
+    this.connectWebSocket();
+
+    // Notify
+    this.emit('connect', this.session);
+    this.config.onConnect?.(response.sessionId);
+
+    return this.session;
+  }
+
+  disconnect(): void {
+    this.ws?.close();
+    this.ws = null;
+    this.session = null;
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+    }
+  }
+
+  async sendMessage(content: string): Promise<Message> {
+    if (!this.session) {
+      throw new Error('Not connected');
+    }
+
+    const response = await this.fetch<SendMessageResponse>('/message', {
+      method: 'POST',
+      body: JSON.stringify({
+        sessionId: this.session.sessionId,
+        content,
+        sender: 'visitor',
+      }),
+    });
+
+    const message: Message = {
+      id: response.messageId,
+      sessionId: this.session.sessionId,
+      content,
+      sender: 'visitor',
+      timestamp: response.timestamp,
+    };
+
+    // Add to local state
+    this.session.messages.push(message);
+    this.emit('message', message);
+    this.config.onMessage?.(message);
+
+    return message;
+  }
+
+  async getMessages(after?: string): Promise<Message[]> {
+    if (!this.session) {
+      throw new Error('Not connected');
+    }
+
+    const params = new URLSearchParams({
+      sessionId: this.session.sessionId,
+    });
+    if (after) {
+      params.set('after', after);
+    }
+
+    const response = await this.fetch<{ messages: Message[] }>(
+      `/messages?${params}`,
+      { method: 'GET' }
+    );
+
+    return response.messages;
+  }
+
+  async sendTyping(isTyping = true): Promise<void> {
+    if (!this.session) return;
+
+    await this.fetch('/typing', {
+      method: 'POST',
+      body: JSON.stringify({
+        sessionId: this.session.sessionId,
+        sender: 'visitor',
+        isTyping,
+      }),
+    });
+  }
+
+  async getPresence(): Promise<PresenceResponse> {
+    return this.fetch<PresenceResponse>('/presence', { method: 'GET' });
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // State
+  // ─────────────────────────────────────────────────────────────────
+
+  getSession(): Session | null {
+    return this.session;
+  }
+
+  getMessages(): Message[] {
+    return this.session?.messages ?? [];
+  }
+
+  isConnected(): boolean {
+    return this.session !== null;
+  }
+
+  isWidgetOpen(): boolean {
+    return this.isOpen;
+  }
+
+  setOpen(open: boolean): void {
+    this.isOpen = open;
+    this.emit('openChange', open);
+    if (open) {
+      this.config.onOpen?.();
+    } else {
+      this.config.onClose?.();
+    }
+  }
+
+  toggleOpen(): void {
+    this.setOpen(!this.isOpen);
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Events
+  // ─────────────────────────────────────────────────────────────────
+
+  on<T>(event: string, listener: Listener<T>): () => void {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, new Set());
+    }
+    this.listeners.get(event)!.add(listener as Listener<unknown>);
+
+    return () => {
+      this.listeners.get(event)?.delete(listener as Listener<unknown>);
+    };
+  }
+
+  private emit(event: string, data: unknown): void {
+    this.listeners.get(event)?.forEach((listener) => listener(data));
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // WebSocket
+  // ─────────────────────────────────────────────────────────────────
+
+  private connectWebSocket(): void {
+    if (!this.session) return;
+
+    const wsUrl = this.config.endpoint
+      .replace(/^http/, 'ws')
+      .replace(/\/$/, '') + `/stream?sessionId=${this.session.sessionId}`;
+
+    try {
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.onopen = () => {
+        this.reconnectAttempts = 0;
+        this.emit('wsConnected', null);
+      };
+
+      this.ws.onmessage = (event) => {
+        try {
+          const wsEvent: WebSocketEvent = JSON.parse(event.data);
+          this.handleWebSocketEvent(wsEvent);
+        } catch (err) {
+          console.error('[PocketPing] Failed to parse WS message:', err);
+        }
+      };
+
+      this.ws.onclose = () => {
+        this.emit('wsDisconnected', null);
+        this.scheduleReconnect();
+      };
+
+      this.ws.onerror = (err) => {
+        console.error('[PocketPing] WebSocket error:', err);
+      };
+    } catch (err) {
+      // WebSocket not supported or blocked, fall back to polling
+      console.warn('[PocketPing] WebSocket unavailable, using polling');
+      this.startPolling();
+    }
+  }
+
+  private handleWebSocketEvent(event: WebSocketEvent): void {
+    switch (event.type) {
+      case 'message':
+        const message = event.data as Message;
+        if (this.session) {
+          this.session.messages.push(message);
+        }
+        this.emit('message', message);
+        this.config.onMessage?.(message);
+        break;
+
+      case 'typing':
+        this.emit('typing', event.data);
+        break;
+
+      case 'presence':
+        if (this.session) {
+          this.session.operatorOnline = (event.data as { online: boolean }).online;
+        }
+        this.emit('presence', event.data);
+        break;
+
+      case 'ai_takeover':
+        this.emit('aiTakeover', event.data);
+        break;
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.warn('[PocketPing] Max reconnect attempts reached, switching to polling');
+      this.startPolling();
+      return;
+    }
+
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+    this.reconnectAttempts++;
+
+    this.reconnectTimeout = setTimeout(() => {
+      this.connectWebSocket();
+    }, delay);
+  }
+
+  private startPolling(): void {
+    // Fallback polling implementation
+    const poll = async () => {
+      if (!this.session) return;
+
+      try {
+        const lastMessageId = this.session.messages[this.session.messages.length - 1]?.id;
+        const newMessages = await this.getMessages(lastMessageId);
+
+        for (const message of newMessages) {
+          if (!this.session.messages.find((m) => m.id === message.id)) {
+            this.session.messages.push(message);
+            this.emit('message', message);
+            this.config.onMessage?.(message);
+          }
+        }
+      } catch (err) {
+        console.error('[PocketPing] Polling error:', err);
+      }
+
+      if (this.session) {
+        setTimeout(poll, 3000);
+      }
+    };
+
+    poll();
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // HTTP
+  // ─────────────────────────────────────────────────────────────────
+
+  private async fetch<T>(path: string, options: RequestInit): Promise<T> {
+    const url = this.config.endpoint.replace(/\/$/, '') + path;
+
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`PocketPing API error: ${response.status} ${error}`);
+    }
+
+    return response.json();
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Storage
+  // ─────────────────────────────────────────────────────────────────
+
+  private getOrCreateVisitorId(): string {
+    const key = 'pocketping_visitor_id';
+    let visitorId = localStorage.getItem(key);
+
+    if (!visitorId) {
+      visitorId = this.generateId();
+      localStorage.setItem(key, visitorId);
+    }
+
+    return visitorId;
+  }
+
+  private getStoredSessionId(): string | null {
+    return sessionStorage.getItem('pocketping_session_id');
+  }
+
+  private storeSessionId(sessionId: string): void {
+    sessionStorage.setItem('pocketping_session_id', sessionId);
+  }
+
+  private generateId(): string {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
+  }
+}

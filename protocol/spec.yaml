@@ -1,0 +1,379 @@
+openapi: 3.1.0
+info:
+  title: PocketPing Protocol
+  version: 1.0.0
+  description: |
+    The PocketPing Protocol defines a simple, backend-agnostic interface for
+    real-time customer chat with mobile notifications.
+
+    Implement these endpoints in your backend (any language/framework) to enable
+    PocketPing functionality.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://yoursite.com/pocketping
+    description: Your backend implementation
+
+paths:
+  /connect:
+    post:
+      operationId: connect
+      summary: Initialize a chat session
+      description: |
+        Called when a visitor opens the chat widget. Creates a new session
+        or resumes an existing one based on visitorId.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectRequest'
+      responses:
+        '200':
+          description: Session created/resumed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectResponse'
+
+  /message:
+    post:
+      operationId: sendMessage
+      summary: Send a message
+      description: |
+        Send a message from visitor to operator (or vice versa).
+        This should trigger notifications to configured bridges (Telegram, etc.)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '200':
+          description: Message sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendMessageResponse'
+
+  /messages:
+    get:
+      operationId: getMessages
+      summary: Fetch message history
+      description: Get messages for a session, with optional pagination
+      parameters:
+        - name: sessionId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: after
+          in: query
+          description: Fetch messages after this message ID (for pagination)
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of messages to return
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+      responses:
+        '200':
+          description: Messages retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetMessagesResponse'
+
+  /typing:
+    post:
+      operationId: typing
+      summary: Send typing indicator
+      description: Notify that someone is typing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TypingRequest'
+      responses:
+        '200':
+          description: Typing indicator sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /presence:
+    get:
+      operationId: getPresence
+      summary: Check operator availability
+      description: |
+        Returns whether an operator is currently available.
+        Used by the widget to show "online" status and decide AI fallback.
+      responses:
+        '200':
+          description: Presence status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresenceResponse'
+
+  /stream:
+    get:
+      operationId: stream
+      summary: WebSocket stream for real-time events
+      description: |
+        Optional WebSocket endpoint for real-time updates.
+        If not implemented, the widget will fall back to polling.
+
+        **Events sent from server:**
+        - `message` - New message received
+        - `typing` - Someone is typing
+        - `presence` - Operator came online/offline
+        - `ai_takeover` - AI has taken over the conversation
+      responses:
+        '101':
+          description: Switching to WebSocket protocol
+
+components:
+  schemas:
+    ConnectRequest:
+      type: object
+      required:
+        - visitorId
+      properties:
+        visitorId:
+          type: string
+          description: Unique identifier for the visitor (stored in localStorage)
+        sessionId:
+          type: string
+          description: Previous session ID to resume (optional)
+        metadata:
+          type: object
+          description: Additional visitor info (page URL, user agent, etc.)
+          properties:
+            url:
+              type: string
+            referrer:
+              type: string
+            userAgent:
+              type: string
+            timezone:
+              type: string
+            language:
+              type: string
+
+    ConnectResponse:
+      type: object
+      required:
+        - sessionId
+        - visitorId
+      properties:
+        sessionId:
+          type: string
+        visitorId:
+          type: string
+        operatorOnline:
+          type: boolean
+          description: Whether an operator is currently available
+        welcomeMessage:
+          type: string
+          description: Optional welcome message to display
+        messages:
+          type: array
+          description: Previous messages in this session (if resuming)
+          items:
+            $ref: '#/components/schemas/Message'
+
+    SendMessageRequest:
+      type: object
+      required:
+        - sessionId
+        - content
+        - sender
+      properties:
+        sessionId:
+          type: string
+        content:
+          type: string
+          maxLength: 4000
+        sender:
+          type: string
+          enum: [visitor, operator]
+        replyTo:
+          type: string
+          description: Message ID this is replying to (optional)
+
+    SendMessageResponse:
+      type: object
+      required:
+        - messageId
+        - timestamp
+      properties:
+        messageId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    GetMessagesResponse:
+      type: object
+      required:
+        - messages
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        hasMore:
+          type: boolean
+          description: Whether there are more messages to fetch
+
+    Message:
+      type: object
+      required:
+        - id
+        - sessionId
+        - content
+        - sender
+        - timestamp
+      properties:
+        id:
+          type: string
+        sessionId:
+          type: string
+        content:
+          type: string
+        sender:
+          type: string
+          enum: [visitor, operator, ai]
+        timestamp:
+          type: string
+          format: date-time
+        replyTo:
+          type: string
+        metadata:
+          type: object
+
+    TypingRequest:
+      type: object
+      required:
+        - sessionId
+        - sender
+      properties:
+        sessionId:
+          type: string
+        sender:
+          type: string
+          enum: [visitor, operator]
+        isTyping:
+          type: boolean
+          default: true
+
+    PresenceResponse:
+      type: object
+      properties:
+        online:
+          type: boolean
+          description: Whether any operator is currently online
+        operators:
+          type: array
+          description: List of online operators (optional)
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              avatar:
+                type: string
+        aiEnabled:
+          type: boolean
+          description: Whether AI fallback is configured
+        aiActiveAfter:
+          type: integer
+          description: Seconds of inactivity before AI takes over
+
+    # WebSocket Event Types
+    WebSocketEvent:
+      oneOf:
+        - $ref: '#/components/schemas/MessageEvent'
+        - $ref: '#/components/schemas/TypingEvent'
+        - $ref: '#/components/schemas/PresenceEvent'
+        - $ref: '#/components/schemas/AITakeoverEvent'
+
+    MessageEvent:
+      type: object
+      required:
+        - type
+        - data
+      properties:
+        type:
+          type: string
+          const: message
+        data:
+          $ref: '#/components/schemas/Message'
+
+    TypingEvent:
+      type: object
+      required:
+        - type
+        - data
+      properties:
+        type:
+          type: string
+          const: typing
+        data:
+          type: object
+          properties:
+            sessionId:
+              type: string
+            sender:
+              type: string
+            isTyping:
+              type: boolean
+
+    PresenceEvent:
+      type: object
+      required:
+        - type
+        - data
+      properties:
+        type:
+          type: string
+          const: presence
+        data:
+          type: object
+          properties:
+            online:
+              type: boolean
+            operatorId:
+              type: string
+
+    AITakeoverEvent:
+      type: object
+      required:
+        - type
+        - data
+      properties:
+        type:
+          type: string
+          const: ai_takeover
+        data:
+          type: object
+          properties:
+            sessionId:
+              type: string
+            reason:
+              type: string
+              enum: [timeout, manual, scheduled]

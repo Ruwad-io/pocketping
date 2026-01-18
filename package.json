@@ -1,0 +1,22 @@
+{
+  "name": "pocketping",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "bridges/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev": "npm run dev --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "eslint packages/**/*.ts bridges/**/*.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.2.0"
+  }
+}

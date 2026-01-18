@@ -1,0 +1,41 @@
+{
+  "name": "@pocketping/bridge-telegram",
+  "version": "0.1.0",
+  "description": "Telegram bridge for PocketPing - receive notifications and reply from Telegram",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.64.0"
+  },
+  "devDependencies": {
+    "@types/node-telegram-bot-api": "^0.64.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  },
+  "peerDependencies": {
+    "@pocketping/sdk": "^0.1.0"
+  },
+  "keywords": [
+    "pocketping",
+    "telegram",
+    "bridge",
+    "notifications",
+    "chat"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/pocketping.git",
+    "directory": "bridges/telegram"
+  }
+}
