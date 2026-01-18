@@ -101,19 +101,31 @@ app.use('/pocketping', pp.middleware());
 app.listen(3000);
 ```
 
-**Python Example:**
+**Python/FastAPI Example:**
 ```python
-from flask import Flask
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
 from pocketping import PocketPing
+from pocketping.fastapi import create_router, lifespan_handler
+from pocketping.bridges.telegram import TelegramBridge
+from pocketping.ai import OpenAIProvider
 
-app = Flask(__name__)
 pp = PocketPing(
-    storage='memory',
-    telegram_token='...',
-    telegram_chat_id='...'
+    welcome_message="Hi! How can we help?",
+    ai_provider=OpenAIProvider(api_key="sk-..."),
+    ai_takeover_delay=300,  # AI takes over after 5 min of no response
+    bridges=[
+        TelegramBridge(bot_token="...", chat_ids="..."),
+    ],
 )
 
-app.register_blueprint(pp.blueprint, url_prefix='/pocketping')
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with lifespan_handler(pp):
+        yield
+
+app = FastAPI(lifespan=lifespan)
+app.include_router(create_router(pp), prefix="/pocketping")
 ```
 
 ### 3. Connect Your Telegram (2 minutes)
@@ -154,30 +166,63 @@ interface Message {
 
 | Package | Description | Status |
 |---------|-------------|--------|
-| [@pocketping/widget](./packages/widget) | Embeddable chat widget | 🚧 WIP |
-| [@pocketping/sdk](./packages/sdk-node) | Node.js SDK | 🚧 WIP |
-| [pocketping](./packages/sdk-python) | Python SDK | 🚧 WIP |
-| [telegram-bridge](./bridges/telegram) | Telegram notification bridge | 🚧 WIP |
-| [discord-bridge](./bridges/discord) | Discord notification bridge | 📋 Planned |
+| [@pocketping/widget](./packages/widget) | Embeddable chat widget | ✅ Ready |
+| [@pocketping/sdk](./packages/sdk-node) | Node.js SDK | ✅ Ready |
+| [pocketping](./packages/sdk-python) | Python SDK (FastAPI) | ✅ Ready |
+| [@pocketping/bridge-telegram](./bridges/telegram) | Telegram notifications | ✅ Ready |
+| [@pocketping/bridge-discord](./bridges/discord) | Discord notifications | ✅ Ready |
+| [@pocketping/bridge-slack](./bridges/slack) | Slack notifications | ✅ Ready |
 
 ## Examples
 
 - [Node.js + Express](./examples/node-express)
-- [Python + Flask](./examples/python-flask)
-- [Go + Fiber](./examples/go-fiber)
+- [Python + FastAPI](https://github.com/abonur/pocketping-test-fastapi) (separate repo)
 
 ## Roadmap
 
 - [x] Protocol specification
-- [ ] Widget v1
-- [ ] Node.js SDK
-- [ ] Python SDK
-- [ ] Telegram bridge
-- [ ] Discord bridge
-- [ ] AI fallback (OpenAI, Gemini, Claude)
-- [ ] Presence detection (operator online/offline)
+- [x] Widget v1
+- [x] Node.js SDK
+- [x] Python SDK (FastAPI)
+- [x] Telegram bridge
+- [x] Discord bridge
+- [x] Slack bridge
+- [x] AI fallback (OpenAI, Gemini, Claude)
+- [x] Smart presence detection (auto AI takeover after configurable delay)
 - [ ] Analytics dashboard
 - [ ] Hosted version (optional SaaS)
+
+## Smart Presence Detection
+
+The AI fallback system is intelligent:
+
+```
+Visitor sends message
+        ↓
+    Timer starts
+        ↓
+┌───────────────────────────────────────┐
+│  Operator responds?                   │
+│  ├─ YES → Timer resets, AI inactive   │
+│  └─ NO  → After X seconds...          │
+│           ↓                           │
+│       AI takes over                   │
+│           ↓                           │
+│  Operator can still reply anytime     │
+│  → AI becomes inactive for session    │
+└───────────────────────────────────────┘
+```
+
+Configure with `ai_takeover_delay` (default: 300 seconds = 5 minutes).
+
+## Admin Dashboard
+
+For building an admin interface, see [docs/ADMIN.md](./docs/ADMIN.md).
+
+Options:
+1. **Use bridges** (Telegram/Discord/Slack) - zero UI work needed
+2. **Add admin routes** to your existing backend
+3. **Build a separate dashboard** (React/Vue/etc.)
 
 ## Philosophy
 

@@ -17,3 +17,9 @@ export interface AIProvider {
   /** Check if the provider is available */
   isAvailable(): Promise<boolean>;
 }
+
+export interface AIConfig {
+  provider: AIProvider;
+  systemPrompt?: string;
+  fallbackAfter?: number; // seconds before AI takes over
+}
