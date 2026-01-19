@@ -62,7 +62,7 @@ export function toggle(): void {
   client?.toggleOpen();
 }
 
-export function sendMessage(content: string): Promise<void> {
+export function sendMessage(content: string): Promise<Message> {
   if (!client) {
     throw new Error('[PocketPing] Not initialized');
   }

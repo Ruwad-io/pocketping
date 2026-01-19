@@ -1,6 +1,7 @@
 import type {
   PocketPingConfig,
   Message,
+  MessageStatus,
   Session,
   ConnectResponse,
   SendMessageResponse,
@@ -108,7 +109,7 @@ export class PocketPingClient {
     return message;
   }
 
-  async getMessages(after?: string): Promise<Message[]> {
+  async fetchMessages(after?: string): Promise<Message[]> {
     if (!this.session) {
       throw new Error('Not connected');
     }
@@ -139,6 +140,37 @@ export class PocketPingClient {
         isTyping,
       }),
     });
+  }
+
+  async sendReadStatus(messageIds: string[], status: MessageStatus): Promise<void> {
+    if (!this.session || messageIds.length === 0) return;
+
+    try {
+      await this.fetch('/read', {
+        method: 'POST',
+        body: JSON.stringify({
+          sessionId: this.session.sessionId,
+          messageIds,
+          status,
+        }),
+      });
+
+      // Update local message status
+      for (const msg of this.session.messages) {
+        if (messageIds.includes(msg.id)) {
+          msg.status = status;
+          if (status === 'delivered') {
+            msg.deliveredAt = new Date().toISOString();
+          } else if (status === 'read') {
+            msg.readAt = new Date().toISOString();
+          }
+        }
+      }
+
+      this.emit('readStatusSent', { messageIds, status });
+    } catch (err) {
+      console.error('[PocketPing] Failed to send read status:', err);
+    }
   }
 
   async getPresence(): Promise<PresenceResponse> {
@@ -266,6 +298,20 @@ export class PocketPingClient {
       case 'ai_takeover':
         this.emit('aiTakeover', event.data);
         break;
+
+      case 'read':
+        const readData = event.data as { messageIds: string[]; status: MessageStatus; readAt?: string; deliveredAt?: string };
+        if (this.session) {
+          for (const msg of this.session.messages) {
+            if (readData.messageIds.includes(msg.id)) {
+              msg.status = readData.status;
+              if (readData.deliveredAt) msg.deliveredAt = readData.deliveredAt;
+              if (readData.readAt) msg.readAt = readData.readAt;
+            }
+          }
+        }
+        this.emit('read', readData);
+        break;
     }
   }
 
@@ -291,7 +337,7 @@ export class PocketPingClient {
 
       try {
         const lastMessageId = this.session.messages[this.session.messages.length - 1]?.id;
-        const newMessages = await this.getMessages(lastMessageId);
+        const newMessages = await this.fetchMessages(lastMessageId);
 
         for (const message of newMessages) {
           if (!this.session.messages.find((m) => m.id === message.id)) {

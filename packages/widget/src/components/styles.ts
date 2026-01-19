@@ -225,6 +225,30 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       font-weight: 600;
     }
 
+    .pp-status {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 4px;
+    }
+
+    .pp-status svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .pp-check,
+    .pp-check-double {
+      stroke: rgba(255, 255, 255, 0.7);
+    }
+
+    .pp-check-read {
+      stroke: #34b7f1;
+    }
+
+    .pp-status-sending .pp-check {
+      opacity: 0.5;
+    }
+
     .pp-typing {
       display: flex;
       gap: 4px;
