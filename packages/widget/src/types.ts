@@ -110,6 +110,8 @@ export interface PocketPingConfig {
   onError?: (error: Error) => void;
 }
 
+export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
+
 export interface Message {
   id: string;
   sessionId: string;
@@ -118,6 +120,11 @@ export interface Message {
   timestamp: string;
   replyTo?: string;
   metadata?: Record<string, unknown>;
+
+  // Read receipt fields
+  status?: MessageStatus;
+  deliveredAt?: string;
+  readAt?: string;
 }
 
 export interface Session {
@@ -151,7 +158,7 @@ export interface PresenceResponse {
   aiActiveAfter?: number;
 }
 
-export type WebSocketEventType = 'message' | 'typing' | 'presence' | 'ai_takeover';
+export type WebSocketEventType = 'message' | 'typing' | 'presence' | 'ai_takeover' | 'read';
 
 export interface WebSocketEvent {
   type: WebSocketEventType;

@@ -36,6 +36,7 @@ export interface Session {
 }
 
 export type SenderType = "visitor" | "operator" | "ai";
+export type MessageStatus = "sending" | "sent" | "delivered" | "read";
 
 export interface Message {
   id: string;
@@ -44,6 +45,11 @@ export interface Message {
   sender: SenderType;
   timestamp: Date;
   replyTo?: string;
+
+  // Read receipt fields
+  status?: MessageStatus;
+  deliveredAt?: Date;
+  readAt?: Date;
 }
 
 // Events sent TO the Bridge Server (from backends)
@@ -69,11 +75,21 @@ export interface OperatorStatusEvent {
   online: boolean;
 }
 
+export interface MessageReadEvent {
+  type: "message_read";
+  sessionId: string;
+  messageIds: string[];
+  status: MessageStatus;
+  readAt?: Date;
+  deliveredAt?: Date;
+}
+
 export type IncomingEvent =
   | NewSessionEvent
   | VisitorMessageEvent
   | AITakeoverEvent
-  | OperatorStatusEvent;
+  | OperatorStatusEvent
+  | MessageReadEvent;
 
 // Events sent FROM the Bridge Server (to backends)
 export interface OperatorMessageEvent {

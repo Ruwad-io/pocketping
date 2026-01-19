@@ -13,6 +13,13 @@ class Sender(str, Enum):
     AI = "ai"
 
 
+class MessageStatus(str, Enum):
+    SENDING = "sending"
+    SENT = "sent"
+    DELIVERED = "delivered"
+    READ = "read"
+
+
 class SessionMetadata(BaseModel):
     """Metadata about the visitor's session."""
 
@@ -66,6 +73,11 @@ class Message(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     reply_to: Optional[str] = Field(None, alias="replyTo")
     metadata: Optional[dict[str, Any]] = None
+
+    # Read receipt fields
+    status: MessageStatus = Field(MessageStatus.SENT)
+    delivered_at: Optional[datetime] = Field(None, alias="deliveredAt")
+    read_at: Optional[datetime] = Field(None, alias="readAt")
 
     class Config:
         populate_by_name = True
@@ -126,6 +138,26 @@ class TypingRequest(BaseModel):
     session_id: str = Field(alias="sessionId")
     sender: Sender
     is_typing: bool = Field(True, alias="isTyping")
+
+    class Config:
+        populate_by_name = True
+
+
+class ReadRequest(BaseModel):
+    """Request to mark messages as read/delivered."""
+
+    session_id: str = Field(alias="sessionId")
+    message_ids: list[str] = Field(alias="messageIds")
+    status: MessageStatus = Field(MessageStatus.READ)
+
+    class Config:
+        populate_by_name = True
+
+
+class ReadResponse(BaseModel):
+    """Response after marking messages as read."""
+
+    updated: int  # Number of messages updated
 
     class Config:
         populate_by_name = True

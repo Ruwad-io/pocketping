@@ -94,6 +94,10 @@ class TelegramBridge(Bridge):
         self._session_message_map: dict[str, int] = {}
         self._message_session_map: dict[int, str] = {}
 
+        # Read receipts: track operator message reactions
+        # pocketping_message_id -> (chat_id, telegram_message_id)
+        self._operator_message_map: dict[str, tuple[int, int]] = {}
+
     @property
     def name(self) -> str:
         return "telegram"
@@ -268,7 +272,7 @@ class TelegramBridge(Bridge):
         operator_name = user.first_name if user else "Operator"
 
         try:
-            await self._pocketping.send_operator_message(
+            message = await self._pocketping.send_operator_message(
                 session_id,
                 text,
                 source_bridge=self.name,
@@ -276,7 +280,12 @@ class TelegramBridge(Bridge):
             )
             self._pocketping.set_operator_online(True)
 
-            # React with checkmark instead of sending a message
+            # Track message for read receipts
+            chat_id = int(self.forum_chat_id)
+            telegram_msg_id = update.message.message_id
+            self._operator_message_map[message.id] = (chat_id, telegram_msg_id)
+
+            # React with single checkmark (sent)
             try:
                 await update.message.set_reaction("✅")
             except Exception:
@@ -298,14 +307,21 @@ class TelegramBridge(Bridge):
             operator_name = user.first_name if user else "Operator"
 
             try:
-                await self._pocketping.send_operator_message(
+                message = await self._pocketping.send_operator_message(
                     session_id,
                     update.message.text,
                     source_bridge=self.name,
                     operator_name=operator_name,
                 )
                 self._pocketping.set_operator_online(True)
-                await update.message.reply_text("✓ Message sent")
+
+                # Track message for read receipts
+                chat_id = int(self.chat_ids[0]) if self.chat_ids else 0
+                telegram_msg_id = update.message.message_id
+                if chat_id:
+                    self._operator_message_map[message.id] = (chat_id, telegram_msg_id)
+
+                await update.message.reply_text("✅ Sent")
             except Exception as e:
                 await update.message.reply_text(f"❌ Failed: {e}")
 
@@ -355,17 +371,21 @@ class TelegramBridge(Bridge):
                 text += f"📍 Page: {session.metadata.url}\n"
 
             if self.show_metadata and session.metadata:
-                if session.metadata.referrer:
-                    text += f"↩️ From: {session.metadata.referrer}\n"
-                if session.metadata.timezone:
-                    text += f"🕐 Timezone: {session.metadata.timezone}\n"
-                if session.metadata.user_agent:
-                    # Parse user agent for readable info
-                    ua = session.metadata.user_agent
-                    if "Mobile" in ua:
-                        text += "📱 Device: Mobile\n"
-                    else:
-                        text += "💻 Device: Desktop\n"
+                meta = session.metadata
+                if meta.referrer:
+                    text += f"↩️ From: {meta.referrer}\n"
+                if meta.ip:
+                    text += f"🌐 IP: `{meta.ip}`\n"
+                if meta.device_type or meta.browser or meta.os:
+                    device_icon = "📱" if meta.device_type == "mobile" else "📱" if meta.device_type == "tablet" else "💻"
+                    device_parts = [p for p in [meta.device_type, meta.browser, meta.os] if p]
+                    text += f"{device_icon} Device: {' • '.join(p.title() if p == meta.device_type else p for p in device_parts)}\n"
+                if meta.language:
+                    text += f"🌍 Language: {meta.language}\n"
+                if meta.timezone:
+                    text += f"🕐 Timezone: {meta.timezone}\n"
+                if meta.screen_resolution:
+                    text += f"🖥️ Screen: {meta.screen_resolution}\n"
 
             text += f"\n_Session ID: `{session.id}`_\n"
             text += "\n💡 *Just type here to reply - no need to swipe-reply!*"
@@ -389,10 +409,17 @@ class TelegramBridge(Bridge):
         text = f"🆕 *New Visitor*\n\nSession: `{session.id[:8]}...`"
 
         if self.show_url and session.metadata and session.metadata.url:
-            text += f"\nPage: {session.metadata.url}"
+            text += f"\n📍 Page: {session.metadata.url}"
 
-        if session.metadata and session.metadata.referrer:
-            text += f"\nFrom: {session.metadata.referrer}"
+        if self.show_metadata and session.metadata:
+            meta = session.metadata
+            if meta.referrer:
+                text += f"\n↩️ From: {meta.referrer}"
+            if meta.ip:
+                text += f"\n🌐 IP: `{meta.ip}`"
+            if meta.device_type or meta.browser or meta.os:
+                device_parts = [p for p in [meta.device_type, meta.browser, meta.os] if p]
+                text += f"\n💻 Device: {' • '.join(p.title() if p == meta.device_type else p for p in device_parts)}"
 
         text += "\n\n_Reply to any message from this user to respond._"
 
@@ -507,6 +534,54 @@ class TelegramBridge(Bridge):
                     text=text,
                     parse_mode="Markdown",
                 )
+
+    async def on_message_read(
+        self,
+        session_id: str,
+        message_ids: list[str],
+        status: str,
+        session: Session,
+    ) -> None:
+        """Update message reactions based on read receipt status.
+
+        Status indicators:
+        - ✅ = sent (default)
+        - ☑️ = delivered to widget
+        - 👁️ = read by visitor
+        """
+        if not self._app:
+            return
+
+        # Map status to reaction emoji
+        status_reactions = {
+            "delivered": "☑️",  # Double check
+            "read": "👁️",       # Eye = seen
+        }
+
+        reaction = status_reactions.get(status)
+        if not reaction:
+            return
+
+        for message_id in message_ids:
+            mapping = self._operator_message_map.get(message_id)
+            if not mapping:
+                continue
+
+            chat_id, telegram_msg_id = mapping
+
+            try:
+                await self._app.bot.set_message_reaction(
+                    chat_id=chat_id,
+                    message_id=telegram_msg_id,
+                    reaction=[{"type": "emoji", "emoji": reaction}],
+                )
+            except Exception:
+                # Reaction update may fail (old messages, permissions, etc.)
+                pass
+
+            # Clean up read messages from tracking (optional memory optimization)
+            if status == "read":
+                self._operator_message_map.pop(message_id, None)
 
     async def destroy(self) -> None:
         if self._app:

@@ -91,6 +91,10 @@ class DiscordBridge(Bridge):
         self._session_message_map: dict[str, int] = {}
         self._message_session_map: dict[int, str] = {}
 
+        # Read receipts: track operator message IDs
+        # pocketping_message_id -> (channel_id, discord_message_id)
+        self._operator_message_map: dict[str, tuple[int, int]] = {}
+
     @property
     def name(self) -> str:
         return "discord"
@@ -285,13 +289,17 @@ class DiscordBridge(Bridge):
         operator_name = message.author.display_name if message.author else "Operator"
 
         try:
-            await self._pocketping.send_operator_message(
+            pp_message = await self._pocketping.send_operator_message(
                 session_id,
                 message.content,
                 source_bridge=self.name,
                 operator_name=operator_name,
             )
             self._pocketping.set_operator_online(True)
+
+            # Track message for read receipts
+            self._operator_message_map[pp_message.id] = (message.channel.id, message.id)
+
             await message.add_reaction("✅")
         except Exception as e:
             await message.reply(f"❌ Failed to send: {e}")
@@ -312,13 +320,17 @@ class DiscordBridge(Bridge):
         operator_name = message.author.display_name if message.author else "Operator"
 
         try:
-            await self._pocketping.send_operator_message(
+            pp_message = await self._pocketping.send_operator_message(
                 session_id,
                 message.content,
                 source_bridge=self.name,
                 operator_name=operator_name,
             )
             self._pocketping.set_operator_online(True)
+
+            # Track message for read receipts
+            self._operator_message_map[pp_message.id] = (message.channel.id, message.id)
+
             await message.add_reaction("✅")
         except Exception as e:
             await message.reply(f"❌ Failed: {e}")
@@ -360,14 +372,21 @@ class DiscordBridge(Bridge):
             description += f"📍 **Page:** {session.metadata.url}\n"
 
         if self.show_metadata and session.metadata:
-            if session.metadata.referrer:
-                description += f"↩️ **From:** {session.metadata.referrer}\n"
-            if session.metadata.timezone:
-                description += f"🕐 **Timezone:** {session.metadata.timezone}\n"
-            if session.metadata.user_agent:
-                ua = session.metadata.user_agent
-                device = "📱 Mobile" if "Mobile" in ua else "💻 Desktop"
-                description += f"**Device:** {device}\n"
+            meta = session.metadata
+            if meta.referrer:
+                description += f"↩️ **From:** {meta.referrer}\n"
+            if meta.ip:
+                description += f"🌐 **IP:** `{meta.ip}`\n"
+            if meta.device_type or meta.browser or meta.os:
+                device_icon = "📱" if meta.device_type in ("mobile", "tablet") else "💻"
+                device_parts = [p for p in [meta.device_type, meta.browser, meta.os] if p]
+                description += f"{device_icon} **Device:** {' • '.join(p.title() if p == meta.device_type else p for p in device_parts)}\n"
+            if meta.language:
+                description += f"🌍 **Language:** {meta.language}\n"
+            if meta.timezone:
+                description += f"🕐 **Timezone:** {meta.timezone}\n"
+            if meta.screen_resolution:
+                description += f"🖥️ **Screen:** {meta.screen_resolution}\n"
 
         description += f"\n*Session ID: `{session.id}`*"
         description += "\n\n💡 **Just type here to reply!**"
@@ -410,10 +429,17 @@ class DiscordBridge(Bridge):
         description = f"Session: `{session.id[:8]}...`"
 
         if self.show_url and session.metadata and session.metadata.url:
-            description += f"\nPage: {session.metadata.url}"
+            description += f"\n📍 Page: {session.metadata.url}"
 
-        if session.metadata and session.metadata.referrer:
-            description += f"\nFrom: {session.metadata.referrer}"
+        if self.show_metadata and session.metadata:
+            meta = session.metadata
+            if meta.referrer:
+                description += f"\n↩️ From: {meta.referrer}"
+            if meta.ip:
+                description += f"\n🌐 IP: `{meta.ip}`"
+            if meta.device_type or meta.browser or meta.os:
+                device_parts = [p for p in [meta.device_type, meta.browser, meta.os] if p]
+                description += f"\n💻 Device: {' • '.join(p.title() if p == meta.device_type else p for p in device_parts)}"
 
         embed = discord.Embed(
             title="🆕 New Visitor",
@@ -548,6 +574,59 @@ class DiscordBridge(Bridge):
                     return
 
         await self._channel.send(embed=embed)
+
+    async def on_message_read(
+        self,
+        session_id: str,
+        message_ids: list[str],
+        status: str,
+        session: Session,
+    ) -> None:
+        """Update message reactions based on read receipt status.
+
+        Status indicators:
+        - ✅ = sent (default)
+        - ☑️ = delivered to widget
+        - 👁️ = read by visitor
+        """
+        if not self._client:
+            return
+
+        # Map status to reaction emoji
+        status_reactions = {
+            "delivered": "☑️",
+            "read": "👁️",
+        }
+
+        reaction = status_reactions.get(status)
+        if not reaction:
+            return
+
+        for message_id in message_ids:
+            mapping = self._operator_message_map.get(message_id)
+            if not mapping:
+                continue
+
+            channel_id, discord_msg_id = mapping
+
+            try:
+                channel = self._client.get_channel(channel_id)
+                if channel:
+                    msg = await channel.fetch_message(discord_msg_id)
+                    if msg:
+                        # Remove old reaction and add new one
+                        try:
+                            await msg.remove_reaction("✅", self._client.user)
+                        except Exception:
+                            pass
+                        await msg.add_reaction(reaction)
+            except Exception:
+                # Message may be deleted or channel inaccessible
+                pass
+
+            # Clean up read messages from tracking
+            if status == "read":
+                self._operator_message_map.pop(message_id, None)
 
     async def destroy(self) -> None:
         if self._client:

@@ -227,6 +227,68 @@ class PocketPing:
             ai_active_after=self.ai_takeover_delay,
         )
 
+    async def handle_read(self, request: "ReadRequest") -> "ReadResponse":
+        """Handle message read/delivered status update."""
+        from pocketping.models import ReadRequest, ReadResponse, MessageStatus
+        from datetime import datetime
+
+        updated = 0
+        now = datetime.utcnow()
+
+        for message_id in request.message_ids:
+            message = await self.storage.get_message(message_id)
+            if message and message.session_id == request.session_id:
+                # Update status
+                message.status = request.status
+                if request.status == MessageStatus.DELIVERED:
+                    message.delivered_at = now
+                elif request.status == MessageStatus.READ:
+                    message.delivered_at = message.delivered_at or now
+                    message.read_at = now
+
+                await self.storage.save_message(message)
+                updated += 1
+
+        # Broadcast read event to WebSocket clients and bridges
+        if updated > 0:
+            await self._broadcast_to_session(
+                request.session_id,
+                WebSocketEvent(
+                    type="read",
+                    data={
+                        "sessionId": request.session_id,
+                        "messageIds": request.message_ids,
+                        "status": request.status.value,
+                    },
+                ),
+            )
+
+            # Notify bridges about read status
+            session = await self.storage.get_session(request.session_id)
+            if session:
+                await self._notify_bridges_read(
+                    request.session_id, request.message_ids, request.status, session
+                )
+
+        return ReadResponse(updated=updated)
+
+    async def _notify_bridges_read(
+        self,
+        session_id: str,
+        message_ids: list[str],
+        status: "MessageStatus",
+        session: "Session",
+    ) -> None:
+        """Notify all bridges about message read status."""
+        from pocketping.models import MessageStatus
+
+        for bridge in self.bridges:
+            if hasattr(bridge, "on_message_read"):
+                try:
+                    await bridge.on_message_read(session_id, message_ids, status, session)
+                except Exception as e:
+                    print(f"[PocketPing] Error notifying {bridge.name} of read status: {e}")
+
     # ─────────────────────────────────────────────────────────────────
     # Operator Actions
     # ─────────────────────────────────────────────────────────────────

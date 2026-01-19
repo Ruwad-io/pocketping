@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from pocketping.core import PocketPing
 from pocketping.models import (
     ConnectRequest,
+    ReadRequest,
     SendMessageRequest,
     SessionMetadata,
     TypingRequest,
@@ -140,6 +141,12 @@ def create_router(pp: PocketPing, prefix: str = "") -> APIRouter:
     async def typing(request: TypingRequest):
         """Send typing indicator."""
         return await pp.handle_typing(request)
+
+    @router.post("/read")
+    async def read(request: ReadRequest):
+        """Mark messages as read/delivered."""
+        response = await pp.handle_read(request)
+        return response.model_dump(by_alias=True)
 
     @router.get("/presence")
     async def presence():

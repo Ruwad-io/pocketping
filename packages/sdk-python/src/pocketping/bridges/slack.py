@@ -54,6 +54,10 @@ class SlackBridge(Bridge):
         self._session_thread_map: dict[str, str] = {}  # session_id -> thread_ts
         self._thread_session_map: dict[str, str] = {}  # thread_ts -> session_id
 
+        # Read receipts: track operator message reactions
+        # pocketping_message_id -> (channel_id, message_ts)
+        self._operator_message_map: dict[str, tuple[str, str]] = {}
+
     @property
     def name(self) -> str:
         return "slack"
@@ -152,7 +156,7 @@ class SlackBridge(Bridge):
                 pass
 
         try:
-            await self._pocketping.send_operator_message(
+            pp_message = await self._pocketping.send_operator_message(
                 session_id,
                 text,
                 source_bridge=self.name,
@@ -160,11 +164,16 @@ class SlackBridge(Bridge):
             )
             self._pocketping.set_operator_online(True)
 
-            # React to confirm
+            # Track message for read receipts
+            msg_ts = event.get("ts")
+            if msg_ts:
+                self._operator_message_map[pp_message.id] = (self.channel_id, msg_ts)
+
+            # React to confirm (sent)
             await self._client.reactions_add(
                 channel=self.channel_id,
                 name="white_check_mark",
-                timestamp=event.get("ts"),
+                timestamp=msg_ts,
             )
         except Exception as e:
             await self._client.chat_postMessage(
@@ -219,14 +228,38 @@ class SlackBridge(Bridge):
         if self.show_url and session.metadata and session.metadata.url:
             fields.append({
                 "type": "mrkdwn",
-                "text": f"*Page*\n{session.metadata.url}",
+                "text": f"*📍 Page*\n{session.metadata.url}",
             })
 
-        if session.metadata and session.metadata.referrer:
-            fields.append({
-                "type": "mrkdwn",
-                "text": f"*From*\n{session.metadata.referrer}",
-            })
+        if self.show_metadata and session.metadata:
+            meta = session.metadata
+            if meta.referrer:
+                fields.append({
+                    "type": "mrkdwn",
+                    "text": f"*↩️ From*\n{meta.referrer}",
+                })
+            if meta.ip:
+                fields.append({
+                    "type": "mrkdwn",
+                    "text": f"*🌐 IP*\n`{meta.ip}`",
+                })
+            if meta.device_type or meta.browser or meta.os:
+                device_parts = [p for p in [meta.device_type, meta.browser, meta.os] if p]
+                device_str = " • ".join(p.title() if p == meta.device_type else p for p in device_parts)
+                fields.append({
+                    "type": "mrkdwn",
+                    "text": f"*💻 Device*\n{device_str}",
+                })
+            if meta.language:
+                fields.append({
+                    "type": "mrkdwn",
+                    "text": f"*🌍 Language*\n{meta.language}",
+                })
+            if meta.timezone:
+                fields.append({
+                    "type": "mrkdwn",
+                    "text": f"*🕐 Timezone*\n{meta.timezone}",
+                })
 
         result = await self._client.chat_postMessage(
             channel=self.channel_id,
@@ -363,6 +396,65 @@ class SlackBridge(Bridge):
                 },
             ],
         )
+
+    async def on_message_read(
+        self,
+        session_id: str,
+        message_ids: list[str],
+        status: str,
+        session: Session,
+    ) -> None:
+        """Update message reactions based on read receipt status.
+
+        Status indicators:
+        - ✅ (white_check_mark) = sent (default)
+        - ☑️ (ballot_box_with_check) = delivered to widget
+        - 👁️ (eyes) = read by visitor
+        """
+        if not self._client:
+            return
+
+        # Map status to Slack reaction names
+        status_reactions = {
+            "delivered": "ballot_box_with_check",
+            "read": "eyes",
+        }
+
+        reaction = status_reactions.get(status)
+        if not reaction:
+            return
+
+        for message_id in message_ids:
+            mapping = self._operator_message_map.get(message_id)
+            if not mapping:
+                continue
+
+            channel_id, msg_ts = mapping
+
+            try:
+                # Remove old reaction
+                try:
+                    await self._client.reactions_remove(
+                        channel=channel_id,
+                        name="white_check_mark",
+                        timestamp=msg_ts,
+                    )
+                except Exception:
+                    pass  # Reaction may already be removed
+
+                # Add new reaction
+                await self._client.reactions_add(
+                    channel=channel_id,
+                    name=reaction,
+                    timestamp=msg_ts,
+                )
+            except Exception:
+                # Reaction update may fail (permissions, message deleted, etc.)
+                pass
+
+            # Clean up read messages from tracking
+            if status == "read":
+                self._operator_message_map.pop(message_id, None)
 
     async def destroy(self) -> None:
         if self._socket_client:

@@ -69,6 +69,8 @@ export interface SessionMetadata {
   [key: string]: unknown;
 }
 
+export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
+
 export interface Message {
   id: string;
   sessionId: string;
@@ -77,6 +79,11 @@ export interface Message {
   timestamp: Date;
   replyTo?: string;
   metadata?: Record<string, unknown>;
+
+  // Read receipt fields
+  status?: MessageStatus;
+  deliveredAt?: Date;
+  readAt?: Date;
 }
 
 // Request/Response types
@@ -122,6 +129,16 @@ export interface TypingRequest {
   sessionId: string;
   sender: 'visitor' | 'operator';
   isTyping?: boolean;
+}
+
+export interface ReadRequest {
+  sessionId: string;
+  messageIds: string[];
+  status?: MessageStatus;
+}
+
+export interface ReadResponse {
+  updated: number;
 }
 
 export interface PresenceResponse {

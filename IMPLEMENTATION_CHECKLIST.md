@@ -119,14 +119,61 @@ All SDKs must implement these HTTP endpoints:
 | GET | `/messages` | Get message history |
 | POST | `/typing` | Send typing indicator |
 | GET | `/presence` | Get operator status |
+| POST | `/read` | Mark messages as read |
 | WS | `/stream` | Real-time events (optional) |
 
 ### Implementation Status
 
-| Component | /connect | /message | /messages | /typing | /presence | /stream |
-|-----------|----------|----------|-----------|---------|-----------|---------|
-| SDK Python | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| SDK Node | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Component | /connect | /message | /messages | /typing | /presence | /read | /stream |
+|-----------|----------|----------|-----------|---------|-----------|-------|---------|
+| SDK Python | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SDK Node | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ | ✅ |
+
+---
+
+## Read Receipts
+
+Message delivery and read status tracking:
+
+| Status | Value | Description | Icon |
+|--------|-------|-------------|------|
+| Sending | `sending` | Message being sent to server | ⏳ |
+| Sent | `sent` | Message saved on server | ✓ |
+| Delivered | `delivered` | Message received by widget | ✓✓ |
+| Read | `read` | Message viewed by recipient | 👁️ |
+
+### Message Type
+
+```typescript
+interface Message {
+  id: string;
+  sessionId: string;
+  content: string;
+  sender: 'visitor' | 'operator' | 'ai';
+  timestamp: Date;
+  status?: 'sending' | 'sent' | 'delivered' | 'read';
+  readAt?: Date;
+  deliveredAt?: Date;
+}
+```
+
+### Flow
+
+1. **Visitor sends message**: status = `sent` after server saves
+2. **Operator sends message**: status = `sent`, then widget sends `delivered` event
+3. **Widget visible + focused**: widget sends `read` event for unread messages
+4. **Bridges update**: reaction/message updated to reflect status
+
+### Implementation Status
+
+| Component | Message.status | /read endpoint | Send delivered | Send read | Display status |
+|-----------|----------------|----------------|----------------|-----------|----------------|
+| SDK Python | ✅ | ✅ | N/A | N/A | N/A |
+| SDK Node | ✅ | ⬜ | N/A | N/A | N/A |
+| Widget | ✅ | N/A | ⬜ | ⬜ | ⬜ |
+| Telegram | N/A | N/A | N/A | N/A | ✅ |
+| Discord | N/A | N/A | N/A | N/A | ✅ |
+| Slack | N/A | N/A | N/A | N/A | ✅ |
 
 ---
 
@@ -150,6 +197,33 @@ All SDKs must implement these HTTP endpoints:
 | Discord (Legacy) | ✅ | ⬜ | ✅ |
 | Slack | ✅ | ⬜ | ✅ |
 | Cross-bridge sync | ✅ | ⬜ | ✅ |
+
+---
+
+## Notification Display Fields
+
+All bridges must display these fields in "New Conversation" notifications:
+
+| Field | Icon | Format | Example |
+|-------|------|--------|---------|
+| `url` | 📍 | Page URL | `http://localhost:8000/pricing` |
+| `referrer` | ↩️ | From URL | `https://google.com` |
+| `ip` | 🌐 | IP address (monospace) | `127.0.0.1` |
+| `deviceType` + `browser` + `os` | 💻/📱 | Combined | `Desktop • Chrome • macOS` |
+| `language` | 🌍 | Language code | `fr-FR` |
+| `timezone` | 🕐 | Timezone | `Europe/Paris` |
+| `screenResolution` | 🖥️ | Resolution | `1920x1080` |
+
+### Implementation Status
+
+| Bridge | url | ip | device/browser/os | language | timezone | screen |
+|--------|-----|----|--------------------|----------|----------|--------|
+| Telegram (Forum) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Telegram (Legacy) | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ |
+| Discord (Threads) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Discord (Legacy) | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ |
+| Slack | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
+| Bridge Server | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ---
 
