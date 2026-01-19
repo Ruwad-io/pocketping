@@ -213,8 +213,21 @@ class PocketPing:
     # Operator Actions
     # ─────────────────────────────────────────────────────────────────
 
-    async def send_operator_message(self, session_id: str, content: str) -> Message:
-        """Send a message as the operator."""
+    async def send_operator_message(
+        self,
+        session_id: str,
+        content: str,
+        source_bridge: str | None = None,
+        operator_name: str | None = None,
+    ) -> Message:
+        """Send a message as the operator.
+
+        Args:
+            session_id: The session to send to
+            content: Message content
+            source_bridge: Name of the bridge that originated this message (for sync)
+            operator_name: Name of the operator who sent the message
+        """
         response = await self.handle_message(
             SendMessageRequest(
                 session_id=session_id,
@@ -223,13 +236,22 @@ class PocketPing:
             )
         )
 
-        return Message(
+        message = Message(
             id=response.message_id,
             session_id=session_id,
             content=content,
             sender=Sender.OPERATOR,
             timestamp=response.timestamp,
         )
+
+        # Notify all bridges about this operator message (for cross-bridge sync)
+        session = await self.storage.get_session(session_id)
+        if session:
+            await self._notify_bridges_operator_message(
+                message, session, source_bridge or "api", operator_name
+            )
+
+        return message
 
     def set_operator_online(self, online: bool) -> None:
         """Set operator online/offline status."""
@@ -416,12 +438,28 @@ class PocketPing:
                 print(f"[PocketPing] Bridge {bridge.name} error: {e}")
 
     async def _notify_bridges_message(self, message: Message, session: Session) -> None:
-        """Notify all bridges about a new message."""
+        """Notify all bridges about a new visitor message."""
         for bridge in self.bridges:
             try:
                 await bridge.on_message(message, session)
             except Exception as e:
                 print(f"[PocketPing] Bridge {bridge.name} error: {e}")
+
+    async def _notify_bridges_operator_message(
+        self,
+        message: Message,
+        session: Session,
+        source_bridge: str,
+        operator_name: str | None = None,
+    ) -> None:
+        """Notify all bridges about an operator message (for cross-bridge sync)."""
+        for bridge in self.bridges:
+            try:
+                await bridge.on_operator_message(
+                    message, session, source_bridge, operator_name
+                )
+            except Exception as e:
+                print(f"[PocketPing] Bridge {bridge.name} sync error: {e}")
 
     # ─────────────────────────────────────────────────────────────────
     # Utilities

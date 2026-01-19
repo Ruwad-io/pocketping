@@ -37,6 +37,26 @@ class Bridge(ABC):
         """Called when AI takes over a conversation."""
         pass
 
+    async def on_operator_message(
+        self,
+        message: "Message",
+        session: "Session",
+        source_bridge: str,
+        operator_name: str | None = None,
+    ) -> None:
+        """Called when an operator sends a message (from any bridge).
+
+        This enables cross-bridge synchronization - when someone responds
+        on Telegram, Discord and Slack can show that response too.
+
+        Args:
+            message: The operator's message
+            session: The session this message belongs to
+            source_bridge: Name of the bridge that originated the message
+            operator_name: Optional name of the operator who sent the message
+        """
+        pass
+
     async def destroy(self) -> None:
         """Cleanup when bridge is removed."""
         pass
@@ -81,6 +101,19 @@ class CompositeBridge(Bridge):
         for bridge in self._bridges:
             try:
                 await bridge.on_ai_takeover(session, reason)
+            except Exception as e:
+                print(f"[PocketPing] Bridge {bridge.name} error: {e}")
+
+    async def on_operator_message(
+        self,
+        message: "Message",
+        session: "Session",
+        source_bridge: str,
+        operator_name: str | None = None,
+    ) -> None:
+        for bridge in self._bridges:
+            try:
+                await bridge.on_operator_message(message, session, source_bridge, operator_name)
             except Exception as e:
                 print(f"[PocketPing] Bridge {bridge.name} error: {e}")
 

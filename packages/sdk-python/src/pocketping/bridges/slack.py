@@ -140,8 +140,24 @@ class SlackBridge(Bridge):
         if not text:
             return
 
+        # Get operator name from user ID
+        user_id = event.get("user")
+        operator_name = None
+        if user_id:
+            try:
+                user_info = await self._client.users_info(user=user_id)
+                if user_info.get("ok"):
+                    operator_name = user_info["user"].get("real_name") or user_info["user"].get("name")
+            except Exception:
+                pass
+
         try:
-            await self._pocketping.send_operator_message(session_id, text)
+            await self._pocketping.send_operator_message(
+                session_id,
+                text,
+                source_bridge=self.name,
+                operator_name=operator_name,
+            )
             self._pocketping.set_operator_online(True)
 
             # React to confirm
@@ -300,6 +316,51 @@ class SlackBridge(Bridge):
                         "text": f"🤖 *AI Takeover*\nSession: `{session.id[:8]}...`\nReason: {reason}",
                     },
                 }
+            ],
+        )
+
+    async def on_operator_message(
+        self,
+        message: Message,
+        session: Session,
+        source_bridge: str,
+        operator_name: str | None = None,
+    ) -> None:
+        """Show operator messages from other bridges (cross-bridge sync)."""
+        # Skip if message is from this bridge
+        if source_bridge == self.name or not self._client:
+            return
+
+        thread_ts = self._session_thread_map.get(session.id)
+        if not thread_ts:
+            return
+
+        # Format the synced message
+        bridge_emoji = {"telegram": ":airplane:", "discord": ":video_game:", "api": ":electric_plug:"}.get(
+            source_bridge, ":incoming_envelope:"
+        )
+        name = operator_name or "Operator"
+
+        await self._client.chat_postMessage(
+            channel=self.channel_id,
+            thread_ts=thread_ts,
+            blocks=[
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": f"{bridge_emoji} *{name}* _via {source_bridge}_",
+                        }
+                    ],
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": message.content,
+                    },
+                },
             ],
         )
 

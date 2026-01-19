@@ -268,7 +268,12 @@ class TelegramBridge(Bridge):
         operator_name = user.first_name if user else "Operator"
 
         try:
-            await self._pocketping.send_operator_message(session_id, text)
+            await self._pocketping.send_operator_message(
+                session_id,
+                text,
+                source_bridge=self.name,
+                operator_name=operator_name,
+            )
             self._pocketping.set_operator_online(True)
 
             # React with checkmark instead of sending a message
@@ -289,9 +294,15 @@ class TelegramBridge(Bridge):
         session_id = self._message_session_map.get(reply_to_id)
 
         if session_id and update.message.text:
+            user = update.message.from_user
+            operator_name = user.first_name if user else "Operator"
+
             try:
                 await self._pocketping.send_operator_message(
-                    session_id, update.message.text
+                    session_id,
+                    update.message.text,
+                    source_bridge=self.name,
+                    operator_name=operator_name,
                 )
                 self._pocketping.set_operator_online(True)
                 await update.message.reply_text("✓ Message sent")
@@ -445,6 +456,40 @@ class TelegramBridge(Bridge):
             return
 
         text = f"🤖 *AI Takeover*\n\nSession `{session.id[:8]}...`\nReason: {reason}"
+
+        if self.use_forum:
+            thread_id = self._session_topic_map.get(session.id)
+            if thread_id:
+                await self._app.bot.send_message(
+                    chat_id=self.forum_chat_id,
+                    message_thread_id=thread_id,
+                    text=text,
+                    parse_mode="Markdown",
+                )
+        else:
+            for chat_id in self.chat_ids:
+                await self._app.bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    parse_mode="Markdown",
+                )
+
+    async def on_operator_message(
+        self,
+        message: Message,
+        session: Session,
+        source_bridge: str,
+        operator_name: str | None = None,
+    ) -> None:
+        """Show operator messages from other bridges (cross-bridge sync)."""
+        # Skip if message is from this bridge (we already showed it)
+        if source_bridge == self.name or not self._app:
+            return
+
+        # Format the synced message
+        bridge_emoji = {"discord": "🎮", "slack": "💬", "api": "🔌"}.get(source_bridge, "📨")
+        name = operator_name or "Operator"
+        text = f"{bridge_emoji} *{name}* _via {source_bridge}_:\n{message.content}"
 
         if self.use_forum:
             thread_id = self._session_topic_map.get(session.id)

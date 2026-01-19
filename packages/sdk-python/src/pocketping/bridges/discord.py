@@ -281,8 +281,16 @@ class DiscordBridge(Bridge):
         if not self._pocketping:
             return
 
+        # Get operator name
+        operator_name = message.author.display_name if message.author else "Operator"
+
         try:
-            await self._pocketping.send_operator_message(session_id, message.content)
+            await self._pocketping.send_operator_message(
+                session_id,
+                message.content,
+                source_bridge=self.name,
+                operator_name=operator_name,
+            )
             self._pocketping.set_operator_online(True)
             await message.add_reaction("✅")
         except Exception as e:
@@ -301,8 +309,15 @@ class DiscordBridge(Bridge):
         if not session_id or not self._pocketping:
             return
 
+        operator_name = message.author.display_name if message.author else "Operator"
+
         try:
-            await self._pocketping.send_operator_message(session_id, message.content)
+            await self._pocketping.send_operator_message(
+                session_id,
+                message.content,
+                source_bridge=self.name,
+                operator_name=operator_name,
+            )
             self._pocketping.set_operator_online(True)
             await message.add_reaction("✅")
         except Exception as e:
@@ -486,6 +501,43 @@ class DiscordBridge(Bridge):
             description=f"Session: `{session.id[:8]}...`\nReason: {reason}",
             color=discord.Color.orange(),
         )
+
+        if self.use_threads:
+            thread_id = self._session_thread_map.get(session.id)
+            if thread_id:
+                thread = self._client.get_channel(thread_id)
+                if thread:
+                    await thread.send(embed=embed)
+                    return
+
+        await self._channel.send(embed=embed)
+
+    async def on_operator_message(
+        self,
+        message: Message,
+        session: Session,
+        source_bridge: str,
+        operator_name: str | None = None,
+    ) -> None:
+        """Show operator messages from other bridges (cross-bridge sync)."""
+        # Skip if message is from this bridge
+        if source_bridge == self.name or not self._channel:
+            return
+
+        try:
+            import discord
+        except ImportError:
+            return
+
+        # Format the synced message
+        bridge_emoji = {"telegram": "✈️", "slack": "💬", "api": "🔌"}.get(source_bridge, "📨")
+        name = operator_name or "Operator"
+
+        embed = discord.Embed(
+            description=message.content,
+            color=discord.Color.greyple(),
+        )
+        embed.set_author(name=f"{bridge_emoji} {name} via {source_bridge}")
 
         if self.use_threads:
             thread_id = self._session_thread_map.get(session.id)
