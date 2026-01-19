@@ -5,7 +5,7 @@
 import { Telegraf, Context } from "telegraf";
 import type { Message as TelegramMessage } from "telegraf/types";
 import { Bridge } from "./base";
-import type { Message, Session, TelegramConfig } from "../types";
+import type { Message, Session, MessageStatus, TelegramConfig } from "../types";
 
 export class TelegramBridge extends Bridge {
   private bot: Telegraf;
@@ -21,6 +21,9 @@ export class TelegramBridge extends Bridge {
   // Legacy mode: message_id -> session_id
   private messageSessionMap: Map<number, string> = new Map();
   private sessionMessageMap: Map<string, number> = new Map();
+
+  // Track operator messages for read receipts: pocketping_msg_id -> (chat_id, telegram_msg_id)
+  private operatorMessageMap: Map<string, { chatId: number; messageId: number }> = new Map();
 
   private operatorOnline = false;
 
@@ -408,6 +411,40 @@ export class TelegramBridge extends Bridge {
 
   async onOperatorStatusChange(online: boolean): Promise<void> {
     this.operatorOnline = online;
+  }
+
+  async onMessageRead(
+    sessionId: string,
+    messageIds: string[],
+    status: MessageStatus
+  ): Promise<void> {
+    // Map status to emoji reaction (using Telegram-supported emoji)
+    const emojiMap: Record<string, string> = {
+      delivered: "👌", // OK hand
+      read: "👀", // Eyes
+    };
+
+    const emoji = emojiMap[status];
+    if (!emoji) return;
+
+    for (const msgId of messageIds) {
+      const tracked = this.operatorMessageMap.get(msgId);
+      if (!tracked) continue;
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await this.bot.telegram.setMessageReaction(tracked.chatId, tracked.messageId, [
+          { type: "emoji", emoji: emoji as any },
+        ]);
+
+        // Clean up after "read" status
+        if (status === "read") {
+          this.operatorMessageMap.delete(msgId);
+        }
+      } catch (error) {
+        console.error("[Telegram] Failed to set message reaction:", error);
+      }
+    }
   }
 
   async destroy(): Promise<void> {

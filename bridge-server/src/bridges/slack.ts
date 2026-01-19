@@ -5,7 +5,7 @@
 import { WebClient } from "@slack/web-api";
 import { SocketModeClient } from "@slack/socket-mode";
 import { Bridge } from "./base";
-import type { Message, Session, SlackConfig } from "../types";
+import type { Message, Session, MessageStatus, SlackConfig } from "../types";
 
 export class SlackBridge extends Bridge {
   private webClient: WebClient;
@@ -16,6 +16,9 @@ export class SlackBridge extends Bridge {
   private sessionThreadMap: Map<string, string> = new Map();
   // Thread mode: thread_ts -> session_id
   private threadSessionMap: Map<string, string> = new Map();
+
+  // Track operator messages for read receipts: pocketping_msg_id -> message_ts
+  private operatorMessageMap: Map<string, string> = new Map();
 
   private operatorOnline = false;
 
@@ -340,6 +343,53 @@ export class SlackBridge extends Bridge {
 
   async onOperatorStatusChange(online: boolean): Promise<void> {
     this.operatorOnline = online;
+  }
+
+  async onMessageRead(
+    sessionId: string,
+    messageIds: string[],
+    status: MessageStatus
+  ): Promise<void> {
+    // Map status to Slack emoji names
+    const emojiMap: Record<string, string> = {
+      delivered: "ballot_box_with_check",
+      read: "eyes",
+    };
+
+    const emoji = emojiMap[status];
+    if (!emoji) return;
+
+    for (const msgId of messageIds) {
+      const messageTs = this.operatorMessageMap.get(msgId);
+      if (!messageTs) continue;
+
+      try {
+        // Remove old "white_check_mark" reaction if exists
+        try {
+          await this.webClient.reactions.remove({
+            channel: this.channelId,
+            name: "white_check_mark",
+            timestamp: messageTs,
+          });
+        } catch {
+          // Reaction might not exist
+        }
+
+        // Add new status reaction
+        await this.webClient.reactions.add({
+          channel: this.channelId,
+          name: emoji,
+          timestamp: messageTs,
+        });
+
+        // Clean up after "read" status
+        if (status === "read") {
+          this.operatorMessageMap.delete(msgId);
+        }
+      } catch (error) {
+        console.error("[Slack] Failed to update message reaction:", error);
+      }
+    }
   }
 
   async destroy(): Promise<void> {

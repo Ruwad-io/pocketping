@@ -12,6 +12,7 @@ import type {
   VisitorMessageEvent,
   AITakeoverEvent,
   OperatorStatusEvent,
+  MessageReadEvent,
   OutgoingEvent,
   BridgeServerConfig,
 } from "../types";
@@ -67,6 +68,9 @@ export function createApp(context: AppContext): Hono {
           break;
         case "operator_status":
           await handleOperatorStatus(context.bridges, event);
+          break;
+        case "message_read":
+          await handleMessageRead(context.bridges, event);
           break;
         default:
           return c.json({ error: "Unknown event type" }, 400);
@@ -153,4 +157,10 @@ async function handleAITakeover(bridges: Bridge[], event: AITakeoverEvent): Prom
 
 async function handleOperatorStatus(bridges: Bridge[], event: OperatorStatusEvent): Promise<void> {
   await Promise.all(bridges.map((bridge) => bridge.onOperatorStatusChange(event.online)));
+}
+
+async function handleMessageRead(bridges: Bridge[], event: MessageReadEvent): Promise<void> {
+  await Promise.all(
+    bridges.map((bridge) => bridge.onMessageRead(event.sessionId, event.messageIds, event.status))
+  );
 }

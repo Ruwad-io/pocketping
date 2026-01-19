@@ -13,7 +13,7 @@ import {
   ThreadAutoArchiveDuration,
 } from "discord.js";
 import { Bridge } from "./base";
-import type { Message, Session, DiscordConfig } from "../types";
+import type { Message, Session, MessageStatus, DiscordConfig } from "../types";
 
 export class DiscordBridge extends Bridge {
   private client: Client;
@@ -32,6 +32,9 @@ export class DiscordBridge extends Bridge {
   // Legacy mode mappings
   private sessionMessageMap: Map<string, string> = new Map();
   private messageSessionMap: Map<string, string> = new Map();
+
+  // Track operator messages for read receipts: pocketping_msg_id -> discord_msg
+  private operatorMessageMap: Map<string, DiscordMessage> = new Map();
 
   private operatorOnline = false;
 
@@ -468,6 +471,44 @@ export class DiscordBridge extends Bridge {
 
   async onOperatorStatusChange(online: boolean): Promise<void> {
     this.operatorOnline = online;
+  }
+
+  async onMessageRead(
+    sessionId: string,
+    messageIds: string[],
+    status: MessageStatus
+  ): Promise<void> {
+    // Map status to emoji reaction
+    const emojiMap: Record<string, string> = {
+      delivered: "☑️", // Ballot box with check
+      read: "👁️", // Eye
+    };
+
+    const emoji = emojiMap[status];
+    if (!emoji) return;
+
+    for (const msgId of messageIds) {
+      const discordMsg = this.operatorMessageMap.get(msgId);
+      if (!discordMsg) continue;
+
+      try {
+        // Remove old "sent" reaction if exists
+        const oldReaction = discordMsg.reactions.cache.get("✅");
+        if (oldReaction) {
+          await oldReaction.users.remove(this.client.user!.id);
+        }
+
+        // Add new status reaction
+        await discordMsg.react(emoji);
+
+        // Clean up after "read" status
+        if (status === "read") {
+          this.operatorMessageMap.delete(msgId);
+        }
+      } catch (error) {
+        console.error("[Discord] Failed to update message reaction:", error);
+      }
+    }
   }
 
   async destroy(): Promise<void> {

@@ -2,7 +2,7 @@
  * Base bridge class for notification bridges
  */
 
-import type { Message, Session, EventCallback, OutgoingEvent } from "../types";
+import type { Message, Session, MessageStatus, EventCallback, OutgoingEvent } from "../types";
 
 export abstract class Bridge {
   protected eventCallback?: EventCallback;
@@ -63,6 +63,15 @@ export abstract class Bridge {
    * Called when operator status changes
    */
   abstract onOperatorStatusChange(online: boolean): Promise<void>;
+
+  /**
+   * Called when messages are marked as delivered/read
+   */
+  abstract onMessageRead(
+    sessionId: string,
+    messageIds: string[],
+    status: MessageStatus
+  ): Promise<void>;
 
   /**
    * Cleanup and disconnect
