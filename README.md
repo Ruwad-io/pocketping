@@ -87,8 +87,8 @@ Bridges run in a separate server. Recommended for production & teams.
 ```
 
 **Pros:**
-- Bridges don't crash your backend
-- Deploy and scale independently
+- Deploy bridges without touching your backend
+- Scale bridges independently
 - Cross-bridge sync built-in
 - Single Docker container for all bridges
 - Works with ANY backend (Python, Node, Go, PHP...)
