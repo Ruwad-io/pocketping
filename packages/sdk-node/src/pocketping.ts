@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type {
   PocketPingConfig,
   Session,
+  SessionMetadata,
   Message,
   ConnectRequest,
   ConnectResponse,
@@ -16,6 +17,67 @@ import type {
 import type { Storage } from './storage/types';
 import { MemoryStorage } from './storage/memory';
 import type { Bridge } from './bridges/types';
+
+// ─────────────────────────────────────────────────────────────────
+// IP & User Agent Helpers
+// ─────────────────────────────────────────────────────────────────
+
+function getClientIp(req: IncomingMessage): string {
+  // Check common proxy headers
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    const ip = Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0];
+    return ip?.trim() ?? 'unknown';
+  }
+
+  const realIp = req.headers['x-real-ip'];
+  if (realIp) {
+    return Array.isArray(realIp) ? realIp[0] ?? 'unknown' : realIp;
+  }
+
+  // Fall back to socket address
+  return req.socket?.remoteAddress ?? 'unknown';
+}
+
+function parseUserAgent(userAgent: string | undefined): {
+  deviceType: 'desktop' | 'mobile' | 'tablet' | undefined;
+  browser: string | undefined;
+  os: string | undefined;
+} {
+  if (!userAgent) {
+    return { deviceType: undefined, browser: undefined, os: undefined };
+  }
+
+  const ua = userAgent.toLowerCase();
+
+  // Device type
+  let deviceType: 'desktop' | 'mobile' | 'tablet' | undefined;
+  if (['mobile', 'android', 'iphone', 'ipod'].some((x) => ua.includes(x))) {
+    deviceType = 'mobile';
+  } else if (['ipad', 'tablet'].some((x) => ua.includes(x))) {
+    deviceType = 'tablet';
+  } else {
+    deviceType = 'desktop';
+  }
+
+  // Browser detection
+  let browser: string | undefined;
+  if (ua.includes('firefox')) browser = 'Firefox';
+  else if (ua.includes('edg')) browser = 'Edge';
+  else if (ua.includes('chrome')) browser = 'Chrome';
+  else if (ua.includes('safari')) browser = 'Safari';
+  else if (ua.includes('opera') || ua.includes('opr')) browser = 'Opera';
+
+  // OS detection
+  let os: string | undefined;
+  if (ua.includes('windows')) os = 'Windows';
+  else if (ua.includes('mac os') || ua.includes('macos')) os = 'macOS';
+  else if (ua.includes('linux')) os = 'Linux';
+  else if (ua.includes('android')) os = 'Android';
+  else if (ua.includes('iphone') || ua.includes('ipad')) os = 'iOS';
+
+  return { deviceType, browser, os };
+}
 
 export class PocketPing {
   private storage: Storage;
@@ -65,9 +127,29 @@ export class PocketPing {
         let result: unknown;
 
         switch (path) {
-          case 'connect':
-            result = await this.handleConnect(body as ConnectRequest);
+          case 'connect': {
+            const connectReq = body as ConnectRequest;
+            // Enrich metadata with server-side info
+            const clientIp = getClientIp(req);
+            const userAgent = req.headers['user-agent'];
+            const uaInfo = parseUserAgent(connectReq.metadata?.userAgent ?? userAgent);
+
+            if (connectReq.metadata) {
+              connectReq.metadata.ip = clientIp;
+              connectReq.metadata.deviceType = connectReq.metadata.deviceType ?? uaInfo.deviceType;
+              connectReq.metadata.browser = connectReq.metadata.browser ?? uaInfo.browser;
+              connectReq.metadata.os = connectReq.metadata.os ?? uaInfo.os;
+            } else {
+              connectReq.metadata = {
+                ip: clientIp,
+                userAgent,
+                ...uaInfo,
+              };
+            }
+
+            result = await this.handleConnect(connectReq);
             break;
+          }
           case 'message':
             result = await this.handleMessage(body as SendMessageRequest);
             break;
@@ -189,9 +271,14 @@ export class PocketPing {
   async handleConnect(request: ConnectRequest): Promise<ConnectResponse> {
     let session: Session | null = null;
 
-    // Try to resume existing session
+    // Try to resume existing session by sessionId
     if (request.sessionId) {
       session = await this.storage.getSession(request.sessionId);
+    }
+
+    // Try to find existing session by visitorId
+    if (!session && this.storage.getSessionByVisitorId) {
+      session = await this.storage.getSessionByVisitorId(request.visitorId);
     }
 
     // Create new session if needed
@@ -212,6 +299,17 @@ export class PocketPing {
 
       // Callback
       await this.config.onNewSession?.(session);
+    } else if (request.metadata) {
+      // Update metadata for returning visitor (e.g., new page URL)
+      if (session.metadata) {
+        // Preserve server-side fields (IP, country, city)
+        request.metadata.ip = session.metadata.ip ?? request.metadata.ip;
+        request.metadata.country = session.metadata.country ?? request.metadata.country;
+        request.metadata.city = session.metadata.city ?? request.metadata.city;
+      }
+      session.metadata = request.metadata;
+      session.lastActivity = new Date();
+      await this.storage.updateSession(session);
     }
 
     // Get existing messages

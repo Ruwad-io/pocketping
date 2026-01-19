@@ -86,13 +86,19 @@ class PocketPing:
     async def handle_connect(self, request: ConnectRequest) -> ConnectResponse:
         """Handle a connection request from the widget."""
         session: Optional[Session] = None
+        is_new_session = False
 
-        # Try to resume existing session
+        # Try to resume existing session by session_id
         if request.session_id:
             session = await self.storage.get_session(request.session_id)
 
+        # Try to find existing session by visitor_id
+        if not session:
+            session = await self.storage.get_session_by_visitor_id(request.visitor_id)
+
         # Create new session if needed
         if not session:
+            is_new_session = True
             session = Session(
                 id=self._generate_id(),
                 visitor_id=request.visitor_id,
@@ -112,6 +118,18 @@ class PocketPing:
                 result = self.on_new_session(session)
                 if asyncio.iscoroutine(result):
                     await result
+        else:
+            # Update metadata if provided (e.g., new page URL)
+            if request.metadata:
+                # Merge new metadata with existing, keeping geo info
+                if session.metadata:
+                    # Preserve server-side fields (IP, country, city)
+                    request.metadata.ip = session.metadata.ip or request.metadata.ip
+                    request.metadata.country = session.metadata.country or request.metadata.country
+                    request.metadata.city = session.metadata.city or request.metadata.city
+                session.metadata = request.metadata
+                session.last_activity = datetime.utcnow()
+                await self.storage.update_session(session)
 
         # Get existing messages
         messages = await self.storage.get_messages(session.id)

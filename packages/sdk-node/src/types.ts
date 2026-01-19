@@ -44,11 +44,28 @@ export interface Session {
 }
 
 export interface SessionMetadata {
+  // Page info
   url?: string;
   referrer?: string;
+  pageTitle?: string;
+
+  // Client info
   userAgent?: string;
   timezone?: string;
   language?: string;
+  screenResolution?: string;
+
+  // Geo info (populated server-side from IP)
+  ip?: string;
+  country?: string;
+  city?: string;
+
+  // Device info (parsed from user agent)
+  deviceType?: 'desktop' | 'mobile' | 'tablet';
+  browser?: string;
+  os?: string;
+
+  // Allow custom fields
   [key: string]: unknown;
 }
 

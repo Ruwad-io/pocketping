@@ -16,11 +16,26 @@ class Sender(str, Enum):
 class SessionMetadata(BaseModel):
     """Metadata about the visitor's session."""
 
+    # Page info
     url: Optional[str] = None
     referrer: Optional[str] = None
+    page_title: Optional[str] = Field(None, alias="pageTitle")
+
+    # Client info
     user_agent: Optional[str] = Field(None, alias="userAgent")
     timezone: Optional[str] = None
     language: Optional[str] = None
+    screen_resolution: Optional[str] = Field(None, alias="screenResolution")
+
+    # Geo info (populated server-side from IP)
+    ip: Optional[str] = None
+    country: Optional[str] = None
+    city: Optional[str] = None
+
+    # Device info (parsed from user agent or sent by client)
+    device_type: Optional[str] = Field(None, alias="deviceType")  # desktop, mobile, tablet
+    browser: Optional[str] = None
+    os: Optional[str] = None
 
     class Config:
         populate_by_name = True

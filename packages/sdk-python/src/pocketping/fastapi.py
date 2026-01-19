@@ -1,17 +1,82 @@
 """FastAPI integration for PocketPing."""
 
+import re
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from pocketping.core import PocketPing
 from pocketping.models import (
     ConnectRequest,
     SendMessageRequest,
+    SessionMetadata,
     TypingRequest,
 )
+
+
+def _get_client_ip(request: Request) -> str:
+    """Extract client IP from request headers (supports proxies)."""
+    # Check common proxy headers
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        # Take the first IP (original client)
+        return forwarded.split(",")[0].strip()
+
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip
+
+    # Fall back to direct connection
+    if request.client:
+        return request.client.host
+
+    return "unknown"
+
+
+def _parse_user_agent(user_agent: str | None) -> dict:
+    """Parse user agent string to extract device, browser, and OS info."""
+    if not user_agent:
+        return {"device_type": None, "browser": None, "os": None}
+
+    ua = user_agent.lower()
+
+    # Device type
+    if any(x in ua for x in ["mobile", "android", "iphone", "ipod"]):
+        device_type = "mobile"
+    elif any(x in ua for x in ["ipad", "tablet"]):
+        device_type = "tablet"
+    else:
+        device_type = "desktop"
+
+    # Browser detection
+    browser = None
+    if "firefox" in ua:
+        browser = "Firefox"
+    elif "edg" in ua:
+        browser = "Edge"
+    elif "chrome" in ua:
+        browser = "Chrome"
+    elif "safari" in ua:
+        browser = "Safari"
+    elif "opera" in ua or "opr" in ua:
+        browser = "Opera"
+
+    # OS detection
+    os_name = None
+    if "windows" in ua:
+        os_name = "Windows"
+    elif "mac os" in ua or "macos" in ua:
+        os_name = "macOS"
+    elif "linux" in ua:
+        os_name = "Linux"
+    elif "android" in ua:
+        os_name = "Android"
+    elif "iphone" in ua or "ipad" in ua:
+        os_name = "iOS"
+
+    return {"device_type": device_type, "browser": browser, "os": os_name}
 
 
 def create_router(pp: PocketPing, prefix: str = "") -> APIRouter:
@@ -30,9 +95,27 @@ def create_router(pp: PocketPing, prefix: str = "") -> APIRouter:
     router = APIRouter(prefix=prefix)
 
     @router.post("/connect")
-    async def connect(request: ConnectRequest):
+    async def connect(body: ConnectRequest, request: Request):
         """Initialize or resume a chat session."""
-        response = await pp.handle_connect(request)
+        # Enrich metadata with server-side info
+        client_ip = _get_client_ip(request)
+        ua_info = _parse_user_agent(
+            body.metadata.user_agent if body.metadata else request.headers.get("user-agent")
+        )
+
+        if body.metadata:
+            body.metadata.ip = client_ip
+            body.metadata.device_type = body.metadata.device_type or ua_info["device_type"]
+            body.metadata.browser = body.metadata.browser or ua_info["browser"]
+            body.metadata.os = body.metadata.os or ua_info["os"]
+        else:
+            body.metadata = SessionMetadata(
+                ip=client_ip,
+                user_agent=request.headers.get("user-agent"),
+                **ua_info,
+            )
+
+        response = await pp.handle_connect(body)
         return response.model_dump(by_alias=True)
 
     @router.post("/message")

@@ -19,6 +19,17 @@ export class MemoryStorage implements Storage {
     return this.sessions.get(sessionId) ?? null;
   }
 
+  async getSessionByVisitorId(visitorId: string): Promise<Session | null> {
+    const visitorSessions = Array.from(this.sessions.values()).filter(
+      (s) => s.visitorId === visitorId
+    );
+    if (visitorSessions.length === 0) return null;
+    // Return most recent by lastActivity
+    return visitorSessions.reduce((latest, s) =>
+      s.lastActivity > latest.lastActivity ? s : latest
+    );
+  }
+
   async updateSession(session: Session): Promise<void> {
     this.sessions.set(session.id, session);
   }

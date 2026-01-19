@@ -8,6 +8,7 @@ export interface Storage {
   // Sessions
   createSession(session: Session): Promise<void>;
   getSession(sessionId: string): Promise<Session | null>;
+  getSessionByVisitorId?(visitorId: string): Promise<Session | null>;
   updateSession(session: Session): Promise<void>;
   deleteSession(sessionId: string): Promise<void>;
 

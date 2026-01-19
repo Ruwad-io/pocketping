@@ -51,6 +51,10 @@ class Storage(ABC):
         """Clean up old sessions. Optional to implement."""
         return 0
 
+    async def get_session_by_visitor_id(self, visitor_id: str) -> Optional[Session]:
+        """Get the most recent session for a visitor. Optional to implement."""
+        return None
+
 
 class MemoryStorage(Storage):
     """In-memory storage adapter. Useful for development and testing."""
@@ -118,3 +122,14 @@ class MemoryStorage(Storage):
     async def get_session_count(self) -> int:
         """Get total session count."""
         return len(self._sessions)
+
+    async def get_session_by_visitor_id(self, visitor_id: str) -> Optional[Session]:
+        """Get the most recent session for a visitor."""
+        visitor_sessions = [
+            s for s in self._sessions.values()
+            if s.visitor_id == visitor_id
+        ]
+        if not visitor_sessions:
+            return None
+        # Return most recent by last_activity
+        return max(visitor_sessions, key=lambda s: s.last_activity)

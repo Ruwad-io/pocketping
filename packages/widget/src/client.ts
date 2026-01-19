@@ -39,10 +39,12 @@ export class PocketPingClient {
         sessionId: storedSessionId,
         metadata: {
           url: window.location.href,
-          referrer: document.referrer,
+          referrer: document.referrer || undefined,
+          pageTitle: document.title || undefined,
           userAgent: navigator.userAgent,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           language: navigator.language,
+          screenResolution: `${window.screen.width}x${window.screen.height}`,
         },
       }),
     });
@@ -350,11 +352,11 @@ export class PocketPingClient {
   }
 
   private getStoredSessionId(): string | null {
-    return sessionStorage.getItem('pocketping_session_id');
+    return localStorage.getItem('pocketping_session_id');
   }
 
   private storeSessionId(sessionId: string): void {
-    sessionStorage.setItem('pocketping_session_id', sessionId);
+    localStorage.setItem('pocketping_session_id', sessionId);
   }
 
   private generateId(): string {
