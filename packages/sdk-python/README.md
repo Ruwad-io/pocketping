@@ -37,7 +37,7 @@ pp = PocketPing(
     bridges=[
         TelegramBridge(
             bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
-            chat_ids=os.getenv("TELEGRAM_CHAT_ID"),
+            forum_chat_id=os.getenv("TELEGRAM_FORUM_CHAT_ID"),  # Supergroup with topics
         ),
     ],
 )
@@ -62,9 +62,41 @@ def home():
 
 ### Telegram
 
+Two modes available:
+
+#### Forum Topics Mode (Recommended for Teams)
+
+Each conversation gets its own topic - perfect for multiple operators:
+
 ```python
 from pocketping.bridges.telegram import TelegramBridge
 
+bridge = TelegramBridge(
+    bot_token="your_bot_token",
+    forum_chat_id="-100123456789",  # Supergroup with topics enabled
+    show_url=True,
+    show_metadata=True,
+)
+```
+
+**Setup:**
+1. Create a Telegram group
+2. Convert to Supergroup (Settings > Group Type)
+3. Enable Topics (Settings > Topics)
+4. Add your bot as admin with "Manage Topics" permission
+5. Get the chat_id (starts with -100)
+
+**Benefits:**
+- Each visitor = separate topic (no message mixing)
+- Just type in the topic to reply (no swipe-reply needed)
+- All team members see all conversations
+- `/close` command to mark conversations as done
+
+#### Legacy Mode (Single Operator)
+
+All messages in one chat, reply-based:
+
+```python
 bridge = TelegramBridge(
     bot_token="your_bot_token",
     chat_ids=["your_chat_id"],  # Can be string or list
@@ -72,14 +104,19 @@ bridge = TelegramBridge(
 )
 ```
 
-Commands in Telegram:
+**Commands:**
 - `/online` - Mark yourself as available
 - `/offline` - Mark yourself as away
 - `/status` - View status
-
-Reply to any message to respond to users.
+- `/close` - Close conversation (forum mode only)
 
 ### Discord
+
+Two modes available:
+
+#### Thread Mode (Default, Recommended for Teams)
+
+Each conversation gets its own thread:
 
 ```python
 from pocketping.bridges.discord import DiscordBridge
@@ -87,16 +124,41 @@ from pocketping.bridges.discord import DiscordBridge
 bridge = DiscordBridge(
     bot_token="your_bot_token",
     channel_id=123456789,  # Your channel ID (int)
+    use_threads=True,  # Default
     show_url=True,
+    show_metadata=True,
 )
 ```
 
-Commands in Discord:
+**Setup:**
+1. Create a Discord bot at https://discord.com/developers/applications
+2. Enable MESSAGE CONTENT INTENT in Bot settings
+3. Add permissions: Send Messages, Create Public Threads, Send Messages in Threads, Add Reactions
+4. Invite bot and get channel ID (Developer Mode > Right-click > Copy ID)
+
+**Benefits:**
+- Each visitor = separate thread (no message mixing)
+- Just type in the thread to reply
+- All team members see all conversations
+- `!close` command to archive threads
+
+#### Legacy Mode (Single Operator)
+
+All messages in channel, reply-based:
+
+```python
+bridge = DiscordBridge(
+    bot_token="your_bot_token",
+    channel_id=123456789,
+    use_threads=False,
+)
+```
+
+**Commands:**
 - `!online` - Mark yourself as available
 - `!offline` - Mark yourself as away
 - `!status` - View status
-
-Reply to any message to respond to users.
+- `!close` - Close conversation (thread mode only)
 
 ### Slack
 
