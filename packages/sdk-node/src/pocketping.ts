@@ -5,6 +5,7 @@ import type {
   Session,
   SessionMetadata,
   Message,
+  MessageStatus,
   ConnectRequest,
   ConnectResponse,
   SendMessageRequest,
@@ -13,6 +14,8 @@ import type {
   GetMessagesResponse,
   TypingRequest,
   PresenceResponse,
+  ReadRequest,
+  ReadResponse,
 } from './types';
 import type { Storage } from './storage/types';
 import { MemoryStorage } from './storage/memory';
@@ -162,6 +165,9 @@ export class PocketPing {
           case 'presence':
             result = await this.handlePresence();
             break;
+          case 'read':
+            result = await this.handleRead(body as ReadRequest);
+            break;
           default:
             if (next) {
               next();
@@ -205,9 +211,10 @@ export class PocketPing {
   // WebSocket
   // ─────────────────────────────────────────────────────────────────
 
-  attachWebSocket(server: unknown): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  attachWebSocket(server: any): void {
     this.wss = new WebSocketServer({
-      server: server as Parameters<typeof WebSocketServer>[0]['server'],
+      server,
       path: '/pocketping/stream'
     });
 
@@ -396,6 +403,49 @@ export class PocketPing {
     };
   }
 
+  async handleRead(request: ReadRequest): Promise<ReadResponse> {
+    const session = await this.storage.getSession(request.sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    const status: MessageStatus = request.status ?? 'read';
+    const now = new Date();
+    let updated = 0;
+
+    // Update message status in storage
+    const messages = await this.storage.getMessages(request.sessionId);
+    for (const msg of messages) {
+      if (request.messageIds.includes(msg.id)) {
+        msg.status = status;
+        if (status === 'delivered') {
+          msg.deliveredAt = now;
+        } else if (status === 'read') {
+          msg.deliveredAt = msg.deliveredAt ?? now;
+          msg.readAt = now;
+        }
+        await this.storage.saveMessage(msg);
+        updated++;
+      }
+    }
+
+    // Broadcast to WebSocket clients
+    this.broadcastToSession(request.sessionId, {
+      type: 'read',
+      data: {
+        messageIds: request.messageIds,
+        status,
+        deliveredAt: status === 'delivered' ? now.toISOString() : undefined,
+        readAt: status === 'read' ? now.toISOString() : undefined,
+      },
+    });
+
+    // Notify bridges
+    await this.notifyBridgesRead(request.sessionId, request.messageIds, status);
+
+    return { updated };
+  }
+
   // ─────────────────────────────────────────────────────────────────
   // Operator Actions (for bridges)
   // ─────────────────────────────────────────────────────────────────
@@ -447,6 +497,20 @@ export class PocketPing {
         }
       } catch (err) {
         console.error(`[PocketPing] Bridge ${bridge.name} error:`, err);
+      }
+    }
+  }
+
+  private async notifyBridgesRead(
+    sessionId: string,
+    messageIds: string[],
+    status: MessageStatus
+  ): Promise<void> {
+    for (const bridge of this.bridges) {
+      try {
+        await bridge.onMessageRead?.(sessionId, messageIds, status);
+      } catch (err) {
+        console.error(`[PocketPing] Bridge ${bridge.name} read notification error:`, err);
       }
     }
   }

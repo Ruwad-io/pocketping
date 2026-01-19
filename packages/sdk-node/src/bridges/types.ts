@@ -1,5 +1,5 @@
 import type { PocketPing } from '../pocketping';
-import type { Session, Message } from '../types';
+import type { Session, Message, MessageStatus } from '../types';
 
 /**
  * Bridge interface for notification channels.
@@ -20,6 +20,13 @@ export interface Bridge {
 
   /** Called when visitor starts/stops typing */
   onTyping?(sessionId: string, isTyping: boolean): void | Promise<void>;
+
+  /** Called when messages are marked as delivered/read */
+  onMessageRead?(
+    sessionId: string,
+    messageIds: string[],
+    status: MessageStatus
+  ): void | Promise<void>;
 
   /** Cleanup when bridge is removed */
   destroy?(): void | Promise<void>;
