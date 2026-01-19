@@ -54,8 +54,8 @@ Bridges run inside your backend. Perfect for getting started.
                           (Topics)     (Threads)    (Threads)
 ```
 
-**Pros:** Simple setup, single deployment
-**Cons:** If a bridge crashes, your backend might too
+**Pros:** Simple setup, single deployment, cross-bridge sync included
+**Cons:** Bridges share resources with backend, redeploy = restart bridges
 
 ### Option 2: Bridge Server Mode (Production)
 
