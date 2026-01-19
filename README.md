@@ -42,14 +42,30 @@ PocketPing is **not a monolithic SaaS**. It's a protocol with pluggable componen
 │  └──────────┘   WS    └──────────────┘         └─────────────┘ │
 │                              │                        │        │
 │                              │                 ┌──────┴──────┐ │
-│                              │                 │  │  │  │    │ │
-│                              │                 TG DC SK LLM  │ │
-│                              │                               │ │
-│                        Implements                            │ │
-│                       5 endpoints                            │ │
+│                        Implements              │  │  │  │    │ │
+│                       5 endpoints              TG DC SK LLM  │ │
 │                                                              │ │
 └──────────────────────────────────────────────────────────────┘
 ```
+
+### Two Bridge Modes
+
+**Option 1: Embedded** - Bridges run in your backend process
+```
+Your Backend (Python/Node/Go)
+     └── Telegram, Discord, Slack bridges
+```
+
+**Option 2: Bridge Server** - Bridges run in a separate server (recommended for production)
+```
+Your Backend ←──HTTP/SSE──→ Bridge Server (Bun) ←→ Telegram, Discord, Slack
+```
+
+The Bridge Server ([`bridge-server/`](./bridge-server)) is a standalone Bun server that handles all notification bridges. Benefits:
+- Bridges don't crash your backend
+- Deploy bridges independently
+- Cross-bridge sync built-in (reply on Telegram, see it on Discord)
+- Single Docker container for all bridges
 
 ### Use Any Backend
 
@@ -169,6 +185,7 @@ interface Message {
 | [@pocketping/widget](./packages/widget) | Embeddable chat widget | ✅ Ready |
 | [@pocketping/sdk](./packages/sdk-node) | Node.js SDK | ✅ Ready |
 | [pocketping](./packages/sdk-python) | Python SDK (FastAPI) | ✅ Ready |
+| [bridge-server](./bridge-server) | Standalone Bridge Server (Bun) | ✅ Ready |
 | [@pocketping/bridge-telegram](./bridges/telegram) | Telegram notifications | ✅ Ready |
 | [@pocketping/bridge-discord](./bridges/discord) | Discord notifications | ✅ Ready |
 | [@pocketping/bridge-slack](./bridges/slack) | Slack notifications | ✅ Ready |
@@ -184,11 +201,13 @@ interface Message {
 - [x] Widget v1
 - [x] Node.js SDK
 - [x] Python SDK (FastAPI)
-- [x] Telegram bridge
-- [x] Discord bridge
-- [x] Slack bridge
+- [x] Telegram bridge (with Forum Topics support)
+- [x] Discord bridge (with Threads support)
+- [x] Slack bridge (with Threads support)
 - [x] AI fallback (OpenAI, Gemini, Claude)
 - [x] Smart presence detection (auto AI takeover after configurable delay)
+- [x] Bridge Server (standalone Bun server for all bridges)
+- [x] Cross-bridge sync (reply on one bridge, see it on all others)
 - [ ] Analytics dashboard
 - [ ] Hosted version (optional SaaS)
 
