@@ -9,6 +9,7 @@
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
     "build": "bun build src/index.ts --compile --outfile dist/bridge-server",
+    "test": "bun test ../tests/integration",
     "typecheck": "tsc --noEmit",
     "docker:build": "docker build -t pocketping/bridge-server .",
     "docker:run": "docker run --env-file .env -p 3001:3001 pocketping/bridge-server"

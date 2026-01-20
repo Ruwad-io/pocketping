@@ -9,8 +9,13 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "dev": "npm run dev --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
-    "lint": "eslint packages/**/*.ts bridges/**/*.ts",
+    "test": "bun run test:widget && bun run test:bridge",
+    "test:widget": "cd packages/widget && bun test",
+    "test:bridge": "cd bridge-server && bun test",
+    "test:sdk": "cd packages/sdk-python && pytest",
+    "test:e2e": "playwright test",
+    "test:coverage": "bun run test:widget -- --coverage && bun run test:bridge -- --coverage",
+    "lint": "eslint packages/**/*.ts bridge-server/**/*.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

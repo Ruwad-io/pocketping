@@ -33,6 +33,9 @@ export class DiscordBridge extends Bridge {
   private sessionMessageMap: Map<string, string> = new Map();
   private messageSessionMap: Map<string, string> = new Map();
 
+  // Track visitor messages for read receipts: discord_msg_id -> { sessionId, messageId }
+  private visitorMessageMap: Map<string, { sessionId: string; messageId: string }> = new Map();
+
   // Track operator messages for read receipts: pocketping_msg_id -> discord_msg
   private operatorMessageMap: Map<string, DiscordMessage> = new Map();
 
@@ -49,6 +52,7 @@ export class DiscordBridge extends Bridge {
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMessageReactions,
       ],
     });
 
@@ -59,6 +63,7 @@ export class DiscordBridge extends Bridge {
     // Set up event handlers
     this.client.once("ready", () => this.onReady());
     this.client.on("messageCreate", (msg) => this.onMessage(msg));
+    this.client.on("messageReactionAdd", (reaction, user) => this.onReactionAdd(reaction, user));
 
     // Login
     this.client.login(config.botToken);
@@ -87,7 +92,7 @@ export class DiscordBridge extends Bridge {
     if (!this.channel) return;
 
     const modeInfo = this.useThreads
-      ? "**Mode:** Threads 🧵\nChaque conversation a son propre thread!"
+      ? "**Mode:** Threads 🧵\nEach conversation has its own thread!"
       : "**Mode:** Legacy (reply-based)";
 
     const embed = new EmbedBuilder()
@@ -95,10 +100,11 @@ export class DiscordBridge extends Bridge {
       .setDescription(
         `${modeInfo}\n\n` +
           "**Commands:**\n" +
-          "`!online` - Marquer comme disponible\n" +
-          "`!offline` - Marquer comme absent\n" +
-          "`!status` - Voir le statut actuel\n" +
-          "`!close` - Fermer la conversation (Threads)"
+          "`!online` - Mark as available\n" +
+          "`!offline` - Mark as away\n" +
+          "`!status` - View current status\n" +
+          "`!read` - Mark all visitor messages as read\n" +
+          "`!close` - Close the conversation (Threads)"
       )
       .setColor(0x00ff00);
 
@@ -123,26 +129,49 @@ export class DiscordBridge extends Bridge {
     }
   }
 
+  private async onReactionAdd(reaction: any, user: any): Promise<void> {
+    // Ignore bot reactions
+    if (user.bot) return;
+
+    const messageId = reaction.message.id;
+    const info = this.visitorMessageMap.get(messageId);
+    if (!info) return;
+
+    // Operator reacted to a visitor message = read receipt
+    await this.emit({
+      type: "message_read_by_reaction",
+      sessionId: info.sessionId,
+      messageIds: [info.messageId],
+      sourceBridge: this.name,
+    });
+
+    this.visitorMessageMap.delete(messageId);
+  }
+
   private async handleCommand(message: DiscordMessage): Promise<void> {
     const command = message.content.slice(1).toLowerCase().split(" ")[0];
 
     switch (command) {
       case "online":
         this.operatorOnline = true;
-        await message.reply("✅ Vous êtes maintenant en ligne.");
+        await message.reply("✅ You are now online.");
         break;
 
       case "offline":
         this.operatorOnline = false;
-        await message.reply("🌙 Vous êtes maintenant hors ligne.");
+        await message.reply("🌙 You are now offline.");
         break;
 
       case "status": {
-        const status = this.operatorOnline ? "🟢 En ligne" : "🔴 Hors ligne";
+        const status = this.operatorOnline ? "🟢 Online" : "🔴 Offline";
         const activeSessions = this.sessionThreadMap.size;
-        await message.reply(`📊 **Statut:** ${status}\n💬 Sessions actives: ${activeSessions}`);
+        await message.reply(`📊 **Status:** ${status}\n💬 Active sessions: ${activeSessions}`);
         break;
       }
+
+      case "read":
+        await this.handleReadCommand(message);
+        break;
 
       case "close":
         await this.handleCloseCommand(message);
@@ -151,25 +180,61 @@ export class DiscordBridge extends Bridge {
       case "help":
         await message.reply(
           "📖 **PocketPing Bridge**\n\n" +
-            "Répondez dans le thread pour communiquer avec le visiteur.\n\n" +
+            "Reply in the thread to communicate with the visitor.\n\n" +
             "**Commands:**\n" +
-            "`!online` - Marquer comme disponible\n" +
-            "`!offline` - Marquer comme absent\n" +
-            "`!status` - Voir le statut actuel\n" +
-            "`!close` - Fermer la conversation"
+            "`!online` - Mark as available\n" +
+            "`!offline` - Mark as away\n" +
+            "`!status` - View current status\n" +
+            "`!read` - Mark all visitor messages as read\n" +
+            "`!close` - Close the conversation"
         );
         break;
     }
   }
 
+  private async handleReadCommand(message: DiscordMessage): Promise<void> {
+    let sessionId: string | undefined;
+
+    if (this.useThreads && message.channel.isThread()) {
+      sessionId = this.threadSessionMap.get(message.channel.id);
+    }
+
+    if (!sessionId) {
+      await message.reply("❌ Use this command inside a conversation thread.");
+      return;
+    }
+
+    const messageIds: string[] = [];
+    for (const [discordMsgId, info] of this.visitorMessageMap.entries()) {
+      if (info.sessionId === sessionId) {
+        messageIds.push(info.messageId);
+        this.visitorMessageMap.delete(discordMsgId);
+      }
+    }
+
+    if (messageIds.length === 0) {
+      await message.reply("✅ All messages are already marked as read.");
+      return;
+    }
+
+    await this.emit({
+      type: "message_read_by_reaction",
+      sessionId,
+      messageIds,
+      sourceBridge: this.name,
+    });
+
+    await message.reply(`👀 ${messageIds.length} message(s) marked as read.`);
+  }
+
   private async handleCloseCommand(message: DiscordMessage): Promise<void> {
     if (!this.useThreads) {
-      await message.reply("❌ Cette commande ne fonctionne qu'en mode Threads.");
+      await message.reply("❌ This command only works in Thread mode.");
       return;
     }
 
     if (!message.channel.isThread()) {
-      await message.reply("❌ Utilisez cette commande dans un thread de conversation.");
+      await message.reply("❌ Use this command inside a conversation thread.");
       return;
     }
 
@@ -177,7 +242,7 @@ export class DiscordBridge extends Bridge {
     const sessionId = this.threadSessionMap.get(threadId);
 
     if (!sessionId) {
-      await message.reply("❌ Aucune conversation active dans ce thread.");
+      await message.reply("❌ No active conversation in this thread.");
       return;
     }
 
@@ -188,7 +253,7 @@ export class DiscordBridge extends Bridge {
       sourceBridge: this.name,
     });
 
-    await message.reply("✅ Conversation fermée.");
+    await message.reply("✅ Conversation closed.");
 
     // Archive the thread
     try {
@@ -222,6 +287,24 @@ export class DiscordBridge extends Bridge {
       sourceBridge: this.name,
       operatorName,
     });
+
+    // Mark all visitor messages in this session as read
+    const readMessageIds: string[] = [];
+    for (const [discordMsgId, info] of this.visitorMessageMap.entries()) {
+      if (info.sessionId === sessionId) {
+        readMessageIds.push(info.messageId);
+        this.visitorMessageMap.delete(discordMsgId);
+      }
+    }
+
+    if (readMessageIds.length > 0) {
+      await this.emit({
+        type: "message_read_by_reaction",
+        sessionId,
+        messageIds: readMessageIds,
+        sourceBridge: this.name,
+      });
+    }
 
     // React to confirm
     try {
@@ -266,10 +349,12 @@ export class DiscordBridge extends Bridge {
   private async createThread(session: Session): Promise<void> {
     if (!this.channel) return;
 
+    const meta = session.metadata;
+
     // Build thread name
     let pageInfo = "";
-    if (session.metadata?.url) {
-      const parts = session.metadata.url.split("/");
+    if (meta?.url) {
+      const parts = meta.url.split("/");
       const lastPart = parts.at(-1) ?? "home";
       const withoutQuery = lastPart.split("?").at(0) ?? lastPart;
       pageInfo = withoutQuery.slice(0, 20);
@@ -282,24 +367,51 @@ export class DiscordBridge extends Bridge {
     // Build welcome embed
     let description = `Session: \`${session.id}\``;
 
-    if (session.metadata?.url) {
-      description += `\n📍 **Page:** ${session.metadata.url}`;
+    if (meta?.url) {
+      description += `\n📍 **Page:** ${meta.url}`;
     }
-    if (session.metadata?.referrer) {
-      description += `\n↩️ **Depuis:** ${session.metadata.referrer}`;
+    if (meta?.pageTitle) {
+      description += `\n📄 **Title:** ${meta.pageTitle}`;
     }
-    if (session.metadata?.timezone) {
-      description += `\n🕐 **Fuseau:** ${session.metadata.timezone}`;
-    }
-    if (session.metadata?.userAgent) {
-      const isMobile = session.metadata.userAgent.includes("Mobile");
-      description += `\n**Device:** ${isMobile ? "📱 Mobile" : "💻 Desktop"}`;
+    if (meta?.referrer) {
+      description += `\n↩️ **From:** ${meta.referrer}`;
     }
 
-    description += "\n\n💡 **Écrivez ici pour répondre!**";
+    // Device info
+    const deviceParts: string[] = [];
+    if (meta?.deviceType) {
+      const deviceEmoji = meta.deviceType === "mobile" ? "📱" : "💻";
+      deviceParts.push(`${deviceEmoji} ${meta.deviceType}`);
+    }
+    if (meta?.browser) deviceParts.push(meta.browser);
+    if (meta?.os) deviceParts.push(meta.os);
+    if (deviceParts.length > 0) {
+      description += `\n🖥️ **Device:** ${deviceParts.join(" • ")}`;
+    }
+
+    // Location
+    const locationParts: string[] = [];
+    if (meta?.city) locationParts.push(meta.city);
+    if (meta?.country) locationParts.push(meta.country);
+    if (locationParts.length > 0) {
+      description += `\n🌍 **Location:** ${locationParts.join(", ")}`;
+    }
+    if (meta?.ip) {
+      description += `\n🔗 **IP:** \`${meta.ip}\``;
+    }
+
+    // Other info
+    if (meta?.language) {
+      description += `\n🗣️ **Language:** ${meta.language}`;
+    }
+    if (meta?.timezone) {
+      description += `\n🕐 **Timezone:** ${meta.timezone}`;
+    }
+
+    description += "\n\n💡 **Reply here to communicate with the visitor!**";
 
     const embed = new EmbedBuilder()
-      .setTitle("🆕 Nouvelle Conversation")
+      .setTitle("🆕 New Conversation")
       .setDescription(description)
       .setColor(0x5865f2);
 
@@ -315,8 +427,8 @@ export class DiscordBridge extends Bridge {
       this.threadSessionMap.set(thread.id, session.id);
 
       await thread.send(
-        "👋 Visiteur connecté! Les messages apparaîtront ici.\n" +
-          "Écrivez directement pour répondre."
+        "👋 Visitor connected! Messages will appear here.\n" +
+          "Type directly to reply."
       );
     } catch (error) {
       console.error("[Discord] Failed to create thread:", error);
@@ -326,19 +438,20 @@ export class DiscordBridge extends Bridge {
   private async sendLegacyNotification(session: Session): Promise<void> {
     if (!this.channel) return;
 
+    const meta = session.metadata;
     let description = `Session: \`${session.id.slice(0, 8)}...\``;
 
-    if (session.metadata?.url) {
-      description += `\nPage: ${session.metadata.url}`;
+    if (meta?.url) {
+      description += `\nPage: ${meta.url}`;
     }
-    if (session.metadata?.referrer) {
-      description += `\nDepuis: ${session.metadata.referrer}`;
+    if (meta?.referrer) {
+      description += `\nFrom: ${meta.referrer}`;
     }
 
     const embed = new EmbedBuilder()
-      .setTitle("🆕 Nouveau Visiteur")
+      .setTitle("🆕 New Visitor")
       .setDescription(description)
-      .setFooter({ text: "Répondez à ce message pour communiquer" })
+      .setFooter({ text: "Reply to this message to communicate" })
       .setColor(0x5865f2);
 
     try {
@@ -374,11 +487,25 @@ export class DiscordBridge extends Bridge {
       if (!thread) return;
 
       const embed = new EmbedBuilder()
-        .setAuthor({ name: "👤 Visiteur" })
+        .setAuthor({ name: "👤 Visitor" })
         .setDescription(message.content)
         .setColor(0x9b59b6);
 
-      await thread.send({ embeds: [embed] });
+      const discordMsg = await thread.send({ embeds: [embed] });
+
+      // Track for read receipts
+      this.visitorMessageMap.set(discordMsg.id, {
+        sessionId: session.id,
+        messageId: message.id,
+      });
+
+      // Notify backend that message was delivered
+      await this.emit({
+        type: "message_delivered",
+        sessionId: session.id,
+        messageId: message.id,
+        sourceBridge: this.name,
+      });
     } catch (error) {
       console.error("[Discord] Failed to send thread message:", error);
     }
@@ -396,6 +523,14 @@ export class DiscordBridge extends Bridge {
       const msg = await this.channel.send({ embeds: [embed] });
       this.sessionMessageMap.set(session.id, msg.id);
       this.messageSessionMap.set(msg.id, session.id);
+
+      // Notify backend that message was delivered
+      await this.emit({
+        type: "message_delivered",
+        sessionId: session.id,
+        messageId: message.id,
+        sourceBridge: this.name,
+      });
     } catch (error) {
       console.error("[Discord] Failed to send message:", error);
     }
@@ -403,8 +538,8 @@ export class DiscordBridge extends Bridge {
 
   async onAITakeover(session: Session, reason: string): Promise<void> {
     const embed = new EmbedBuilder()
-      .setTitle("🤖 IA Activée")
-      .setDescription(`Session: \`${session.id.slice(0, 8)}...\`\nRaison: ${reason}`)
+      .setTitle("🤖 AI Activated")
+      .setDescription(`Session: \`${session.id.slice(0, 8)}...\`\nReason: ${reason}`)
       .setColor(0xffa500);
 
     if (this.useThreads) {

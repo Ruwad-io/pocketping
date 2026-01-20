@@ -84,29 +84,62 @@ export class PocketPingClient {
       throw new Error('Not connected');
     }
 
-    const response = await this.fetch<SendMessageResponse>('/message', {
-      method: 'POST',
-      body: JSON.stringify({
-        sessionId: this.session.sessionId,
-        content,
-        sender: 'visitor',
-      }),
-    });
-
-    const message: Message = {
-      id: response.messageId,
+    // Create temporary message with 'sending' status
+    const tempId = `temp-${this.generateId()}`;
+    const tempMessage: Message = {
+      id: tempId,
       sessionId: this.session.sessionId,
       content,
       sender: 'visitor',
-      timestamp: response.timestamp,
+      timestamp: new Date().toISOString(),
+      status: 'sending',
     };
 
-    // Add to local state
-    this.session.messages.push(message);
-    this.emit('message', message);
-    this.config.onMessage?.(message);
+    // Add to local state immediately for instant UI feedback
+    this.session.messages.push(tempMessage);
+    this.emit('message', tempMessage);
 
-    return message;
+    try {
+      const response = await this.fetch<SendMessageResponse>('/message', {
+        method: 'POST',
+        body: JSON.stringify({
+          sessionId: this.session.sessionId,
+          content,
+          sender: 'visitor',
+        }),
+      });
+
+      // Update the temporary message with real ID and 'sent' status
+      const messageIndex = this.session.messages.findIndex((m) => m.id === tempId);
+      if (messageIndex >= 0) {
+        this.session.messages[messageIndex].id = response.messageId;
+        this.session.messages[messageIndex].timestamp = response.timestamp;
+        this.session.messages[messageIndex].status = 'sent';
+
+        // Emit to trigger re-render with updated status
+        this.emit('message', this.session.messages[messageIndex]);
+      }
+
+      const message = this.session.messages[messageIndex] || {
+        id: response.messageId,
+        sessionId: this.session.sessionId,
+        content,
+        sender: 'visitor',
+        timestamp: response.timestamp,
+        status: 'sent',
+      };
+
+      this.config.onMessage?.(message);
+      return message;
+    } catch (error) {
+      // Remove failed message from local state
+      const messageIndex = this.session.messages.findIndex((m) => m.id === tempId);
+      if (messageIndex >= 0) {
+        this.session.messages.splice(messageIndex, 1);
+        this.emit('message', tempMessage); // Trigger re-render
+      }
+      throw error;
+    }
   }
 
   async fetchMessages(after?: string): Promise<Message[]> {
@@ -278,14 +311,61 @@ export class PocketPingClient {
       case 'message':
         const message = event.data as Message;
         if (this.session) {
-          this.session.messages.push(message);
+          // First, try to find by exact ID
+          let existingIndex = this.session.messages.findIndex((m) => m.id === message.id);
+
+          // If not found and it's a visitor message, look for a pending temp message
+          // This handles the race condition where WS arrives before HTTP response
+          if (existingIndex < 0 && message.sender === 'visitor') {
+            existingIndex = this.session.messages.findIndex(
+              (m) => m.id.startsWith('temp-') && m.content === message.content && m.sender === 'visitor'
+            );
+            // Update the temp ID to the real server ID
+            if (existingIndex >= 0) {
+              this.session.messages[existingIndex].id = message.id;
+            }
+          }
+
+          // For operator/AI messages, also check for duplicates by content (within 2 seconds)
+          if (existingIndex < 0 && message.sender !== 'visitor') {
+            const msgTime = new Date(message.timestamp).getTime();
+            existingIndex = this.session.messages.findIndex(
+              (m) =>
+                m.sender === message.sender &&
+                m.content === message.content &&
+                Math.abs(new Date(m.timestamp).getTime() - msgTime) < 2000
+            );
+          }
+
+          if (existingIndex >= 0) {
+            // Update existing message (status update from server)
+            const existing = this.session.messages[existingIndex];
+            if (message.status && message.status !== existing.status) {
+              existing.status = message.status;
+              if (message.deliveredAt) existing.deliveredAt = message.deliveredAt;
+              if (message.readAt) existing.readAt = message.readAt;
+              // Emit read event to trigger UI update
+              this.emit('read', { messageIds: [message.id], status: message.status });
+            }
+          } else {
+            // Add new message (operator/AI messages)
+            this.session.messages.push(message);
+            this.emit('message', message);
+            this.config.onMessage?.(message);
+          }
         }
-        this.emit('message', message);
-        this.config.onMessage?.(message);
+        // Clear typing indicator when operator/AI sends a message
+        if (message.sender !== 'visitor') {
+          this.emit('typing', { isTyping: false });
+        }
         break;
 
       case 'typing':
-        this.emit('typing', event.data);
+        // Only show typing indicator if it's from operator/AI, not visitor
+        const typingData = event.data as { isTyping: boolean; sender?: string };
+        if (typingData.sender !== 'visitor') {
+          this.emit('typing', { isTyping: typingData.isTyping });
+        }
         break;
 
       case 'presence':

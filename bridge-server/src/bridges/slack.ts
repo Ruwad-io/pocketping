@@ -17,6 +17,9 @@ export class SlackBridge extends Bridge {
   // Thread mode: thread_ts -> session_id
   private threadSessionMap: Map<string, string> = new Map();
 
+  // Track visitor messages for read receipts: message_ts -> { sessionId, messageId }
+  private visitorMessageMap: Map<string, { sessionId: string; messageId: string }> = new Map();
+
   // Track operator messages for read receipts: pocketping_msg_id -> message_ts
   private operatorMessageMap: Map<string, string> = new Map();
 
@@ -51,6 +54,7 @@ export class SlackBridge extends Bridge {
     try {
       await this.webClient.chat.postMessage({
         channel: this.channelId,
+        text: "PocketPing Bridge Connected - Commands: @PocketPing online/offline/status",
         blocks: [
           {
             type: "section",
@@ -59,10 +63,11 @@ export class SlackBridge extends Bridge {
               text:
                 "🔔 *PocketPing Bridge Connected*\n\n" +
                 "*Commands (mention me):*\n" +
-                "• `@PocketPing online` - Marquer comme disponible\n" +
-                "• `@PocketPing offline` - Marquer comme absent\n" +
-                "• `@PocketPing status` - Voir le statut actuel\n\n" +
-                "_Répondez dans un thread pour communiquer avec le visiteur._",
+                "• `@PocketPing online` - Mark as available\n" +
+                "• `@PocketPing offline` - Mark as away\n" +
+                "• `@PocketPing status` - View current status\n" +
+                "• `@PocketPing read` - Mark all visitor messages as read\n\n" +
+                "_Reply in a thread to communicate with the visitor._",
             },
           },
         ],
@@ -81,6 +86,9 @@ export class SlackBridge extends Bridge {
     const body = event.body;
     if (!body) return;
 
+    // Debug: log all incoming events
+    console.log("[Slack] Event received:", body.type, body.event?.type || "");
+
     // Handle events_api
     if (body.type === "event_callback") {
       const innerEvent = body.event;
@@ -89,19 +97,38 @@ export class SlackBridge extends Bridge {
         await this.handleMessageEvent(innerEvent);
       } else if (innerEvent.type === "app_mention") {
         await this.handleMention(innerEvent);
+      } else if (innerEvent.type === "reaction_added") {
+        await this.handleReactionAdded(innerEvent);
       }
     }
   }
 
   private async handleMessageEvent(event: any): Promise<void> {
+    console.log("[Slack] Message event:", { thread_ts: event.thread_ts, text: event.text?.slice(0, 50) });
+
     const threadTs = event.thread_ts;
-    if (!threadTs) return; // Not a thread reply
+    if (!threadTs) {
+      console.log("[Slack] Ignoring: not a thread reply");
+      return;
+    }
 
     const sessionId = this.threadSessionMap.get(threadTs);
-    if (!sessionId) return; // Not a tracked thread
+    if (!sessionId) {
+      console.log("[Slack] Ignoring: thread not tracked, known threads:", [...this.threadSessionMap.keys()]);
+      return;
+    }
 
     const text = event.text;
     if (!text) return;
+
+    // Check if this is a command (message starts with bot mention)
+    if (text.trim().startsWith("<@")) {
+      console.log("[Slack] Detected mention, treating as command");
+      await this.handleMentionCommand(text, threadTs, sessionId);
+      return;
+    }
+
+    console.log("[Slack] Processing operator message for session:", sessionId);
 
     // Get operator name
     let operatorName: string | undefined;
@@ -125,6 +152,24 @@ export class SlackBridge extends Bridge {
       operatorName,
     });
 
+    // Mark all visitor messages in this session as read
+    const readMessageIds: string[] = [];
+    for (const [messageTs, info] of this.visitorMessageMap.entries()) {
+      if (info.sessionId === sessionId) {
+        readMessageIds.push(info.messageId);
+        this.visitorMessageMap.delete(messageTs);
+      }
+    }
+
+    if (readMessageIds.length > 0) {
+      await this.emit({
+        type: "message_read_by_reaction",
+        sessionId,
+        messageIds: readMessageIds,
+        sourceBridge: this.name,
+      });
+    }
+
     // React to confirm
     try {
       await this.webClient.reactions.add({
@@ -137,31 +182,154 @@ export class SlackBridge extends Bridge {
     }
   }
 
+  private async handleReactionAdded(event: any): Promise<void> {
+    const messageTs = event.item?.ts;
+    if (!messageTs) return;
+
+    const info = this.visitorMessageMap.get(messageTs);
+    if (!info) return;
+
+    // Operator reacted to a visitor message = read receipt
+    await this.emit({
+      type: "message_read_by_reaction",
+      sessionId: info.sessionId,
+      messageIds: [info.messageId],
+      sourceBridge: this.name,
+    });
+
+    this.visitorMessageMap.delete(messageTs);
+  }
+
+  private async handleMentionCommand(text: string, threadTs: string, sessionId: string): Promise<void> {
+    const lowerText = text.toLowerCase();
+
+    if (lowerText.includes("read")) {
+      // Mark all visitor messages in this session as read
+      const messageIds: string[] = [];
+      for (const [messageTs, info] of this.visitorMessageMap.entries()) {
+        if (info.sessionId === sessionId) {
+          messageIds.push(info.messageId);
+          this.visitorMessageMap.delete(messageTs);
+        }
+      }
+
+      if (messageIds.length === 0) {
+        await this.webClient.chat.postMessage({
+          channel: this.channelId,
+          text: "✅ All messages are already marked as read.",
+          thread_ts: threadTs,
+        });
+        return;
+      }
+
+      await this.emit({
+        type: "message_read_by_reaction",
+        sessionId,
+        messageIds,
+        sourceBridge: this.name,
+      });
+
+      await this.webClient.chat.postMessage({
+        channel: this.channelId,
+        text: `👀 ${messageIds.length} message(s) marked as read.`,
+        thread_ts: threadTs,
+      });
+    } else if (lowerText.includes("status")) {
+      const status = this.operatorOnline ? "🟢 Online" : "🔴 Offline";
+      await this.webClient.chat.postMessage({
+        channel: this.channelId,
+        text: `📊 Status: ${status}`,
+        thread_ts: threadTs,
+      });
+    } else if (lowerText.includes("online")) {
+      this.operatorOnline = true;
+      await this.webClient.chat.postMessage({
+        channel: this.channelId,
+        text: "✅ You are now online.",
+        thread_ts: threadTs,
+      });
+    } else if (lowerText.includes("offline")) {
+      this.operatorOnline = false;
+      await this.webClient.chat.postMessage({
+        channel: this.channelId,
+        text: "🌙 You are now offline.",
+        thread_ts: threadTs,
+      });
+    }
+  }
+
   private async handleMention(event: any): Promise<void> {
     const text = (event.text || "").toLowerCase();
+    const threadTs = event.thread_ts;
 
     if (text.includes("online")) {
       this.operatorOnline = true;
       await this.webClient.chat.postMessage({
         channel: this.channelId,
-        text: "✅ Vous êtes maintenant en ligne.",
+        text: "✅ You are now online.",
+        thread_ts: threadTs,
       });
     } else if (text.includes("offline")) {
       this.operatorOnline = false;
       await this.webClient.chat.postMessage({
         channel: this.channelId,
-        text: "🌙 Vous êtes maintenant hors ligne.",
+        text: "🌙 You are now offline.",
+        thread_ts: threadTs,
       });
     } else if (text.includes("status")) {
-      const status = this.operatorOnline ? "🟢 En ligne" : "🔴 Hors ligne";
+      const status = this.operatorOnline ? "🟢 Online" : "🔴 Offline";
       await this.webClient.chat.postMessage({
         channel: this.channelId,
-        text: `📊 *Statut:* ${status}`,
+        text: `📊 Status: ${status}`,
+        thread_ts: threadTs,
+      });
+    } else if (text.includes("read")) {
+      // Mark all visitor messages in this thread as read
+      const sessionId = threadTs ? this.threadSessionMap.get(threadTs) : undefined;
+
+      if (!sessionId) {
+        await this.webClient.chat.postMessage({
+          channel: this.channelId,
+          text: "❌ Use this command inside a conversation thread.",
+          thread_ts: threadTs,
+        });
+        return;
+      }
+
+      const messageIds: string[] = [];
+      for (const [messageTs, info] of this.visitorMessageMap.entries()) {
+        if (info.sessionId === sessionId) {
+          messageIds.push(info.messageId);
+          this.visitorMessageMap.delete(messageTs);
+        }
+      }
+
+      if (messageIds.length === 0) {
+        await this.webClient.chat.postMessage({
+          channel: this.channelId,
+          text: "✅ All messages are already marked as read.",
+          thread_ts: threadTs,
+        });
+        return;
+      }
+
+      await this.emit({
+        type: "message_read_by_reaction",
+        sessionId,
+        messageIds,
+        sourceBridge: this.name,
+      });
+
+      await this.webClient.chat.postMessage({
+        channel: this.channelId,
+        text: `👀 ${messageIds.length} message(s) marked as read.`,
+        thread_ts: threadTs,
       });
     }
   }
 
   async onNewSession(session: Session): Promise<void> {
+    const meta = session.metadata;
     const fields: any[] = [
       {
         type: "mrkdwn",
@@ -169,29 +337,64 @@ export class SlackBridge extends Bridge {
       },
     ];
 
-    if (session.metadata?.url) {
+    if (meta?.url) {
       fields.push({
         type: "mrkdwn",
-        text: `*Page*\n${session.metadata.url}`,
+        text: `*Page*\n${meta.url}`,
       });
     }
 
-    if (session.metadata?.referrer) {
+    if (meta?.referrer) {
       fields.push({
         type: "mrkdwn",
-        text: `*Depuis*\n${session.metadata.referrer}`,
+        text: `*From*\n${meta.referrer}`,
       });
     }
+
+    // Build device info
+    const deviceParts: string[] = [];
+    if (meta?.deviceType) deviceParts.push(meta.deviceType);
+    if (meta?.browser) deviceParts.push(meta.browser);
+    if (meta?.os) deviceParts.push(meta.os);
+    if (deviceParts.length > 0) {
+      fields.push({
+        type: "mrkdwn",
+        text: `*Device*\n${deviceParts.join(" • ")}`,
+      });
+    }
+
+    // Build location info
+    const locationParts: string[] = [];
+    if (meta?.city) locationParts.push(meta.city);
+    if (meta?.country) locationParts.push(meta.country);
+    if (locationParts.length > 0) {
+      fields.push({
+        type: "mrkdwn",
+        text: `*Location*\n${locationParts.join(", ")}`,
+      });
+    }
+
+    if (meta?.ip) {
+      fields.push({
+        type: "mrkdwn",
+        text: `*IP*\n\`${meta.ip}\``,
+      });
+    }
+
+    // Plain text fallback
+    let plainText = `New visitor - Session: ${session.id.slice(0, 8)}...`;
+    if (meta?.url) plainText += ` | Page: ${meta.url}`;
 
     try {
       const result = await this.webClient.chat.postMessage({
         channel: this.channelId,
+        text: plainText,
         blocks: [
           {
             type: "header",
             text: {
               type: "plain_text",
-              text: "🆕 Nouveau Visiteur",
+              text: "🆕 New Conversation",
             },
           },
           {
@@ -203,7 +406,7 @@ export class SlackBridge extends Bridge {
             elements: [
               {
                 type: "mrkdwn",
-                text: "_Répondez dans ce thread pour communiquer avec le visiteur_",
+                text: "_Reply in this thread to communicate with the visitor_",
               },
             ],
           },
@@ -228,6 +431,7 @@ export class SlackBridge extends Bridge {
       try {
         const result = await this.webClient.chat.postMessage({
           channel: this.channelId,
+          text: `New message: ${message.content}`,
           blocks: [
             {
               type: "section",
@@ -252,7 +456,21 @@ export class SlackBridge extends Bridge {
         if (threadTs) {
           this.sessionThreadMap.set(session.id, threadTs);
           this.threadSessionMap.set(threadTs, session.id);
+
+          // Track for read receipts
+          this.visitorMessageMap.set(threadTs, {
+            sessionId: session.id,
+            messageId: message.id,
+          });
         }
+
+        // Notify backend that message was delivered to Slack
+        await this.emit({
+          type: "message_delivered",
+          sessionId: session.id,
+          messageId: message.id,
+          sourceBridge: this.name,
+        });
       } catch (error) {
         console.error("[Slack] Failed to create thread:", error);
         return;
@@ -260,10 +478,26 @@ export class SlackBridge extends Bridge {
     } else {
       // Reply in existing thread
       try {
-        await this.webClient.chat.postMessage({
+        const result = await this.webClient.chat.postMessage({
           channel: this.channelId,
           thread_ts: threadTs,
           text: message.content,
+        });
+
+        // Track for read receipts
+        if (result.ts) {
+          this.visitorMessageMap.set(result.ts, {
+            sessionId: session.id,
+            messageId: message.id,
+          });
+        }
+
+        // Notify backend that message was delivered to Slack
+        await this.emit({
+          type: "message_delivered",
+          sessionId: session.id,
+          messageId: message.id,
+          sourceBridge: this.name,
         });
       } catch (error) {
         console.error("[Slack] Failed to send thread message:", error);
@@ -278,12 +512,13 @@ export class SlackBridge extends Bridge {
       await this.webClient.chat.postMessage({
         channel: this.channelId,
         thread_ts: threadTs,
+        text: `AI Activated - Session: ${session.id.slice(0, 8)}... - Reason: ${reason}`,
         blocks: [
           {
             type: "section",
             text: {
               type: "mrkdwn",
-              text: `🤖 *IA Activée*\nSession: \`${session.id.slice(0, 8)}...\`\nRaison: ${reason}`,
+              text: `🤖 *AI Activated*\nSession: \`${session.id.slice(0, 8)}...\`\nReason: ${reason}`,
             },
           },
         ],
@@ -317,6 +552,7 @@ export class SlackBridge extends Bridge {
       await this.webClient.chat.postMessage({
         channel: this.channelId,
         thread_ts: threadTs,
+        text: `${name} via ${sourceBridge}: ${message.content}`,
         blocks: [
           {
             type: "context",

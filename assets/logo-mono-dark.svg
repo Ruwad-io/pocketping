@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- For dark backgrounds -->
+
+  <!-- Rounded square background -->
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="#e9f1ff"/>
+
+  <!-- Chat bubble -->
+  <path
+    d="M32 36
+       C32 31 36 28 40 28
+       L88 28
+       C92 28 96 31 96 36
+       L96 72
+       C96 76 92 80 88 80
+       L56 80
+       L40 96
+       L40 80
+       C36 80 32 76 32 72
+       Z"
+    fill="#0b0d14"
+  />
+
+  <!-- Ping indicator -->
+  <circle cx="88" cy="36" r="16" fill="#0b0d14"/>
+  <circle cx="88" cy="36" r="6" fill="#e9f1ff"/>
+
+  <!-- Chat dots -->
+  <g fill="#e9f1ff">
+    <circle cx="52" cy="54" r="6"/>
+    <circle cx="68" cy="54" r="6"/>
+    <circle cx="84" cy="54" r="6"/>
+  </g>
+</svg>

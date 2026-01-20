@@ -251,15 +251,23 @@ class PocketPing:
 
         # Broadcast read event to WebSocket clients and bridges
         if updated > 0:
+            broadcast_data = {
+                "sessionId": request.session_id,
+                "messageIds": request.message_ids,
+                "status": request.status.value,
+            }
+            # Include timestamps if available
+            if request.status == MessageStatus.DELIVERED:
+                broadcast_data["deliveredAt"] = now.isoformat()
+            elif request.status == MessageStatus.READ:
+                broadcast_data["readAt"] = now.isoformat()
+                broadcast_data["deliveredAt"] = now.isoformat()
+
             await self._broadcast_to_session(
                 request.session_id,
                 WebSocketEvent(
                     type="read",
-                    data={
-                        "sessionId": request.session_id,
-                        "messageIds": request.message_ids,
-                        "status": request.status.value,
-                    },
+                    data=broadcast_data,
                 ),
             )
 

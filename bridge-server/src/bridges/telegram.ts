@@ -25,6 +25,9 @@ export class TelegramBridge extends Bridge {
   // Track operator messages for read receipts: pocketping_msg_id -> (chat_id, telegram_msg_id)
   private operatorMessageMap: Map<string, { chatId: number; messageId: number }> = new Map();
 
+  // Track visitor messages for reaction-based read receipts: telegram_msg_id -> {sessionId, messageId}
+  private visitorMessageMap: Map<number, { sessionId: string; messageId: string }> = new Map();
+
   private operatorOnline = false;
 
   constructor(config: TelegramConfig) {
@@ -45,14 +48,35 @@ export class TelegramBridge extends Bridge {
     this.bot.command("offline", this.handleOfflineCommand.bind(this));
     this.bot.command("status", this.handleStatusCommand.bind(this));
     this.bot.command("close", this.handleCloseCommand.bind(this));
+    this.bot.command("read", this.handleReadCommand.bind(this));
     this.bot.command("help", this.handleHelpCommand.bind(this));
 
     // Handle incoming messages
     this.bot.on("message", this.handleMessage.bind(this));
 
+    // Handle reactions (for read receipts)
+    this.bot.on("message_reaction", this.handleReaction.bind(this));
+
     // Start the bot
-    await this.bot.launch();
-    console.log("[Telegram] Bridge started");
+    console.log("[Telegram] Launching bot...");
+    try {
+      // Launch with explicit polling options
+      this.bot.launch({
+        dropPendingUpdates: true,
+        allowedUpdates: ["message", "callback_query", "message_reaction"],
+      });
+
+      // Don't await launch() - it returns a promise that resolves when bot stops
+      // Instead, wait a bit and check if bot is running
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // Test by getting bot info
+      const botInfo = await this.bot.telegram.getMe();
+      console.log(`[Telegram] Bridge started! Bot: @${botInfo.username}`);
+    } catch (error) {
+      console.error("[Telegram] Failed to launch bot:", error);
+      throw error;
+    }
 
     // Send startup message
     await this.sendStartupMessage();
@@ -63,13 +87,13 @@ export class TelegramBridge extends Bridge {
     if (!targetChatId) return;
 
     const modeInfo = this.useForumTopics
-      ? "Mode: Forum Topics\nChaque conversation a son propre topic!"
+      ? "Mode: Forum Topics\nEach conversation gets its own topic!"
       : "Mode: Legacy (reply-based)";
 
     try {
       await this.bot.telegram.sendMessage(
         targetChatId,
-        `🔔 *PocketPing Bridge Connected*\n\n${modeInfo}\n\n*Commands:*\n/online - Marquer comme disponible\n/offline - Marquer comme absent\n/status - Voir le statut actuel\n/close - Fermer la conversation (Forum Topics)\n/help - Aide`,
+        `🔔 *PocketPing Bridge Connected*\n\n${modeInfo}\n\n*Commands:*\n/online - Mark as available\n/offline - Mark as away\n/status - View current status\n/read - Mark messages as read\n/close - Close conversation (Forum Topics)\n/help - Help`,
         { parse_mode: "Markdown" }
       );
     } catch (error) {
@@ -79,39 +103,39 @@ export class TelegramBridge extends Bridge {
 
   private async handleOnlineCommand(ctx: Context): Promise<void> {
     this.operatorOnline = true;
-    await ctx.reply("✅ Vous êtes maintenant en ligne. Les utilisateurs verront que vous êtes disponible.");
+    await ctx.reply("✅ You are now online. Users will see you as available.");
   }
 
   private async handleOfflineCommand(ctx: Context): Promise<void> {
     this.operatorOnline = false;
-    await ctx.reply("🌙 Vous êtes maintenant hors ligne. L'IA gérera les conversations si configurée.");
+    await ctx.reply("🌙 You are now offline. AI will handle conversations if configured.");
   }
 
   private async handleStatusCommand(ctx: Context): Promise<void> {
-    const status = this.operatorOnline ? "🟢 En ligne" : "🔴 Hors ligne";
+    const status = this.operatorOnline ? "🟢 Online" : "🔴 Offline";
     const activeSessions = this.useForumTopics
       ? this.sessionTopicMap.size
       : this.sessionMessageMap.size;
-    await ctx.reply(`📊 *Statut:* ${status}\n💬 Sessions actives: ${activeSessions}`, {
+    await ctx.reply(`📊 *Status:* ${status}\n💬 Active sessions: ${activeSessions}`, {
       parse_mode: "Markdown",
     });
   }
 
   private async handleCloseCommand(ctx: Context): Promise<void> {
     if (!this.useForumTopics) {
-      await ctx.reply("❌ Cette commande ne fonctionne qu'en mode Forum Topics.");
+      await ctx.reply("❌ This command only works in Forum Topics mode.");
       return;
     }
 
     const topicId = ctx.message?.message_thread_id;
     if (!topicId) {
-      await ctx.reply("❌ Utilisez cette commande dans un topic de conversation.");
+      await ctx.reply("❌ Use this command inside a conversation topic.");
       return;
     }
 
     const sessionId = this.topicSessionMap.get(topicId);
     if (!sessionId) {
-      await ctx.reply("❌ Aucune conversation active dans ce topic.");
+      await ctx.reply("❌ No active conversation in this topic.");
       return;
     }
 
@@ -125,7 +149,7 @@ export class TelegramBridge extends Bridge {
     // Close the topic
     try {
       await this.bot.telegram.closeForumTopic(this.forumChatId!, topicId);
-      await ctx.reply("✅ Conversation fermée.");
+      await ctx.reply("✅ Conversation closed.");
     } catch (error) {
       console.error("[Telegram] Failed to close topic:", error);
     }
@@ -135,13 +159,61 @@ export class TelegramBridge extends Bridge {
     this.topicSessionMap.delete(topicId);
   }
 
+  private async handleReadCommand(ctx: Context): Promise<void> {
+    let sessionId: string | undefined;
+
+    if (this.useForumTopics) {
+      const topicId = ctx.message?.message_thread_id;
+      if (!topicId) {
+        await ctx.reply("❌ Use this command inside a conversation topic.");
+        return;
+      }
+      sessionId = this.topicSessionMap.get(topicId);
+    } else {
+      // Legacy mode: get session from reply or last message
+      const replyTo = (ctx.message as { reply_to_message?: { message_id: number } })?.reply_to_message;
+      if (replyTo) {
+        sessionId = this.messageSessionMap.get(replyTo.message_id);
+      }
+    }
+
+    if (!sessionId) {
+      await ctx.reply("❌ No active conversation found.");
+      return;
+    }
+
+    // Get all tracked visitor messages for this session
+    const messageIds: string[] = [];
+    for (const [telegramMsgId, info] of this.visitorMessageMap.entries()) {
+      if (info.sessionId === sessionId) {
+        messageIds.push(info.messageId);
+        this.visitorMessageMap.delete(telegramMsgId);
+      }
+    }
+
+    if (messageIds.length === 0) {
+      await ctx.reply("✅ All messages are already marked as read.");
+      return;
+    }
+
+    // Emit read event
+    await this.emit({
+      type: "message_read_by_reaction",
+      sessionId,
+      messageIds,
+      sourceBridge: this.name,
+    });
+
+    await ctx.reply(`👀 ${messageIds.length} message(s) marked as read.`);
+  }
+
   private async handleHelpCommand(ctx: Context): Promise<void> {
     const modeHelp = this.useForumTopics
-      ? "Répondez directement dans le topic pour communiquer avec l'utilisateur."
-      : "Répondez à un message pour communiquer avec l'utilisateur correspondant.";
+      ? "Reply directly in the topic to communicate with the visitor."
+      : "Reply to a message to communicate with the corresponding visitor.";
 
     await ctx.reply(
-      `📖 *PocketPing Bridge*\n\n${modeHelp}\n\n*Commands:*\n/online - Marquer comme disponible\n/offline - Marquer comme absent\n/status - Voir le statut actuel\n/close - Fermer la conversation\n/help - Cette aide`,
+      `📖 *PocketPing Bridge*\n\n${modeHelp}\n\n*Commands:*\n/online - Mark as available\n/offline - Mark as away\n/status - View current status\n/read - Mark messages as read ✓✓\n/close - Close conversation\n/help - This help`,
       { parse_mode: "Markdown" }
     );
   }
@@ -157,6 +229,58 @@ export class TelegramBridge extends Bridge {
       await this.handleForumMessage(ctx, message);
     } else {
       await this.handleLegacyReply(ctx, message);
+    }
+  }
+
+  private async handleReaction(ctx: Context): Promise<void> {
+    // Get the reaction update
+    const update = ctx.update as { message_reaction?: {
+      message_id: number;
+      chat: { id: number };
+      new_reaction: Array<{ type: string; emoji?: string }>;
+      user?: { id: number };
+    }};
+
+    const reaction = update.message_reaction;
+    if (!reaction) return;
+
+    // Check if the message is a tracked visitor message
+    const tracked = this.visitorMessageMap.get(reaction.message_id);
+    if (!tracked) return;
+
+    // Only process if there's a new reaction (not removal)
+    if (reaction.new_reaction.length === 0) return;
+
+    // Get the emoji
+    const emoji = reaction.new_reaction[0]?.emoji;
+    console.log(`[Telegram] Reaction "${emoji}" on visitor message ${tracked.messageId.slice(0, 8)}...`);
+
+    // Emit read event for this message
+    await this.emit({
+      type: "message_read_by_reaction",
+      sessionId: tracked.sessionId,
+      messageIds: [tracked.messageId],
+      sourceBridge: this.name,
+    });
+
+    // Also mark all previous unread visitor messages in this session as read
+    const sessionMessages: string[] = [];
+    for (const [telegramMsgId, info] of this.visitorMessageMap.entries()) {
+      if (info.sessionId === tracked.sessionId) {
+        sessionMessages.push(info.messageId);
+        // Clean up tracked messages
+        this.visitorMessageMap.delete(telegramMsgId);
+      }
+    }
+
+    if (sessionMessages.length > 1) {
+      // Emit for all messages in the session
+      await this.emit({
+        type: "message_read_by_reaction",
+        sessionId: tracked.sessionId,
+        messageIds: sessionMessages,
+        sourceBridge: this.name,
+      });
     }
   }
 
@@ -243,20 +367,56 @@ export class TelegramBridge extends Bridge {
       this.sessionTopicMap.set(session.id, topicId);
       this.topicSessionMap.set(topicId, session.id);
 
-      // Build welcome message
-      let welcomeText = `🆕 *Nouvelle conversation*\n\nSession: \`${session.id.slice(0, 8)}...\``;
+      // Build welcome message with all available metadata
+      const meta = session.metadata;
+      let welcomeText = `🆕 *New conversation*\n\nSession: \`${session.id.slice(0, 8)}...\``;
 
-      if (session.metadata?.url) {
-        welcomeText += `\n📍 Page: ${session.metadata.url}`;
+      // Page info
+      if (meta?.url) {
+        welcomeText += `\n📍 Page: ${meta.url}`;
       }
-      if (session.metadata?.referrer) {
-        welcomeText += `\n↩️ Depuis: ${session.metadata.referrer}`;
+      if (meta?.pageTitle) {
+        welcomeText += `\n📄 Title: ${meta.pageTitle}`;
       }
-      if (session.metadata?.timezone) {
-        welcomeText += `\n🕐 Fuseau: ${session.metadata.timezone}`;
+      if (meta?.referrer) {
+        welcomeText += `\n↩️ From: ${meta.referrer}`;
       }
 
-      welcomeText += "\n\n_Répondez ici pour communiquer avec le visiteur._";
+      // Device info
+      const deviceParts: string[] = [];
+      if (meta?.deviceType) {
+        const deviceEmoji = meta.deviceType === "mobile" ? "📱" : meta.deviceType === "tablet" ? "📱" : "💻";
+        deviceParts.push(`${deviceEmoji} ${meta.deviceType}`);
+      }
+      if (meta?.browser) deviceParts.push(meta.browser);
+      if (meta?.os) deviceParts.push(meta.os);
+      if (deviceParts.length > 0) {
+        welcomeText += `\n🖥️ Device: ${deviceParts.join(" • ")}`;
+      }
+
+      // Location info
+      const locationParts: string[] = [];
+      if (meta?.city) locationParts.push(meta.city);
+      if (meta?.country) locationParts.push(meta.country);
+      if (locationParts.length > 0) {
+        welcomeText += `\n🌍 Location: ${locationParts.join(", ")}`;
+      }
+      if (meta?.ip) {
+        welcomeText += `\n🔗 IP: \`${meta.ip}\``;
+      }
+
+      // Other info
+      if (meta?.language) {
+        welcomeText += `\n🗣️ Language: ${meta.language}`;
+      }
+      if (meta?.timezone) {
+        welcomeText += `\n🕐 Timezone: ${meta.timezone}`;
+      }
+      if (meta?.screenResolution) {
+        welcomeText += `\n📐 Screen: ${meta.screenResolution}`;
+      }
+
+      welcomeText += "\n\n_Reply here to communicate with the visitor._";
 
       await this.bot.telegram.sendMessage(this.forumChatId, welcomeText, {
         message_thread_id: topicId,
@@ -270,16 +430,52 @@ export class TelegramBridge extends Bridge {
   private async sendLegacyNotification(session: Session): Promise<void> {
     if (!this.chatId) return;
 
-    let text = `🆕 *Nouveau visiteur*\n\nSession: \`${session.id.slice(0, 8)}...\``;
+    const meta = session.metadata;
+    let text = `🆕 *New visitor*\n\nSession: \`${session.id.slice(0, 8)}...\``;
 
-    if (session.metadata?.url) {
-      text += `\nPage: ${session.metadata.url}`;
+    // Page info
+    if (meta?.url) {
+      text += `\n📍 Page: ${meta.url}`;
     }
-    if (session.metadata?.referrer) {
-      text += `\nDepuis: ${session.metadata.referrer}`;
+    if (meta?.pageTitle) {
+      text += `\n📄 Title: ${meta.pageTitle}`;
+    }
+    if (meta?.referrer) {
+      text += `\n↩️ From: ${meta.referrer}`;
     }
 
-    text += "\n\n_Répondez à ce message pour communiquer avec le visiteur._";
+    // Device info
+    const deviceParts: string[] = [];
+    if (meta?.deviceType) {
+      const deviceEmoji = meta.deviceType === "mobile" ? "📱" : meta.deviceType === "tablet" ? "📱" : "💻";
+      deviceParts.push(`${deviceEmoji} ${meta.deviceType}`);
+    }
+    if (meta?.browser) deviceParts.push(meta.browser);
+    if (meta?.os) deviceParts.push(meta.os);
+    if (deviceParts.length > 0) {
+      text += `\n🖥️ Device: ${deviceParts.join(" • ")}`;
+    }
+
+    // Location
+    const locationParts: string[] = [];
+    if (meta?.city) locationParts.push(meta.city);
+    if (meta?.country) locationParts.push(meta.country);
+    if (locationParts.length > 0) {
+      text += `\n🌍 Location: ${locationParts.join(", ")}`;
+    }
+    if (meta?.ip) {
+      text += `\n🔗 IP: \`${meta.ip}\``;
+    }
+
+    // Other
+    if (meta?.language) {
+      text += `\n🗣️ Language: ${meta.language}`;
+    }
+    if (meta?.timezone) {
+      text += `\n🕐 Timezone: ${meta.timezone}`;
+    }
+
+    text += "\n\n_Reply to this message to communicate with the visitor._";
 
     try {
       const result = await this.bot.telegram.sendMessage(this.chatId, text, {
@@ -315,14 +511,28 @@ export class TelegramBridge extends Bridge {
     if (!topicId) return;
 
     try {
-      await this.bot.telegram.sendMessage(
+      const result = await this.bot.telegram.sendMessage(
         this.forumChatId,
-        `👤 *Visiteur:*\n\n${message.content}`,
+        `👤 *Visitor:*\n\n${message.content}`,
         {
           message_thread_id: topicId,
           parse_mode: "Markdown",
         }
       );
+
+      // Track visitor message for reaction-based read receipts
+      this.visitorMessageMap.set(result.message_id, {
+        sessionId: session.id,
+        messageId: message.id,
+      });
+
+      // Notify backend that message was delivered to Telegram
+      await this.emit({
+        type: "message_delivered",
+        sessionId: session.id,
+        messageId: message.id,
+        sourceBridge: this.name,
+      });
     } catch (error) {
       console.error("[Telegram] Failed to send forum message:", error);
     }
@@ -340,6 +550,20 @@ export class TelegramBridge extends Bridge {
 
       this.messageSessionMap.set(result.message_id, session.id);
       this.sessionMessageMap.set(session.id, result.message_id);
+
+      // Track visitor message for reaction-based read receipts
+      this.visitorMessageMap.set(result.message_id, {
+        sessionId: session.id,
+        messageId: message.id,
+      });
+
+      // Notify backend that message was delivered to Telegram
+      await this.emit({
+        type: "message_delivered",
+        sessionId: session.id,
+        messageId: message.id,
+        sourceBridge: this.name,
+      });
     } catch (error) {
       console.error("[Telegram] Failed to send message:", error);
     }
@@ -349,7 +573,7 @@ export class TelegramBridge extends Bridge {
     const targetChatId = this.forumChatId || this.chatId;
     if (!targetChatId) return;
 
-    const text = `🤖 *IA Activée*\n\nSession: \`${session.id.slice(0, 8)}...\`\nRaison: ${reason}`;
+    const text = `🤖 *AI Activated*\n\nSession: \`${session.id.slice(0, 8)}...\`\nReason: ${reason}`;
 
     const options: Parameters<typeof this.bot.telegram.sendMessage>[2] = {
       parse_mode: "Markdown" as const,

@@ -113,10 +113,26 @@ export interface SessionClosedEvent {
   sourceBridge: string;
 }
 
+export interface MessageDeliveredEvent {
+  type: "message_delivered";
+  sessionId: string;
+  messageId: string;
+  sourceBridge: string;
+}
+
+export interface MessageReadByReactionEvent {
+  type: "message_read_by_reaction";
+  sessionId: string;
+  messageIds: string[];
+  sourceBridge: string;
+}
+
 export type OutgoingEvent =
   | OperatorMessageEvent
   | OperatorTypingEvent
-  | SessionClosedEvent;
+  | SessionClosedEvent
+  | MessageDeliveredEvent
+  | MessageReadByReactionEvent;
 
 // Bridge configuration
 export interface TelegramConfig {

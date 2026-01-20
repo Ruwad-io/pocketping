@@ -31,3 +31,18 @@ coverage/
 
 # Package manager
 .pnpm-store/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+venv/
+.venv/
+
+# Playwright
+playwright-report/
+test-results/

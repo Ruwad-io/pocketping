@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0d14"/>
+      <stop offset="50%" stop-color="#10162a"/>
+      <stop offset="100%" stop-color="#0b0d14"/>
+    </linearGradient>
+    <linearGradient id="neon" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#36e3ff"/>
+      <stop offset="100%" stop-color="#7c5cff"/>
+    </linearGradient>
+    <linearGradient id="magenta" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff5fd4"/>
+      <stop offset="100%" stop-color="#ff8fe6"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M24 0H0V24" stroke="#2a3458" stroke-width="1" opacity="0.5"/>
+    </pattern>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="400" fill="url(#bg)"/>
+  <rect width="1200" height="400" fill="url(#grid)" opacity="0.35"/>
+
+  <!-- Neon arcs -->
+  <g stroke="url(#neon)" stroke-width="2" opacity="0.5">
+    <path d="M80 300 C240 200 420 200 580 300"/>
+    <path d="M620 90 C780 0 980 0 1140 90"/>
+  </g>
+
+  <!-- Logo mark -->
+  <g transform="translate(110, 70)" filter="url(#glow)">
+    <rect x="0" y="0" width="220" height="220" rx="60" fill="#0f1220"/>
+    <path
+      d="M40 70
+         C40 58 50 48 62 48
+         L158 48
+         C170 48 180 58 180 70
+         L180 140
+         C180 152 170 162 158 162
+         L104 162
+         L76 190
+         L76 162
+         C64 162 54 152 54 140
+         Z"
+      fill="url(#neon)"
+    />
+    <circle cx="166" cy="70" r="14" fill="url(#magenta)"/>
+    <circle cx="166" cy="70" r="5" fill="#0b0d14"/>
+    <g fill="#0b0d14">
+      <circle cx="86" cy="104" r="8"/>
+      <circle cx="110" cy="104" r="8"/>
+      <circle cx="134" cy="104" r="8"/>
+    </g>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="390" y="190" font-family="'Space Grotesk', 'Trebuchet MS', sans-serif" font-size="72" font-weight="700" fill="#e9f1ff">
+    PocketPing
+  </text>
+  <text x="392" y="236" font-family="'Space Grotesk', 'Trebuchet MS', sans-serif" font-size="22" font-weight="400" fill="#9ab3ff">
+    Real-time chat widget. Get pinged in your pocket.
+  </text>
+</svg>

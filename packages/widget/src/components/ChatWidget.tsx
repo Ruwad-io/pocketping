@@ -22,8 +22,10 @@ export function ChatWidget({ client, config }: Props) {
   // Subscribe to client events
   useEffect(() => {
     const unsubOpen = client.on<boolean>('openChange', setIsOpen);
-    const unsubMessage = client.on<Message>('message', (msg) => {
-      setMessages((prev) => [...prev, msg]);
+    const unsubMessage = client.on<Message>('message', () => {
+      // Simply sync with client's authoritative message list
+      // Client already handles deduplication
+      setMessages([...client.getMessages()]);
     });
     const unsubTyping = client.on<{ isTyping: boolean }>('typing', (data) => {
       setIsTyping(data.isTyping);
