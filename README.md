@@ -50,6 +50,7 @@ Visitor opens chat -> You get a Telegram ping -> Reply from your phone
 | **Self-hosted** | Yes | No | No | Yes | No |
 | **Telegram** | Yes | No | No | No | No |
 | **Discord** | Yes | No | No | No | No |
+| **Slack** | Yes | Add-on | Add-on | Yes | No |
 | **Open source** | MIT | No | No | AGPL | No |
 
 **[See full comparison](docs/COMPARISON.md)** - Detailed analysis vs Intercom, Crisp, Chatwoot, Tawk.to, Drift, Zendesk
