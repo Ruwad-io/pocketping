@@ -72,21 +72,47 @@ GET /api/events/stream
 
 ## Docker Deployment
 
-### Build and run
+### Quick Start (recommended)
+
+Pull and run the pre-built image from GitHub Container Registry:
 
 ```bash
-# Build image
-bun run docker:build
-
-# Run container
-bun run docker:run
+docker run -d \
+  --name pocketping-bridge \
+  -p 3001:3001 \
+  -e TELEGRAM_BOT_TOKEN=your_token \
+  -e TELEGRAM_FORUM_CHAT_ID=your_chat_id \
+  ghcr.io/pocketping/pocketping-bridge:latest
 ```
 
 ### Docker Compose
 
 ```bash
-docker-compose up -d
+# Create .env file with your credentials
+cp .env.example .env
+
+# Pull and run
+docker compose up -d
 ```
+
+### Build from source
+
+If you want to build locally instead:
+
+```bash
+# Using docker compose
+docker compose -f docker-compose.build.yml up -d
+
+# Or manually
+docker build -t pocketping-bridge .
+docker run -d --name pocketping-bridge -p 3001:3001 --env-file .env pocketping-bridge
+```
+
+### Available tags
+
+- `latest` - Latest stable release
+- `main` - Latest from main branch
+- `v1.0.0`, `v1.0`, `v1` - Specific versions
 
 ## Integration with Backend
 

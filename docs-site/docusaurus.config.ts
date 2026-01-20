@@ -32,7 +32,7 @@ const config: Config = {
         docs: {
           routeBasePath: '/',
           sidebarPath: './sidebars.ts',
-          editUrl: 'https://github.com/pocketping/pocketping/tree/main/docs-site/',
+          editUrl: 'https://github.com/ruwad-io/pocketping/tree/main/docs-site/',
         },
         blog: false,
         theme: {
@@ -72,7 +72,7 @@ const config: Config = {
           position: 'right',
         },
         {
-          href: 'https://github.com/pocketping/pocketping',
+          href: 'https://github.com/ruwad-io/pocketping',
           label: 'GitHub',
           position: 'right',
         },
@@ -108,7 +108,7 @@ const config: Config = {
           title: 'Links',
           items: [
             { label: 'Website', href: 'https://pocketping.io' },
-            { label: 'GitHub', href: 'https://github.com/pocketping/pocketping' },
+            { label: 'GitHub', href: 'https://github.com/ruwad-io/pocketping' },
             { label: 'Dashboard', href: 'https://app.pocketping.io' },
           ],
         },

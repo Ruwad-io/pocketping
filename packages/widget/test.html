@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PocketPing Widget Test</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem;
+      background: #f5f5f5;
+    }
+    h1 { color: #333; }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    code {
+      background: #e5e5e5;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>PocketPing Widget Test Page</h1>
+
+  <div class="card">
+    <h2>Instructions</h2>
+    <ol>
+      <li>Run <code>pnpm build</code> to build the widget</li>
+      <li>Run <code>pnpm dev:test</code> to start the test server</li>
+      <li>The widget bubble should appear in the bottom-right corner</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>Test Content</h2>
+    <p>This is a test page to verify the PocketPing widget works correctly.</p>
+    <p>Try clicking the chat bubble to open the widget and send a message.</p>
+  </div>
+
+  <div class="card">
+    <h2>Configuration</h2>
+    <p>Current project key: <code id="project-key">proj_test_local</code></p>
+    <p>API endpoint: <code id="api-endpoint">http://localhost:3001</code></p>
+  </div>
+
+  <!-- Load the widget -->
+  <script src="./dist/index.global.js"></script>
+  <script>
+    // Initialize with test configuration
+    PocketPing.init({
+      projectKey: 'proj_test_local',
+      // Point to local bridge server or app API
+      apiUrl: 'http://localhost:3001',
+      // Optional: customize appearance
+      position: 'bottom-right',
+      primaryColor: '#6366f1',
+      operatorName: 'Support Test',
+    });
+
+    console.log('PocketPing widget initialized for local testing');
+  </script>
+</body>
+</html>

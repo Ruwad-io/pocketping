@@ -10,11 +10,11 @@
 </p>
 
 <p align="center">
+  <a href="https://pocketping.io">Website</a> &bull;
+  <a href="https://pocketping.io/docs">Documentation</a> &bull;
   <a href="#-60-second-quick-start">Quick Start</a> &bull;
-  <a href="#-how-it-works">How it Works</a> &bull;
-  <a href="#-setup-guides">Setup Guides</a> &bull;
   <a href="#-features">Features</a> &bull;
-  <a href="https://github.com/Ruwad-io/pocketping/issues">Get Help</a>
+  <a href="https://github.com/pocketping/pocketping/issues">Get Help</a>
 </p>
 
 <p align="center">
@@ -77,7 +77,7 @@ Visitor opens chat -> You get a Telegram ping -> Reply from your phone
 
 ```bash
 # Clone the example
-git clone https://github.com/Ruwad-io/pocketping-test-fastapi
+git clone https://github.com/pocketping/pocketping-test-fastapi
 cd pocketping-test-fastapi
 
 # Install dependencies
@@ -95,7 +95,7 @@ uvicorn main:app --reload
 
 ```bash
 # Clone PocketPing
-git clone https://github.com/Ruwad-io/pocketping
+git clone https://github.com/pocketping/pocketping
 cd pocketping/bridge-server
 
 # Configure
@@ -535,7 +535,7 @@ See [Python SDK README](packages/sdk-python/README.md) for all options.
 
 ```bash
 # Clone the repo
-git clone https://github.com/Ruwad-io/pocketping
+git clone https://github.com/pocketping/pocketping
 cd pocketping
 
 # Install dependencies
