@@ -12,4 +12,6 @@ export type {
   SendMessageRequest,
   SendMessageResponse,
   PresenceResponse,
+  CustomEvent,
+  CustomEventHandler,
 } from './types';

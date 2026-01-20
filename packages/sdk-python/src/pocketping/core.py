@@ -9,6 +9,7 @@ from typing import Any, Callable, Optional
 from pocketping.models import (
     ConnectRequest,
     ConnectResponse,
+    CustomEvent,
     Message,
     PresenceResponse,
     SendMessageRequest,
@@ -36,6 +37,7 @@ class PocketPing:
         welcome_message: Optional[str] = None,
         on_new_session: Optional[Callable[[Session], Any]] = None,
         on_message: Optional[Callable[[Message, Session], Any]] = None,
+        on_event: Optional[Callable[[CustomEvent, Session], Any]] = None,
     ):
         self.storage = storage or MemoryStorage()
         self.bridges = bridges or []
@@ -49,11 +51,13 @@ class PocketPing:
         self.welcome_message = welcome_message
         self.on_new_session = on_new_session
         self.on_message = on_message
+        self.on_event_callback = on_event
 
         self._operator_online = False
         self._last_operator_activity: dict[str, float] = {}  # session_id -> timestamp
         self._websocket_connections: dict[str, set] = {}  # session_id -> set of websockets
         self._presence_check_task: Optional[asyncio.Task] = None
+        self._event_handlers: dict[str, set[Callable]] = {}  # event_name -> set of handlers
 
     # ─────────────────────────────────────────────────────────────────
     # Lifecycle
@@ -548,6 +552,125 @@ class PocketPing:
                 )
             except Exception as e:
                 print(f"[PocketPing] Bridge {bridge.name} sync error: {e}")
+
+    # ─────────────────────────────────────────────────────────────────
+    # Custom Events
+    # ─────────────────────────────────────────────────────────────────
+
+    def on_event(self, event_name: str, handler: Callable[[CustomEvent, Session], Any]) -> Callable[[], None]:
+        """Subscribe to a custom event.
+
+        Args:
+            event_name: The name of the event (e.g., 'clicked_pricing') or '*' for all events
+            handler: Callback function to handle the event
+
+        Returns:
+            Unsubscribe function
+        """
+        if event_name not in self._event_handlers:
+            self._event_handlers[event_name] = set()
+        self._event_handlers[event_name].add(handler)
+
+        def unsubscribe():
+            self._event_handlers[event_name].discard(handler)
+
+        return unsubscribe
+
+    def off_event(self, event_name: str, handler: Callable) -> None:
+        """Unsubscribe from a custom event.
+
+        Args:
+            event_name: The name of the event
+            handler: The handler to remove
+        """
+        if event_name in self._event_handlers:
+            self._event_handlers[event_name].discard(handler)
+
+    async def emit_event(self, session_id: str, event_name: str, data: Optional[dict] = None) -> None:
+        """Emit a custom event to a specific session.
+
+        Args:
+            session_id: The session to send the event to
+            event_name: The name of the event
+            data: Optional payload data
+        """
+        event = CustomEvent(
+            name=event_name,
+            data=data,
+            timestamp=datetime.utcnow(),
+            session_id=session_id,
+        )
+
+        # Broadcast to WebSocket clients
+        await self._broadcast_to_session(
+            session_id,
+            WebSocketEvent(type="event", data=event.model_dump(by_alias=True)),
+        )
+
+    async def broadcast_event(self, event_name: str, data: Optional[dict] = None) -> None:
+        """Broadcast a custom event to all connected sessions.
+
+        Args:
+            event_name: The name of the event
+            data: Optional payload data
+        """
+        for session_id in self._websocket_connections.keys():
+            await self.emit_event(session_id, event_name, data)
+
+    async def handle_custom_event(self, session_id: str, event: CustomEvent) -> None:
+        """Handle an incoming custom event from the widget.
+
+        Args:
+            session_id: The session that sent the event
+            event: The custom event
+        """
+        session = await self.storage.get_session(session_id)
+        if not session:
+            print(f"[PocketPing] Session {session_id} not found for custom event")
+            return
+
+        event.session_id = session_id
+
+        # Call specific event handlers
+        handlers = self._event_handlers.get(event.name, set())
+        for handler in handlers:
+            try:
+                result = handler(event, session)
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception as e:
+                print(f"[PocketPing] Error in event handler for '{event.name}': {e}")
+
+        # Call wildcard handlers
+        wildcard_handlers = self._event_handlers.get("*", set())
+        for handler in wildcard_handlers:
+            try:
+                result = handler(event, session)
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception as e:
+                print(f"[PocketPing] Error in wildcard event handler: {e}")
+
+        # Call the config callback
+        if self.on_event_callback:
+            try:
+                result = self.on_event_callback(event, session)
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception as e:
+                print(f"[PocketPing] Error in on_event callback: {e}")
+
+        # Notify bridges
+        await self._notify_bridges_event(event, session)
+
+    async def _notify_bridges_event(self, event: CustomEvent, session: Session) -> None:
+        """Notify all bridges about a custom event."""
+        for bridge in self.bridges:
+            if hasattr(bridge, "on_event"):
+                try:
+                    await bridge.on_event(event, session)
+                except Exception as e:
+                    print(f"[PocketPing] Bridge {bridge.name} error on custom event: {e}")
 
     # ─────────────────────────────────────────────────────────────────
     # Utilities

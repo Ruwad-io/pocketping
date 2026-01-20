@@ -25,7 +25,7 @@ const localStorageMock = (() => {
 
 Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock });
 
-// Mock WebSocket
+// Mock WebSocket with explicit constants
 class MockWebSocket {
   static instances: MockWebSocket[] = [];
 
@@ -44,7 +44,7 @@ class MockWebSocket {
 
   send = vi.fn();
   close = vi.fn(() => {
-    this.readyState = 3;
+    this.readyState = 3; // CLOSED
     this.onclose?.();
   });
 
@@ -54,7 +54,7 @@ class MockWebSocket {
   }
 
   simulateClose() {
-    this.readyState = 3;
+    this.readyState = 3; // CLOSED
     this.onclose?.();
   }
 
@@ -63,7 +63,19 @@ class MockWebSocket {
   }
 }
 
-Object.defineProperty(globalThis, 'WebSocket', { value: MockWebSocket });
+// Add WebSocket constants to both the class and instances
+Object.defineProperty(MockWebSocket, 'CONNECTING', { value: 0, writable: false });
+Object.defineProperty(MockWebSocket, 'OPEN', { value: 1, writable: false });
+Object.defineProperty(MockWebSocket, 'CLOSING', { value: 2, writable: false });
+Object.defineProperty(MockWebSocket, 'CLOSED', { value: 3, writable: false });
+
+// Also add to prototype for instance access
+Object.defineProperty(MockWebSocket.prototype, 'CONNECTING', { value: 0, writable: false });
+Object.defineProperty(MockWebSocket.prototype, 'OPEN', { value: 1, writable: false });
+Object.defineProperty(MockWebSocket.prototype, 'CLOSING', { value: 2, writable: false });
+Object.defineProperty(MockWebSocket.prototype, 'CLOSED', { value: 3, writable: false });
+
+Object.defineProperty(globalThis, 'WebSocket', { value: MockWebSocket, writable: true, configurable: true });
 
 // Mock fetch
 globalThis.fetch = vi.fn();

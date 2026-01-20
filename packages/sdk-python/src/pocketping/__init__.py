@@ -10,6 +10,7 @@ from pocketping.models import (
     SendMessageRequest,
     SendMessageResponse,
     PresenceResponse,
+    CustomEvent,
 )
 from pocketping.storage import Storage, MemoryStorage
 from pocketping.bridges import Bridge
@@ -26,6 +27,7 @@ __all__ = [
     "SendMessageRequest",
     "SendMessageResponse",
     "PresenceResponse",
+    "CustomEvent",
     "Storage",
     "MemoryStorage",
     "Bridge",

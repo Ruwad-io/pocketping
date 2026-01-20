@@ -13,7 +13,7 @@ import {
   ThreadAutoArchiveDuration,
 } from "discord.js";
 import { Bridge } from "./base";
-import type { Message, Session, MessageStatus, DiscordConfig } from "../types";
+import type { Message, Session, MessageStatus, DiscordConfig, CustomEvent } from "../types";
 
 export class DiscordBridge extends Bridge {
   private client: Client;
@@ -643,6 +643,36 @@ export class DiscordBridge extends Bridge {
       } catch (error) {
         console.error("[Discord] Failed to update message reaction:", error);
       }
+    }
+  }
+
+  async onCustomEvent(event: CustomEvent, session: Session): Promise<void> {
+    // Format event data for display
+    const dataStr = event.data ? `\`\`\`json\n${JSON.stringify(event.data, null, 2)}\n\`\`\`` : '_No data_';
+
+    const embed = new EmbedBuilder()
+      .setTitle("⚡ Custom Event")
+      .setDescription(`**Event:** \`${event.name}\`\n\n${dataStr}`)
+      .setFooter({ text: `Session: ${session.id.slice(0, 8)}...` })
+      .setColor(0xf1c40f);
+
+    if (this.useThreads) {
+      const threadId = this.sessionThreadMap.get(session.id);
+      if (threadId) {
+        try {
+          const thread = (await this.client.channels.fetch(threadId)) as ThreadChannel;
+          if (thread) {
+            await thread.send({ embeds: [embed] });
+            return;
+          }
+        } catch (error) {
+          console.error("[Discord] Failed to send custom event to thread:", error);
+        }
+      }
+    }
+
+    if (this.channel) {
+      await this.channel.send({ embeds: [embed] });
     }
   }
 

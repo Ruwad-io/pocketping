@@ -180,3 +180,19 @@ class WebSocketEvent(BaseModel):
 
     type: str
     data: dict[str, Any]
+
+
+class CustomEvent(BaseModel):
+    """Custom event for bidirectional communication."""
+
+    name: str
+    data: Optional[dict[str, Any]] = None
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    session_id: Optional[str] = Field(None, alias="sessionId")
+
+    class Config:
+        populate_by_name = True
+
+
+# Type alias for custom event handler
+CustomEventHandler = Any  # Callable[[CustomEvent, Session], Any]

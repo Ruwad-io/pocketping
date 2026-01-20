@@ -13,6 +13,13 @@ describe('PocketPingClient', () => {
     vi.clearAllMocks();
     MockWebSocket.reset();
     localStorageMock.clear();
+
+    // Ensure WebSocket constants are properly set (jsdom may not have them)
+    (globalThis as any).WebSocket.CONNECTING = 0;
+    (globalThis as any).WebSocket.OPEN = 1;
+    (globalThis as any).WebSocket.CLOSING = 2;
+    (globalThis as any).WebSocket.CLOSED = 3;
+
     client = new PocketPingClient(mockConfig);
   });
 
@@ -369,6 +376,234 @@ describe('PocketPingClient', () => {
       client.setOpen(true);
 
       expect(callback).toHaveBeenCalledWith(true);
+    });
+  });
+
+  describe('Custom Events', () => {
+    beforeEach(async () => {
+      const mockResponse = {
+        sessionId: 'session-123',
+        visitorId: 'visitor-456',
+        operatorOnline: false,
+        messages: [],
+      };
+
+      (globalThis.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
+
+      await client.connect();
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    describe('trigger()', () => {
+      it('should send event via WebSocket', () => {
+        client.trigger('clicked_pricing', { plan: 'pro' });
+
+        const ws = MockWebSocket.instances[0];
+        expect(ws.send).toHaveBeenCalled();
+
+        const sentData = JSON.parse(ws.send.mock.calls[0][0]);
+        expect(sentData.type).toBe('event');
+        expect(sentData.data.name).toBe('clicked_pricing');
+        expect(sentData.data.data).toEqual({ plan: 'pro' });
+        expect(sentData.data.timestamp).toBeDefined();
+      });
+
+      it('should trigger without data payload', () => {
+        client.trigger('page_view');
+
+        const ws = MockWebSocket.instances[0];
+        const sentData = JSON.parse(ws.send.mock.calls[0][0]);
+        expect(sentData.data.name).toBe('page_view');
+        expect(sentData.data.data).toBeUndefined();
+      });
+
+      it('should emit local event:name event', () => {
+        const callback = vi.fn();
+        client.on('event:clicked_cta', callback);
+
+        client.trigger('clicked_cta', { button: 'signup' });
+
+        expect(callback).toHaveBeenCalled();
+        expect(callback.mock.calls[0][0].name).toBe('clicked_cta');
+      });
+
+      it('should warn when WebSocket is not connected', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const disconnectedClient = new PocketPingClient(mockConfig);
+
+        disconnectedClient.trigger('test_event');
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          '[PocketPing] Cannot trigger event: WebSocket not connected'
+        );
+        warnSpy.mockRestore();
+      });
+    });
+
+    describe('onEvent()', () => {
+      it('should subscribe to custom event', () => {
+        const handler = vi.fn();
+        client.onEvent('show_offer', handler);
+
+        // Simulate receiving event from WebSocket
+        const ws = MockWebSocket.instances[0];
+        ws.simulateMessage({
+          type: 'event',
+          data: {
+            name: 'show_offer',
+            data: { discount: 20 },
+            timestamp: new Date().toISOString(),
+          },
+        });
+
+        expect(handler).toHaveBeenCalledWith(
+          { discount: 20 },
+          expect.objectContaining({ name: 'show_offer' })
+        );
+      });
+
+      it('should return unsubscribe function', () => {
+        const handler = vi.fn();
+        const unsubscribe = client.onEvent('promo', handler);
+
+        unsubscribe();
+
+        const ws = MockWebSocket.instances[0];
+        ws.simulateMessage({
+          type: 'event',
+          data: {
+            name: 'promo',
+            data: { code: 'SAVE10' },
+            timestamp: new Date().toISOString(),
+          },
+        });
+
+        expect(handler).not.toHaveBeenCalled();
+      });
+
+      it('should handle multiple handlers for same event', () => {
+        const handler1 = vi.fn();
+        const handler2 = vi.fn();
+
+        client.onEvent('notification', handler1);
+        client.onEvent('notification', handler2);
+
+        const ws = MockWebSocket.instances[0];
+        ws.simulateMessage({
+          type: 'event',
+          data: {
+            name: 'notification',
+            data: { message: 'Hello' },
+            timestamp: new Date().toISOString(),
+          },
+        });
+
+        expect(handler1).toHaveBeenCalled();
+        expect(handler2).toHaveBeenCalled();
+      });
+
+      it('should only trigger handler for matching event name', () => {
+        const handler = vi.fn();
+        client.onEvent('event_a', handler);
+
+        const ws = MockWebSocket.instances[0];
+        ws.simulateMessage({
+          type: 'event',
+          data: {
+            name: 'event_b',
+            data: {},
+            timestamp: new Date().toISOString(),
+          },
+        });
+
+        expect(handler).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('offEvent()', () => {
+      it('should unsubscribe handler from event', () => {
+        const handler = vi.fn();
+        client.onEvent('alert', handler);
+
+        client.offEvent('alert', handler);
+
+        const ws = MockWebSocket.instances[0];
+        ws.simulateMessage({
+          type: 'event',
+          data: {
+            name: 'alert',
+            data: {},
+            timestamp: new Date().toISOString(),
+          },
+        });
+
+        expect(handler).not.toHaveBeenCalled();
+      });
+
+      it('should only remove specific handler', () => {
+        const handler1 = vi.fn();
+        const handler2 = vi.fn();
+
+        client.onEvent('update', handler1);
+        client.onEvent('update', handler2);
+        client.offEvent('update', handler1);
+
+        const ws = MockWebSocket.instances[0];
+        ws.simulateMessage({
+          type: 'event',
+          data: {
+            name: 'update',
+            data: {},
+            timestamp: new Date().toISOString(),
+          },
+        });
+
+        expect(handler1).not.toHaveBeenCalled();
+        expect(handler2).toHaveBeenCalled();
+      });
+    });
+
+    describe('WebSocket event handling', () => {
+      it('should emit generic event on any custom event', () => {
+        const genericHandler = vi.fn();
+        client.on('event', genericHandler);
+
+        const ws = MockWebSocket.instances[0];
+        ws.simulateMessage({
+          type: 'event',
+          data: {
+            name: 'any_event',
+            data: { foo: 'bar' },
+            timestamp: new Date().toISOString(),
+          },
+        });
+
+        expect(genericHandler).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'any_event' })
+        );
+      });
+
+      it('should handle event without data payload', () => {
+        const handler = vi.fn();
+        client.onEvent('ping', handler);
+
+        const ws = MockWebSocket.instances[0];
+        ws.simulateMessage({
+          type: 'event',
+          data: {
+            name: 'ping',
+            timestamp: new Date().toISOString(),
+          },
+        });
+
+        expect(handler).toHaveBeenCalledWith(
+          undefined,
+          expect.objectContaining({ name: 'ping' })
+        );
+      });
     });
   });
 });

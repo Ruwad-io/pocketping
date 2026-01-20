@@ -158,9 +158,26 @@ export interface PresenceResponse {
   aiActiveAfter?: number;
 }
 
-export type WebSocketEventType = 'message' | 'typing' | 'presence' | 'ai_takeover' | 'read';
+export type WebSocketEventType = 'message' | 'typing' | 'presence' | 'ai_takeover' | 'read' | 'event';
 
 export interface WebSocketEvent {
   type: WebSocketEventType;
   data: unknown;
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Custom Events (bidirectional communication)
+// ─────────────────────────────────────────────────────────────────
+
+/** Custom event sent from widget to backend or vice versa */
+export interface CustomEvent {
+  /** Event name (e.g., 'clicked_pricing', 'show_offer') */
+  name: string;
+  /** Event payload */
+  data?: Record<string, unknown>;
+  /** Timestamp of the event */
+  timestamp: string;
+}
+
+/** Handler for custom events */
+export type CustomEventHandler = (data: Record<string, unknown> | undefined, event: CustomEvent) => void;

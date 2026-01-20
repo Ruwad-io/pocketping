@@ -13,6 +13,7 @@ import type {
   AITakeoverEvent,
   OperatorStatusEvent,
   MessageReadEvent,
+  CustomEventEvent,
   OutgoingEvent,
   BridgeServerConfig,
 } from "../types";
@@ -72,6 +73,9 @@ export function createApp(context: AppContext): Hono {
         case "message_read":
           await handleMessageRead(context.bridges, event);
           break;
+        case "custom_event":
+          await handleCustomEvent(context.bridges, event);
+          break;
         default:
           return c.json({ error: "Unknown event type" }, 400);
       }
@@ -102,6 +106,14 @@ export function createApp(context: AppContext): Hono {
     const { online } = await c.req.json();
     const event: OperatorStatusEvent = { type: "operator_status", online };
     await handleOperatorStatus(context.bridges, event);
+    return c.json({ ok: true });
+  });
+
+  // Custom events endpoint
+  app.post("/api/custom-events", async (c) => {
+    const { event: customEvent, session } = await c.req.json();
+    const eventPayload: CustomEventEvent = { type: "custom_event", event: customEvent, session };
+    await handleCustomEvent(context.bridges, eventPayload);
     return c.json({ ok: true });
   });
 
@@ -163,4 +175,8 @@ async function handleMessageRead(bridges: Bridge[], event: MessageReadEvent): Pr
   await Promise.all(
     bridges.map((bridge) => bridge.onMessageRead(event.sessionId, event.messageIds, event.status))
   );
+}
+
+async function handleCustomEvent(bridges: Bridge[], event: CustomEventEvent): Promise<void> {
+  await Promise.all(bridges.map((bridge) => bridge.onCustomEvent(event.event, event.session)));
 }

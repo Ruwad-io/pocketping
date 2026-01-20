@@ -7,6 +7,8 @@ import type {
   SendMessageResponse,
   PresenceResponse,
   WebSocketEvent,
+  CustomEvent,
+  CustomEventHandler,
 } from './types';
 
 type Listener<T> = (data: T) => void;
@@ -17,6 +19,7 @@ export class PocketPingClient {
   private ws: WebSocket | null = null;
   private isOpen = false;
   private listeners: Map<string, Set<Listener<unknown>>> = new Map();
+  private customEventHandlers: Map<string, Set<CustomEventHandler>> = new Map();
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -264,6 +267,79 @@ export class PocketPingClient {
   }
 
   // ─────────────────────────────────────────────────────────────────
+  // Custom Events (bidirectional)
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Trigger a custom event to the backend
+   * @param eventName - The name of the event (e.g., 'clicked_pricing', 'viewed_demo')
+   * @param data - Optional payload to send with the event
+   * @example
+   * PocketPing.trigger('clicked_cta', { button: 'signup', page: '/pricing' })
+   */
+  trigger(eventName: string, data?: Record<string, unknown>): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.warn('[PocketPing] Cannot trigger event: WebSocket not connected');
+      return;
+    }
+
+    const event: CustomEvent = {
+      name: eventName,
+      data,
+      timestamp: new Date().toISOString(),
+    };
+
+    this.ws.send(JSON.stringify({
+      type: 'event',
+      data: event,
+    }));
+
+    // Also emit locally for any local listeners
+    this.emit(`event:${eventName}`, event);
+  }
+
+  /**
+   * Subscribe to custom events from the backend
+   * @param eventName - The name of the event to listen for (e.g., 'show_offer', 'open_chat')
+   * @param handler - Callback function when event is received
+   * @returns Unsubscribe function
+   * @example
+   * const unsubscribe = PocketPing.onEvent('show_offer', (data) => {
+   *   showPopup(data.message)
+   * })
+   */
+  onEvent(eventName: string, handler: CustomEventHandler): () => void {
+    if (!this.customEventHandlers.has(eventName)) {
+      this.customEventHandlers.set(eventName, new Set());
+    }
+    this.customEventHandlers.get(eventName)!.add(handler);
+
+    return () => {
+      this.customEventHandlers.get(eventName)?.delete(handler);
+    };
+  }
+
+  /**
+   * Unsubscribe from a custom event
+   * @param eventName - The name of the event
+   * @param handler - The handler to remove
+   */
+  offEvent(eventName: string, handler: CustomEventHandler): void {
+    this.customEventHandlers.get(eventName)?.delete(handler);
+  }
+
+  private emitCustomEvent(event: CustomEvent): void {
+    const handlers = this.customEventHandlers.get(event.name);
+    if (handlers) {
+      handlers.forEach((handler) => handler(event.data, event));
+    }
+
+    // Also emit to generic 'event' listeners
+    this.emit('event', event);
+    this.emit(`event:${event.name}`, event);
+  }
+
+  // ─────────────────────────────────────────────────────────────────
   // WebSocket
   // ─────────────────────────────────────────────────────────────────
 
@@ -391,6 +467,12 @@ export class PocketPingClient {
           }
         }
         this.emit('read', readData);
+        break;
+
+      case 'event':
+        // Custom event from backend
+        const customEvent = event.data as CustomEvent;
+        this.emitCustomEvent(customEvent);
         break;
     }
   }

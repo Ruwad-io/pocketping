@@ -23,6 +23,9 @@ export interface PocketPingConfig {
 
   /** Callback when a message is received */
   onMessage?: (message: Message, session: Session) => void | Promise<void>;
+
+  /** Callback when a custom event is received from widget */
+  onEvent?: (event: CustomEvent, session: Session) => void | Promise<void>;
 }
 
 export interface AIConfig {
@@ -151,3 +154,25 @@ export interface PresenceResponse {
   aiEnabled: boolean;
   aiActiveAfter?: number;
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Custom Events (bidirectional communication)
+// ─────────────────────────────────────────────────────────────────
+
+/** Custom event sent from widget to backend or vice versa */
+export interface CustomEvent {
+  /** Event name (e.g., 'clicked_pricing', 'show_offer') */
+  name: string;
+  /** Event payload */
+  data?: Record<string, unknown>;
+  /** Timestamp of the event */
+  timestamp: string;
+  /** Session ID (populated by SDK when event comes from widget) */
+  sessionId?: string;
+}
+
+/** Handler for custom events */
+export type CustomEventHandler = (
+  event: CustomEvent,
+  session: Session
+) => void | Promise<void>;

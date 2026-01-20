@@ -122,11 +122,12 @@ async function main() {
   console.log(`\n✅ Bridge Server running on http://localhost:${config.port}`);
   console.log(`   Enabled bridges: ${bridges.map((b) => b.name).join(", ") || "none"}`);
   console.log("\nEndpoints:");
-  console.log(`   GET  /health           - Health check`);
-  console.log(`   POST /api/events       - Receive events from backend`);
-  console.log(`   POST /api/sessions     - New session notification`);
-  console.log(`   POST /api/messages     - Visitor message notification`);
+  console.log(`   GET  /health              - Health check`);
+  console.log(`   POST /api/events          - Receive events from backend`);
+  console.log(`   POST /api/sessions        - New session notification`);
+  console.log(`   POST /api/messages        - Visitor message notification`);
   console.log(`   POST /api/operator/status - Update operator status`);
+  console.log(`   POST /api/custom-events   - Custom event notification`);
   console.log(`   GET  /api/events/stream   - SSE stream of operator events`);
 
   // Handle graceful shutdown

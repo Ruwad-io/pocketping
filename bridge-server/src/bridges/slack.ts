@@ -5,7 +5,7 @@
 import { WebClient } from "@slack/web-api";
 import { SocketModeClient } from "@slack/socket-mode";
 import { Bridge } from "./base";
-import type { Message, Session, MessageStatus, SlackConfig } from "../types";
+import type { Message, Session, MessageStatus, SlackConfig, CustomEvent } from "../types";
 
 export class SlackBridge extends Bridge {
   private webClient: WebClient;
@@ -625,6 +625,41 @@ export class SlackBridge extends Bridge {
       } catch (error) {
         console.error("[Slack] Failed to update message reaction:", error);
       }
+    }
+  }
+
+  async onCustomEvent(event: CustomEvent, session: Session): Promise<void> {
+    const threadTs = this.sessionThreadMap.get(session.id);
+
+    // Format event data for display
+    const dataStr = event.data ? `\`\`\`${JSON.stringify(event.data, null, 2)}\`\`\`` : '_No data_';
+
+    try {
+      await this.webClient.chat.postMessage({
+        channel: this.channelId,
+        thread_ts: threadTs,
+        text: `Custom Event: ${event.name}`,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `⚡ *Custom Event*\n\n*Event:* \`${event.name}\`\n${dataStr}`,
+            },
+          },
+          {
+            type: "context",
+            elements: [
+              {
+                type: "mrkdwn",
+                text: `_Session: \`${session.id.slice(0, 8)}...\`_`,
+              },
+            ],
+          },
+        ],
+      });
+    } catch (error) {
+      console.error("[Slack] Failed to send custom event:", error);
     }
   }
 

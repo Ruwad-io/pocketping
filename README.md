@@ -52,6 +52,7 @@ Visitor opens chat -> You get a Telegram ping -> Reply from your phone
 | **Discord** | Yes | No | No | No | No |
 | **Slack** | Yes | Add-on | Add-on | Yes | No |
 | **Multi-channel sync** | Yes | No | No | No | No |
+| **Custom Events** | Yes | Paid | Limited | No | No |
 | **Open source** | MIT | No | No | AGPL | No |
 
 **[See full comparison](docs/COMPARISON.md)** - Detailed analysis vs Intercom, Crisp, Chatwoot, Tawk.to, Drift, Zendesk
@@ -397,6 +398,47 @@ pp = PocketPing(
 
 Supports: **OpenAI**, **Google Gemini**, **Anthropic Claude**
 
+### Custom Events (Bidirectional)
+
+Trigger events from your website to get notified, or send events to the widget:
+
+**Widget → Backend → Bridges:**
+
+```javascript
+// User clicked pricing? Get notified!
+PocketPing.trigger('clicked_pricing', { plan: 'pro' });
+
+// Track any user action
+PocketPing.trigger('viewed_demo');
+PocketPing.trigger('error_occurred', { code: 500, page: '/checkout' });
+```
+
+**Backend → Widget:**
+
+```python
+# Send a special offer to the visitor
+pp.emit_event(session_id, 'show_offer', {'discount': 20})
+
+# Broadcast to all connected visitors
+pp.broadcast_event('announcement', {'message': 'New feature launched!'})
+```
+
+**Subscribe to events:**
+
+```javascript
+// In widget
+const unsubscribe = PocketPing.onEvent('show_offer', (data) => {
+  showPopup(`${data.discount}% off!`);
+});
+
+// In backend (Python)
+@pp.on_event('clicked_pricing')
+async def handle_pricing_click(event, session):
+    print(f"User {session.id} interested in {event.data['plan']}")
+```
+
+Events appear in your Telegram/Discord/Slack with full context!
+
 ### Cross-Bridge Sync
 
 When you have Telegram + Discord + Slack all configured:
@@ -469,6 +511,16 @@ PocketPing.init({
   onOpen: () => console.log('Chat opened'),
   onMessage: (msg) => console.log('New message', msg),
 });
+
+// Widget API Methods
+PocketPing.open();                              // Open chat
+PocketPing.close();                             // Close chat
+PocketPing.toggle();                            // Toggle chat
+PocketPing.sendMessage('Hello!');               // Send message
+PocketPing.trigger('event_name', { data });     // Trigger custom event
+PocketPing.onEvent('event_name', handler);      // Subscribe to event
+PocketPing.offEvent('event_name', handler);     // Unsubscribe
+PocketPing.destroy();                           // Cleanup
 ```
 
 See [Widget README](packages/widget/README.md) for all options.
@@ -495,7 +547,14 @@ pp = PocketPing(
     # Callbacks
     on_new_session=lambda s: print(f"New session: {s.id}"),
     on_message=lambda m, s: print(f"Message: {m.content}"),
+    on_event=lambda e, s: print(f"Event: {e.name}"),  # Custom events
 )
+
+# Event API Methods
+pp.on_event('clicked_pricing', handler)           # Subscribe to event
+pp.off_event('clicked_pricing', handler)          # Unsubscribe
+await pp.emit_event(session_id, 'show_offer', {}) # Send event to session
+await pp.broadcast_event('announcement', {})       # Send to all sessions
 ```
 
 See [Python SDK README](packages/sdk-python/README.md) for all options.

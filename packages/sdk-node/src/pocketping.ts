@@ -16,6 +16,8 @@ import type {
   PresenceResponse,
   ReadRequest,
   ReadResponse,
+  CustomEvent,
+  CustomEventHandler,
 } from './types';
 import type { Storage } from './storage/types';
 import { MemoryStorage } from './storage/memory';
@@ -89,6 +91,7 @@ export class PocketPing {
   private wss: WebSocketServer | null = null;
   private sessionSockets: Map<string, Set<WebSocket>> = new Map();
   private operatorOnline = false;
+  private eventHandlers: Map<string, Set<CustomEventHandler>> = new Map();
 
   constructor(config: PocketPingConfig = {}) {
     this.config = config;
@@ -256,7 +259,52 @@ export class PocketPing {
           data: event.data,
         });
         break;
+
+      case 'event':
+        // Custom event from widget
+        const customEvent = event.data as CustomEvent;
+        customEvent.sessionId = sessionId;
+        await this.handleCustomEvent(sessionId, customEvent);
+        break;
     }
+  }
+
+  private async handleCustomEvent(sessionId: string, event: CustomEvent): Promise<void> {
+    const session = await this.storage.getSession(sessionId);
+    if (!session) {
+      console.warn(`[PocketPing] Event received for unknown session: ${sessionId}`);
+      return;
+    }
+
+    // Call registered handlers for this event name
+    const handlers = this.eventHandlers.get(event.name);
+    if (handlers) {
+      for (const handler of handlers) {
+        try {
+          await handler(event, session);
+        } catch (err) {
+          console.error(`[PocketPing] Event handler error for '${event.name}':`, err);
+        }
+      }
+    }
+
+    // Call wildcard handlers (listening to all events)
+    const wildcardHandlers = this.eventHandlers.get('*');
+    if (wildcardHandlers) {
+      for (const handler of wildcardHandlers) {
+        try {
+          await handler(event, session);
+        } catch (err) {
+          console.error(`[PocketPing] Wildcard event handler error:`, err);
+        }
+      }
+    }
+
+    // Call config callback if defined
+    await this.config.onEvent?.(event, session);
+
+    // Notify bridges about the event
+    await this.notifyBridgesEvent(event, session);
   }
 
   private broadcastToSession(sessionId: string, event: unknown): void {
@@ -481,6 +529,99 @@ export class PocketPing {
   }
 
   // ─────────────────────────────────────────────────────────────────
+  // Custom Events (bidirectional)
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Subscribe to custom events from widgets
+   * @param eventName - The name of the event to listen for, or '*' for all events
+   * @param handler - Callback function when event is received
+   * @returns Unsubscribe function
+   * @example
+   * // Listen for specific event
+   * pp.onEvent('clicked_pricing', async (event, session) => {
+   *   console.log(`User ${session.visitorId} clicked pricing: ${event.data?.plan}`)
+   * })
+   *
+   * // Listen for all events
+   * pp.onEvent('*', async (event, session) => {
+   *   console.log(`Event: ${event.name}`, event.data)
+   * })
+   */
+  onEvent(eventName: string, handler: CustomEventHandler): () => void {
+    if (!this.eventHandlers.has(eventName)) {
+      this.eventHandlers.set(eventName, new Set());
+    }
+    this.eventHandlers.get(eventName)!.add(handler);
+
+    return () => {
+      this.eventHandlers.get(eventName)?.delete(handler);
+    };
+  }
+
+  /**
+   * Unsubscribe from a custom event
+   * @param eventName - The name of the event
+   * @param handler - The handler to remove
+   */
+  offEvent(eventName: string, handler: CustomEventHandler): void {
+    this.eventHandlers.get(eventName)?.delete(handler);
+  }
+
+  /**
+   * Send a custom event to a specific widget/session
+   * @param sessionId - The session ID to send the event to
+   * @param eventName - The name of the event
+   * @param data - Optional payload to send with the event
+   * @example
+   * // Send a promotion offer to a specific user
+   * pp.emitEvent('session-123', 'show_offer', {
+   *   discount: 20,
+   *   code: 'SAVE20',
+   *   message: 'Special offer just for you!'
+   * })
+   */
+  emitEvent(sessionId: string, eventName: string, data?: Record<string, unknown>): void {
+    const event: CustomEvent = {
+      name: eventName,
+      data,
+      timestamp: new Date().toISOString(),
+      sessionId,
+    };
+
+    this.broadcastToSession(sessionId, {
+      type: 'event',
+      data: event,
+    });
+  }
+
+  /**
+   * Broadcast a custom event to all connected widgets
+   * @param eventName - The name of the event
+   * @param data - Optional payload to send with the event
+   * @example
+   * // Notify all users about maintenance
+   * pp.broadcastEvent('maintenance_warning', {
+   *   message: 'Site will be down for maintenance in 5 minutes'
+   * })
+   */
+  broadcastEvent(eventName: string, data?: Record<string, unknown>): void {
+    const event: CustomEvent = {
+      name: eventName,
+      data,
+      timestamp: new Date().toISOString(),
+    };
+
+    for (const sessionId of this.sessionSockets.keys()) {
+      event.sessionId = sessionId;
+      this.broadcastToSession(sessionId, {
+        type: 'event',
+        data: event,
+      });
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
   // Bridges
   // ─────────────────────────────────────────────────────────────────
 
@@ -511,6 +652,16 @@ export class PocketPing {
         await bridge.onMessageRead?.(sessionId, messageIds, status);
       } catch (err) {
         console.error(`[PocketPing] Bridge ${bridge.name} read notification error:`, err);
+      }
+    }
+  }
+
+  private async notifyBridgesEvent(event: CustomEvent, session: Session): Promise<void> {
+    for (const bridge of this.bridges) {
+      try {
+        await bridge.onEvent?.(event, session);
+      } catch (err) {
+        console.error(`[PocketPing] Bridge ${bridge.name} event notification error:`, err);
       }
     }
   }

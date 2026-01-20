@@ -282,6 +282,100 @@ pp = PocketPing(
 )
 ```
 
+## Custom Events
+
+PocketPing supports bidirectional custom events between your website and backend. This enables powerful interactions like triggering alerts, sending offers, or reacting to user behavior.
+
+### Listening for Events (Widget → Backend)
+
+Subscribe to events triggered from the widget:
+
+```python
+from pocketping import PocketPing, CustomEvent, Session
+
+pp = PocketPing()
+
+# Using callback in config
+def handle_event(event: CustomEvent, session: Session):
+    print(f"Event {event.name} from session {session.id}")
+    print(f"Data: {event.data}")
+
+pp = PocketPing(on_event=handle_event)
+
+# Or using decorator-style subscription
+@pp.on_event('clicked_pricing')
+async def on_pricing_click(event: CustomEvent, session: Session):
+    print(f"User interested in: {event.data.get('plan')}")
+    # Notify sales team, log to analytics, etc.
+
+# Subscribe to all events with wildcard
+@pp.on_event('*')
+async def log_all_events(event: CustomEvent, session: Session):
+    print(f"Event: {event.name} | Data: {event.data}")
+
+# Unsubscribe when needed
+pp.off_event('clicked_pricing', on_pricing_click)
+```
+
+### Sending Events (Backend → Widget)
+
+Send events to specific sessions or broadcast to all:
+
+```python
+# Send to a specific session
+await pp.emit_event(
+    session_id='session-123',
+    event_name='show_offer',
+    data={'discount': 20, 'code': 'SAVE20'}
+)
+
+# Broadcast to all connected sessions
+await pp.broadcast_event(
+    event_name='announcement',
+    data={'message': 'New feature launched!'}
+)
+```
+
+### Event Structure
+
+```python
+from pocketping import CustomEvent
+
+event = CustomEvent(
+    name='clicked_pricing',           # Event name
+    data={'plan': 'pro', 'page': '/pricing'},  # Optional payload
+    timestamp=datetime.utcnow(),      # Auto-set
+    session_id='session-123',         # Set by SDK when from widget
+)
+```
+
+### Use Cases
+
+| Event | Direction | Use Case |
+|-------|-----------|----------|
+| `clicked_pricing` | Widget → Backend | Alert sales when visitor shows interest |
+| `error_occurred` | Widget → Backend | Get notified of frontend errors |
+| `cart_abandoned` | Widget → Backend | Trigger follow-up actions |
+| `show_offer` | Backend → Widget | Display personalized discount |
+| `request_callback` | Backend → Widget | Show callback scheduling modal |
+| `announcement` | Backend → Widget | System-wide notification |
+
+### Bridge Integration
+
+Custom events are automatically forwarded to all configured bridges (Telegram, Discord, Slack). Events appear with full context:
+
+```
+⚡ Custom Event
+
+📌 Event: clicked_pricing
+{
+  "plan": "pro",
+  "source": "homepage"
+}
+
+Session: abc123...
+```
+
 ## License
 
 MIT

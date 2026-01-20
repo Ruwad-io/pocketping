@@ -1,9 +1,9 @@
 import { render, h } from 'preact';
 import { ChatWidget } from './components/ChatWidget';
 import { PocketPingClient } from './client';
-import type { PocketPingConfig, Message } from './types';
+import type { PocketPingConfig, Message, CustomEvent, CustomEventHandler } from './types';
 
-export type { PocketPingConfig, Message };
+export type { PocketPingConfig, Message, CustomEvent, CustomEventHandler };
 
 let client: PocketPingClient | null = null;
 let container: HTMLElement | null = null;
@@ -69,6 +69,48 @@ export function sendMessage(content: string): Promise<Message> {
   return client.sendMessage(content);
 }
 
+/**
+ * Trigger a custom event to the backend
+ * @param eventName - The name of the event (e.g., 'clicked_pricing', 'viewed_demo')
+ * @param data - Optional payload to send with the event
+ * @example
+ * PocketPing.trigger('clicked_cta', { button: 'signup', page: '/pricing' })
+ */
+export function trigger(eventName: string, data?: Record<string, unknown>): void {
+  if (!client) {
+    console.warn('[PocketPing] Not initialized, cannot trigger event');
+    return;
+  }
+  client.trigger(eventName, data);
+}
+
+/**
+ * Subscribe to custom events from the backend
+ * @param eventName - The name of the event to listen for
+ * @param handler - Callback function when event is received
+ * @returns Unsubscribe function
+ * @example
+ * const unsubscribe = PocketPing.onEvent('show_offer', (data) => {
+ *   showPopup(data.message)
+ * })
+ */
+export function onEvent(eventName: string, handler: CustomEventHandler): () => void {
+  if (!client) {
+    console.warn('[PocketPing] Not initialized, cannot subscribe to event');
+    return () => {};
+  }
+  return client.onEvent(eventName, handler);
+}
+
+/**
+ * Unsubscribe from a custom event
+ * @param eventName - The name of the event
+ * @param handler - The handler to remove
+ */
+export function offEvent(eventName: string, handler: CustomEventHandler): void {
+  client?.offEvent(eventName, handler);
+}
+
 // Auto-init from script tag data attributes
 if (typeof document !== 'undefined') {
   const script = document.currentScript as HTMLScriptElement | null;
@@ -82,4 +124,4 @@ if (typeof document !== 'undefined') {
 }
 
 // Global export for IIFE build
-export default { init, destroy, open, close, toggle, sendMessage };
+export default { init, destroy, open, close, toggle, sendMessage, trigger, onEvent, offEvent };

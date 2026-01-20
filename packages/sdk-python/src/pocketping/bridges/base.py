@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from pocketping.core import PocketPing
-    from pocketping.models import Message, Session
+    from pocketping.models import Message, Session, CustomEvent
 
 
 class Bridge(ABC):
@@ -54,6 +54,15 @@ class Bridge(ABC):
             session: The session this message belongs to
             source_bridge: Name of the bridge that originated the message
             operator_name: Optional name of the operator who sent the message
+        """
+        pass
+
+    async def on_event(self, event: "CustomEvent", session: "Session") -> None:
+        """Called when a custom event is triggered from the widget.
+
+        Args:
+            event: The custom event with name, data, and timestamp
+            session: The session that triggered the event
         """
         pass
 
@@ -114,6 +123,13 @@ class CompositeBridge(Bridge):
         for bridge in self._bridges:
             try:
                 await bridge.on_operator_message(message, session, source_bridge, operator_name)
+            except Exception as e:
+                print(f"[PocketPing] Bridge {bridge.name} error: {e}")
+
+    async def on_event(self, event: "CustomEvent", session: "Session") -> None:
+        for bridge in self._bridges:
+            try:
+                await bridge.on_event(event, session)
             except Exception as e:
                 print(f"[PocketPing] Bridge {bridge.name} error: {e}")
 

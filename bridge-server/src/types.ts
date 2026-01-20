@@ -84,12 +84,27 @@ export interface MessageReadEvent {
   deliveredAt?: Date;
 }
 
+// Custom events from widgets
+export interface CustomEvent {
+  name: string;
+  data?: Record<string, unknown>;
+  timestamp: string;
+  sessionId?: string;
+}
+
+export interface CustomEventEvent {
+  type: "custom_event";
+  event: CustomEvent;
+  session: Session;
+}
+
 export type IncomingEvent =
   | NewSessionEvent
   | VisitorMessageEvent
   | AITakeoverEvent
   | OperatorStatusEvent
-  | MessageReadEvent;
+  | MessageReadEvent
+  | CustomEventEvent;
 
 // Events sent FROM the Bridge Server (to backends)
 export interface OperatorMessageEvent {

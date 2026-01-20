@@ -2,7 +2,7 @@
  * Base bridge class for notification bridges
  */
 
-import type { Message, Session, MessageStatus, EventCallback, OutgoingEvent } from "../types";
+import type { Message, Session, MessageStatus, EventCallback, OutgoingEvent, CustomEvent } from "../types";
 
 export abstract class Bridge {
   protected eventCallback?: EventCallback;
@@ -72,6 +72,11 @@ export abstract class Bridge {
     messageIds: string[],
     status: MessageStatus
   ): Promise<void>;
+
+  /**
+   * Called when a custom event is triggered from the widget
+   */
+  abstract onCustomEvent(event: CustomEvent, session: Session): Promise<void>;
 
   /**
    * Cleanup and disconnect

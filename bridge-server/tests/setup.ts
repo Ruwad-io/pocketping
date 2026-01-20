@@ -2,7 +2,7 @@
  * Test setup file for bridge-server
  */
 
-import { vi } from 'bun:test';
+import { vi, beforeEach } from 'bun:test';
 
 // Mock environment variables
 process.env.PORT = '3001';

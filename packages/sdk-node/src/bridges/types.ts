@@ -1,5 +1,5 @@
 import type { PocketPing } from '../pocketping';
-import type { Session, Message, MessageStatus } from '../types';
+import type { Session, Message, MessageStatus, CustomEvent } from '../types';
 
 /**
  * Bridge interface for notification channels.
@@ -27,6 +27,9 @@ export interface Bridge {
     messageIds: string[],
     status: MessageStatus
   ): void | Promise<void>;
+
+  /** Called when a custom event is triggered from the widget */
+  onEvent?(event: CustomEvent, session: Session): void | Promise<void>;
 
   /** Cleanup when bridge is removed */
   destroy?(): void | Promise<void>;

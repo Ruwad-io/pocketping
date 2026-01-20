@@ -260,9 +260,78 @@ PocketPing.close();
 // Toggle the chat
 PocketPing.toggle();
 
+// Send a message programmatically
+PocketPing.sendMessage('Hello!');
+
 // Destroy the widget
 PocketPing.destroy();
 ```
+
+---
+
+## Custom Events
+
+PocketPing supports bidirectional custom events between your website and the backend. This enables powerful interactions like triggering alerts when users take specific actions.
+
+### Triggering Events (Widget → Backend)
+
+Send events to your backend when users perform actions:
+
+```javascript
+// Notify when user clicks pricing
+PocketPing.trigger('clicked_pricing', { plan: 'pro', source: 'header' });
+
+// Track user interactions
+PocketPing.trigger('viewed_demo');
+PocketPing.trigger('downloaded_pdf', { name: 'whitepaper.pdf' });
+
+// Report errors
+PocketPing.trigger('error_occurred', { code: 500, page: window.location.pathname });
+```
+
+Events are forwarded to your backend and displayed in Telegram/Discord/Slack with full context.
+
+### Listening for Events (Backend → Widget)
+
+Your backend can send events to the widget. Subscribe to handle them:
+
+```javascript
+// Subscribe to an event
+const unsubscribe = PocketPing.onEvent('show_offer', (data) => {
+  showPopup(`Special offer: ${data.discount}% off!`);
+});
+
+// Unsubscribe when done
+unsubscribe();
+
+// Or use offEvent
+PocketPing.onEvent('announcement', handleAnnouncement);
+PocketPing.offEvent('announcement', handleAnnouncement);
+```
+
+### Event Callback
+
+You can also use an `onEvent` callback in the init config:
+
+```javascript
+PocketPing.init({
+  endpoint: 'https://yoursite.com/pocketping',
+  onEvent: (event) => {
+    console.log('Received event:', event.name, event.data);
+  }
+});
+```
+
+### Use Cases
+
+| Event | Use Case |
+|-------|----------|
+| `clicked_pricing` | Alert sales team when visitor shows interest |
+| `error_spike` | Get notified of frontend errors |
+| `cart_abandoned` | Trigger follow-up message |
+| `show_offer` | Display personalized offer |
+| `request_demo` | Open demo scheduling modal |
+| `announcement` | Show system-wide notification |
 
 ---
 
@@ -271,7 +340,16 @@ PocketPing.destroy();
 Full TypeScript definitions are included:
 
 ```typescript
-import { init, PocketPingConfig, Message } from '@pocketping/widget';
+import {
+  init,
+  trigger,
+  onEvent,
+  offEvent,
+  PocketPingConfig,
+  Message,
+  CustomEvent,
+  CustomEventHandler
+} from '@pocketping/widget';
 
 const config: PocketPingConfig = {
   endpoint: 'https://yoursite.com/pocketping',
@@ -281,6 +359,15 @@ const config: PocketPingConfig = {
 };
 
 init(config);
+
+// Type-safe events
+trigger('clicked_pricing', { plan: 'pro' });
+
+const handler: CustomEventHandler = (data, event: CustomEvent) => {
+  console.log(event.name, data);
+};
+
+onEvent('show_offer', handler);
 ```
 
 ---

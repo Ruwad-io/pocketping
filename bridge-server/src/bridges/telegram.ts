@@ -5,7 +5,7 @@
 import { Telegraf, Context } from "telegraf";
 import type { Message as TelegramMessage } from "telegraf/types";
 import { Bridge } from "./base";
-import type { Message, Session, MessageStatus, TelegramConfig } from "../types";
+import type { Message, Session, MessageStatus, TelegramConfig, CustomEvent } from "../types";
 
 export class TelegramBridge extends Bridge {
   private bot: Telegraf;
@@ -668,6 +668,33 @@ export class TelegramBridge extends Bridge {
       } catch (error) {
         console.error("[Telegram] Failed to set message reaction:", error);
       }
+    }
+  }
+
+  async onCustomEvent(event: CustomEvent, session: Session): Promise<void> {
+    const targetChatId = this.forumChatId || this.chatId;
+    if (!targetChatId) return;
+
+    // Format event data for display
+    const dataStr = event.data ? `\n\`\`\`json\n${JSON.stringify(event.data, null, 2)}\n\`\`\`` : '';
+
+    const text = `⚡ *Custom Event*\n\n📌 Event: \`${event.name}\`${dataStr}\n\n_Session: \`${session.id.slice(0, 8)}...\`_`;
+
+    const options: Parameters<typeof this.bot.telegram.sendMessage>[2] = {
+      parse_mode: "Markdown" as const,
+    };
+
+    if (this.useForumTopics) {
+      const topicId = this.sessionTopicMap.get(session.id);
+      if (topicId) {
+        options.message_thread_id = topicId;
+      }
+    }
+
+    try {
+      await this.bot.telegram.sendMessage(targetChatId, text, options);
+    } catch (error) {
+      console.error("[Telegram] Failed to send custom event:", error);
     }
   }
 
