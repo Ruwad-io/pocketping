@@ -32,8 +32,8 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Install dependencies
-        run: pnpm install --filter @pocketping/widget...
+      - name: Install all dependencies
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build widget
         run: pnpm --filter @pocketping/widget build
@@ -61,8 +61,8 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Install dependencies
-        run: pnpm install --filter @pocketping/sdk-node...
+      - name: Install all dependencies
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build SDK
         run: pnpm --filter @pocketping/sdk-node build
