@@ -63,7 +63,7 @@ Visitor opens chat -> You get a Telegram ping -> Reply from your phone
 ### Step 1: Add the widget to your site
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget"></script>
+<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget/dist/index.global.js"></script>
 <script>
   PocketPing.init({
     endpoint: 'https://yoursite.com/pocketping'

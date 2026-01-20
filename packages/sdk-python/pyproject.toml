@@ -58,9 +58,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/abonur/pocketping"
-Documentation = "https://github.com/abonur/pocketping#readme"
-Repository = "https://github.com/abonur/pocketping"
+Homepage = "https://github.com/Ruwad-io/pocketping"
+Documentation = "https://github.com/Ruwad-io/pocketping/tree/main/packages/sdk-python#readme"
+Repository = "https://github.com/Ruwad-io/pocketping"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pocketping"]

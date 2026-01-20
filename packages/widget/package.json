@@ -2,8 +2,9 @@
   "name": "@pocketping/widget",
   "version": "0.1.0",
   "description": "Embeddable chat widget for PocketPing",
-  "main": "dist/pocketping.js",
-  "module": "dist/pocketping.esm.js",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "browser": "dist/index.global.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist"

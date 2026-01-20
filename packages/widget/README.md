@@ -7,7 +7,7 @@ Embeddable chat widget for PocketPing. Drop-in customer support chat that connec
 ### Via CDN (Recommended)
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget/dist/pocketping.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget/dist/index.global.js"></script>
 <script>
   PocketPing.init({
     endpoint: 'https://yoursite.com/pocketping'
