@@ -367,6 +367,7 @@ Bridges run separately. Recommended for production.
 | Solo founder | Embedded Mode |
 | Team with multiple operators | Bridge Server |
 | Production deployment | Bridge Server |
+| Python backend | Embedded (SDK) or Bridge Server |
 | Node.js backend | Embedded (SDK) or Bridge Server |
 | Go/PHP/Ruby backend | Bridge Server |
 
