@@ -31,14 +31,12 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-          cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --filter @pocketping/widget...
 
       - name: Build widget
-        working-directory: packages/widget
-        run: pnpm build
+        run: pnpm --filter @pocketping/widget build
 
       - name: Publish widget
         working-directory: packages/widget
@@ -62,14 +60,12 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-          cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --filter @pocketping/sdk-node...
 
       - name: Build SDK
-        working-directory: packages/sdk-node
-        run: pnpm build
+        run: pnpm --filter @pocketping/sdk-node build
 
       - name: Publish SDK
         working-directory: packages/sdk-node
