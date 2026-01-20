@@ -1,5 +1,5 @@
 {
-  "name": "@ruwad/pocketping-sdk-node",
+  "name": "@ruwad-io/pocketping-sdk-node",
   "version": "0.1.0",
   "description": "Node.js SDK for implementing PocketPing protocol",
   "main": "dist/index.js",

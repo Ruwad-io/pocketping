@@ -63,7 +63,7 @@ Visitor opens chat -> You get a Telegram ping -> Reply from your phone
 ### Step 1: Add the widget to your site
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@ruwad/pocketping-widget/dist/index.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ruwad-io/pocketping-widget/dist/index.global.js"></script>
 <script>
   PocketPing.init({
     endpoint: 'https://yoursite.com/pocketping'
@@ -435,9 +435,9 @@ Location: Paris, France
 
 | Package | Description | Status |
 |---------|-------------|--------|
-| [@ruwad/pocketping-widget](packages/widget) | Chat widget (add to your site) | Ready |
+| [@ruwad-io/pocketping-widget](packages/widget) | Chat widget (add to your site) | Ready |
 | [pocketping](packages/sdk-python) | Python SDK (FastAPI) | Ready |
-| [@ruwad/pocketping-sdk-node](packages/sdk-node) | Node.js SDK (Express) | Ready |
+| [@ruwad-io/pocketping-sdk-node](packages/sdk-node) | Node.js SDK (Express) | Ready |
 | [bridge-server](bridge-server) | Standalone bridge server (Bun) | Ready |
 
 ---
