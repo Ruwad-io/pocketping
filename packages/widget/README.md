@@ -1,4 +1,4 @@
-# @ruwad-io/pocketping-widget
+# @pocketping-widget
 
 Embeddable chat widget for PocketPing. Drop-in customer support chat that connects to your backend and notifies you via Telegram, Discord, or Slack.
 
@@ -7,7 +7,7 @@ Embeddable chat widget for PocketPing. Drop-in customer support chat that connec
 ### Via CDN (Recommended)
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@ruwad-io/pocketping-widget/dist/index.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@pocketping-widget/dist/index.global.js"></script>
 <script>
   PocketPing.init({
     endpoint: 'https://yoursite.com/pocketping'
@@ -18,11 +18,11 @@ Embeddable chat widget for PocketPing. Drop-in customer support chat that connec
 ### Via npm
 
 ```bash
-npm install @ruwad-io/pocketping-widget
+npm install @pocketping-widget
 ```
 
 ```javascript
-import { init } from '@ruwad-io/pocketping-widget';
+import { init } from '@pocketping-widget';
 
 init({
   endpoint: 'https://yoursite.com/pocketping'
@@ -271,7 +271,7 @@ PocketPing.destroy();
 Full TypeScript definitions are included:
 
 ```typescript
-import { init, PocketPingConfig, Message } from '@ruwad-io/pocketping-widget';
+import { init, PocketPingConfig, Message } from '@pocketping-widget';
 
 const config: PocketPingConfig = {
   endpoint: 'https://yoursite.com/pocketping',
