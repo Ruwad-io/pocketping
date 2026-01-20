@@ -1,0 +1,81 @@
+/**
+ * PocketPing Documentation Theme
+ */
+
+:root {
+  /* Brand colors - Indigo */
+  --ifm-color-primary: #6366f1;
+  --ifm-color-primary-dark: #4f46e5;
+  --ifm-color-primary-darker: #4338ca;
+  --ifm-color-primary-darkest: #3730a3;
+  --ifm-color-primary-light: #818cf8;
+  --ifm-color-primary-lighter: #a5b4fc;
+  --ifm-color-primary-lightest: #c7d2fe;
+
+  --ifm-code-font-size: 95%;
+  --ifm-font-family-base: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --ifm-heading-font-family: var(--ifm-font-family-base);
+
+  --docusaurus-highlighted-code-line-bg: rgba(99, 102, 241, 0.1);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #818cf8;
+  --ifm-color-primary-dark: #6366f1;
+  --ifm-color-primary-darker: #4f46e5;
+  --ifm-color-primary-darkest: #4338ca;
+  --ifm-color-primary-light: #a5b4fc;
+  --ifm-color-primary-lighter: #c7d2fe;
+  --ifm-color-primary-lightest: #e0e7ff;
+
+  --docusaurus-highlighted-code-line-bg: rgba(129, 140, 248, 0.2);
+}
+
+/* Navbar */
+.navbar {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.navbar__title {
+  font-weight: 600;
+}
+
+/* Sidebar */
+.menu__link {
+  font-size: 0.9rem;
+}
+
+/* Code blocks */
+.prism-code {
+  font-size: 0.875rem;
+}
+
+/* Tables */
+table {
+  display: table;
+  width: 100%;
+}
+
+th, td {
+  border: 1px solid var(--ifm-table-border-color);
+}
+
+/* Admonitions */
+.admonition {
+  border-radius: 8px;
+}
+
+/* Footer */
+.footer {
+  background-color: var(--ifm-background-surface-color);
+}
+
+[data-theme='dark'] .footer {
+  background-color: #1a1a1a;
+}
+
+/* Custom classes */
+.text-brand {
+  color: var(--ifm-color-primary);
+}
