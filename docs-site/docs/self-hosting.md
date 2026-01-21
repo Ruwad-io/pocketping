@@ -123,32 +123,92 @@ const pp = new PocketPing({
 </script>
 ```
 
-## Database Options
+## Storage Options
 
-By default, sessions and messages are stored in memory. For production, implement a custom storage backend:
+By default, sessions and messages are stored **in memory** using `MemoryStorage`. This works for development but data is lost on restart.
 
-### PostgreSQL Example (Python)
+### Built-in Storage
+
+| Storage | Included | Description |
+|---------|----------|-------------|
+| `MemoryStorage` | ✅ Yes | In-memory, data lost on restart. Good for dev/testing. |
+| `PostgresStorage` | ❌ No | Implement yourself using the interface below. |
+| `RedisStorage` | ❌ No | Implement yourself using the interface below. |
+
+### Custom Storage Interface
+
+To persist data, implement the `Storage` interface:
+
+```python
+# Python - Required methods
+from pocketping.storage import Storage
+
+class MyStorage(Storage):
+    async def create_session(self, session: Session) -> None: ...
+    async def get_session(self, session_id: str) -> Session | None: ...
+    async def update_session(self, session: Session) -> None: ...
+    async def delete_session(self, session_id: str) -> None: ...
+    async def save_message(self, message: Message) -> None: ...
+    async def get_messages(self, session_id: str, after: str | None = None, limit: int = 50) -> list[Message]: ...
+    async def get_message(self, message_id: str) -> Message | None: ...
+```
+
+```typescript
+// Node.js - Required methods
+import { Storage } from '@pocketping/sdk-node';
+
+class MyStorage implements Storage {
+  async createSession(session: Session): Promise<void>;
+  async getSession(sessionId: string): Promise<Session | null>;
+  async updateSession(session: Session): Promise<void>;
+  async deleteSession(sessionId: string): Promise<void>;
+  async saveMessage(message: Message): Promise<void>;
+  async getMessages(sessionId: string, after?: string, limit?: number): Promise<Message[]>;
+  async getMessage(messageId: string): Promise<Message | null>;
+}
+```
+
+### Example: PostgreSQL (Python)
+
+:::note
+This is an example. `PostgresStorage` is **not included** in the SDK—you need to implement it.
+:::
 
 ```python
 from pocketping.storage import Storage
+from pocketping.models import Session, Message
 import asyncpg
 
 class PostgresStorage(Storage):
     def __init__(self, dsn: str):
         self.dsn = dsn
+        self.pool = None
 
-    async def create_session(self, session):
-        conn = await asyncpg.connect(self.dsn)
-        await conn.execute('''
-            INSERT INTO sessions (id, visitor_id, created_at)
-            VALUES ($1, $2, $3)
-        ''', session.id, session.visitor_id, session.created_at)
-        await conn.close()
+    async def connect(self):
+        self.pool = await asyncpg.create_pool(self.dsn)
 
-    # Implement other methods...
+    async def create_session(self, session: Session) -> None:
+        async with self.pool.acquire() as conn:
+            await conn.execute('''
+                INSERT INTO sessions (id, visitor_id, created_at, last_activity)
+                VALUES ($1, $2, $3, $4)
+            ''', session.id, session.visitor_id, session.created_at, session.last_activity)
+
+    async def get_session(self, session_id: str) -> Session | None:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow('SELECT * FROM sessions WHERE id = $1', session_id)
+            if row:
+                return Session(id=row['id'], visitor_id=row['visitor_id'], ...)
+            return None
+
+    # ... implement remaining methods
+
+# Usage
+storage = PostgresStorage("postgresql://user:pass@localhost/pocketping")
+await storage.connect()
 
 pp = PocketPing(
-    storage=PostgresStorage("postgresql://user:pass@localhost/db"),
+    storage=storage,
     bridge=TelegramBridge(...)
 )
 ```

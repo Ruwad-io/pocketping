@@ -18,15 +18,26 @@ Traditional live chat tools force you to:
 
 ## The Solution
 
-```
-┌─────────────────┐          ┌─────────────────┐          ┌─────────────────┐
-│   Your Website  │          │   PocketPing    │          │  Your Phone     │
-│                 │          │                 │          │                 │
-│  ┌───────────┐  │  ──────► │  Routes to your │  ──────► │  Telegram       │
-│  │  Widget   │  │          │  messaging apps │          │  Discord        │
-│  │  (~14KB)  │  │  ◄────── │                 │  ◄────── │  Slack          │
-│  └───────────┘  │          │  + AI fallback  │          │                 │
-└─────────────────┘          └─────────────────┘          └─────────────────┘
+```mermaid
+flowchart LR
+    subgraph website["Your Website"]
+        widget["Chat Widget<br/>~14KB"]
+    end
+
+    subgraph pp["PocketPing"]
+        bridge["Bridge Server<br/>+ AI fallback"]
+    end
+
+    subgraph phone["Your Phone"]
+        tg["Telegram"]
+        dc["Discord"]
+        sl["Slack"]
+    end
+
+    widget <--> bridge
+    bridge <--> tg
+    bridge <--> dc
+    bridge <--> sl
 ```
 
 **Result:** Reply to customers from anywhere, even from your phone while walking your dog.
@@ -39,14 +50,16 @@ Traditional live chat tools force you to:
 
 Not just notifications—**reply directly** from Telegram, Discord, or Slack. The conversation syncs in real-time.
 
-```
-Visitor: "Hi, do you ship to France?"
-         ↓
-    [Telegram notification on your phone]
-         ↓
-You reply from Telegram: "Yes! Free shipping on orders over €50"
-         ↓
-Visitor sees your reply instantly in the widget
+```mermaid
+sequenceDiagram
+    participant V as Visitor
+    participant W as Widget
+    participant T as Telegram
+
+    V->>W: "Hi, do you ship to France?"
+    W->>T: 📱 Notification
+    T->>W: "Yes! Free shipping over €50"
+    W->>V: Reply appears instantly
 ```
 
 ### 2. Custom Events
@@ -71,15 +84,18 @@ onEvent: (event, session) => {
 
 When you're away, AI responds using your custom instructions:
 
-```
-[You're asleep at 3am]
+```mermaid
+sequenceDiagram
+    participant V as Visitor
+    participant W as Widget
+    participant AI as AI Agent
 
-Visitor: "How do I reset my password?"
-         ↓
-AI (using your docs): "Go to Settings → Security → Reset Password.
-                      You'll receive an email within 5 minutes."
-         ↓
-[Morning: AI marked the conversation for your review]
+    Note over V,AI: 3am - You're asleep
+    V->>W: "How do I reset my password?"
+    W->>AI: No human available
+    AI->>W: "Go to Settings → Security → Reset Password"
+    W->>V: AI responds instantly
+    Note over V,AI: Morning: Flagged for review
 ```
 
 ### 4. Lightweight Widget
@@ -127,25 +143,32 @@ Choose Telegram, Discord, or Slack (or all three). When a visitor sends a messag
 
 Reply directly from your phone. The visitor sees your response in real-time.
 
-```
-That's it. No complex setup, no dashboard to monitor.
-```
+**That's it.** No complex setup, no dashboard to monitor.
 
 ---
 
 ## Architecture Overview
 
-```
-┌─────────────────┐     WebSocket/HTTP     ┌──────────────────┐
-│   Chat Widget   │◄─────────────────────► │   Bridge Server  │
-│    (Preact)     │                        │     (Bun.js)     │
-└─────────────────┘                        └────────┬─────────┘
-                                                    │
-                          ┌────────────────────────┼────────────────────────┐
-                          ▼                        ▼                        ▼
-                    ┌──────────┐            ┌──────────┐            ┌──────────┐
-                    │ Telegram │            │ Discord  │            │  Slack   │
-                    └──────────┘            └──────────┘            └──────────┘
+```mermaid
+flowchart TB
+    subgraph frontend["Frontend"]
+        widget["Chat Widget<br/>(Preact, ~14KB)"]
+    end
+
+    subgraph backend["Backend"]
+        bridge["Bridge Server<br/>(Bun.js)"]
+    end
+
+    subgraph platforms["Messaging Platforms"]
+        tg["Telegram"]
+        dc["Discord"]
+        sl["Slack"]
+    end
+
+    widget <-->|WebSocket/HTTP| bridge
+    bridge <--> tg
+    bridge <--> dc
+    bridge <--> sl
 ```
 
 | Component | Description |
