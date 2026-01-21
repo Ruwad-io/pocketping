@@ -284,7 +284,6 @@ Deploy on your own infrastructure.
 ---
 
 :::tip Need help?
-- Check the [FAQ](/faq)
 - Open an issue on [GitHub](https://github.com/Ruwad-io/pocketping/issues)
 - Use the chat widget on this page!
 :::
