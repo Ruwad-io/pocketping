@@ -439,6 +439,50 @@ async def handle_pricing_click(event, session):
 
 Events appear in your Telegram/Discord/Slack with full context!
 
+### Webhook Forwarding
+
+Forward all custom events to your own webhook for integrations with **Zapier**, **Make**, **n8n**, or your custom backend:
+
+**Python:**
+```python
+pp = PocketPing(
+    webhook_url='https://your-server.com/pocketping-events',
+    webhook_secret='your-hmac-secret',  # Optional: adds X-PocketPing-Signature header
+)
+```
+
+**Node.js:**
+```javascript
+const pp = new PocketPing({
+  webhookUrl: 'https://your-server.com/pocketping-events',
+  webhookSecret: 'your-hmac-secret',  // Optional: adds X-PocketPing-Signature
+});
+```
+
+**Bridge-server (Docker):**
+```bash
+EVENTS_WEBHOOK_URL=https://your-server.com/pocketping-events
+EVENTS_WEBHOOK_SECRET=your-hmac-secret
+```
+
+**Webhook payload:**
+```json
+{
+  "event": {
+    "name": "clicked_pricing",
+    "data": { "plan": "pro" },
+    "timestamp": "2026-01-21T00:00:00.000Z",
+    "sessionId": "sess_abc123"
+  },
+  "session": {
+    "id": "sess_abc123",
+    "visitorId": "visitor_xyz",
+    "metadata": { "url": "...", "country": "France" }
+  },
+  "sentAt": "2026-01-21T00:00:00.000Z"
+}
+```
+
 ### Cross-Bridge Sync
 
 When you have Telegram + Discord + Slack all configured:
