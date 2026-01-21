@@ -19,7 +19,7 @@ PocketPing has a modular architecture with three main components:
 │                              YOUR WEBSITE                                    │
 │                                                                             │
 │   ┌─────────────────┐                                                       │
-│   │   Widget (7KB)  │ ◄──── Embedded in your pages                         │
+│   │  Widget (~14KB) │ ◄──── Embedded in your pages                         │
 │   │   - Chat UI     │                                                       │
 │   │   - Events      │                                                       │
 │   └────────┬────────┘                                                       │
@@ -54,7 +54,7 @@ PocketPing has a modular architecture with three main components:
 
 | Component | Size | Role | You Need To... |
 |-----------|------|------|----------------|
-| **Widget** | 7KB | Chat UI + event handling | Add 2 lines of code |
+| **Widget** | ~14KB | Chat UI + event handling | Add 2 lines of code |
 | **Bridge Server** | - | Message routing + storage | Use SaaS or self-host |
 | **Bridges** | - | Platform integrations | Configure credentials |
 | **Backend SDK** | Optional | Custom logic + webhooks | `npm install` / `pip install` |

@@ -24,7 +24,7 @@ Traditional live chat tools force you to:
 │                 │          │                 │          │                 │
 │  ┌───────────┐  │  ──────► │  Routes to your │  ──────► │  Telegram       │
 │  │  Widget   │  │          │  messaging apps │          │  Discord        │
-│  │  (7KB)    │  │  ◄────── │                 │  ◄────── │  Slack          │
+│  │  (~14KB)  │  │  ◄────── │                 │  ◄────── │  Slack          │
 │  └───────────┘  │          │  + AI fallback  │          │                 │
 └─────────────────┘          └─────────────────┘          └─────────────────┘
 ```
@@ -84,16 +84,16 @@ AI (using your docs): "Go to Settings → Security → Reset Password.
 
 ### 4. Lightweight Widget
 
-Only **7KB gzipped**. Compare:
+Only **~14KB gzipped**—6x smaller than competitors:
 
-| Widget | Size |
-|--------|------|
-| Intercom | ~200KB |
-| Crisp | ~100KB |
-| Drift | ~150KB |
-| **PocketPing** | **7KB** |
+| Widget | Size (gzipped) |
+|--------|----------------|
+| Crisp | ~88KB |
+| Drift | ~61KB |
+| Intercom | ~80KB+ |
+| **PocketPing** | **~14KB** |
 
-Zero impact on your page load time.
+Minimal impact on your page load time.
 
 ---
 
@@ -150,7 +150,7 @@ That's it. No complex setup, no dashboard to monitor.
 
 | Component | Description |
 |-----------|-------------|
-| **Widget** | Chat interface embedded on your website (7KB) |
+| **Widget** | Chat interface embedded on your website (~14KB gzipped) |
 | **Bridge Server** | Routes messages between widget and messaging apps |
 | **Bridges** | Connectors for Telegram, Discord, and Slack |
 
@@ -164,7 +164,7 @@ That's it. No complex setup, no dashboard to monitor.
 | Notifications | ✓ Your existing apps | Yet another app |
 | AI fallback | ✓ Built-in | Premium add-on |
 | Self-hosting | ✓ Free | Enterprise only |
-| Widget size | 7KB | 100-200KB |
+| Widget size | ~14KB | 60-90KB |
 | Per-seat pricing | None | $15-50/seat |
 
 ---
