@@ -115,6 +115,63 @@ PocketPing.identify({
 PocketPing.destroy();
 ```
 
+## Custom Events
+
+Track user actions and respond to backend events for advanced integrations.
+
+### Sending Events
+
+Use `trigger()` to send custom events to your backend (for analytics, automation, etc.):
+
+```javascript
+// Track a user action
+PocketPing.trigger('clicked_pricing', {
+  plan: 'pro',
+  source: 'homepage'
+});
+
+// Track page views
+PocketPing.trigger('viewed_demo');
+
+// Track form submissions
+PocketPing.trigger('submitted_form', {
+  formId: 'contact',
+  fields: ['name', 'email']
+});
+```
+
+### Listening to Events
+
+Use `onEvent()` to react to events sent from your backend:
+
+```javascript
+// Show a popup when backend sends 'show_offer' event
+const unsubscribe = PocketPing.onEvent('show_offer', (data) => {
+  showPopup(data.message);
+});
+
+// Open chat programmatically
+PocketPing.onEvent('open_chat', () => {
+  PocketPing.open();
+});
+
+// Unsubscribe when done
+unsubscribe();
+```
+
+### Event Flow
+
+```
+┌─────────────┐     trigger()      ┌─────────────┐
+│   Widget    │ ─────────────────► │   Backend   │
+│             │                    │   (SDK)     │
+│             │ ◄───────────────── │             │
+└─────────────┘     onEvent()      └─────────────┘
+```
+
+Events sent via `trigger()` are received by your backend SDK's `onCustomEvent()` handler.
+Events sent from your backend via `sendEvent()` are received by the widget's `onEvent()` listeners.
+
 ## Next Steps
 
 - [Customization](/widget/customization) - Styling and theming options

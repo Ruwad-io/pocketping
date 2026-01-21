@@ -132,6 +132,75 @@ await pp.identify('sess_xxx', {
 });
 ```
 
+## Custom Events
+
+Handle events from the widget and send events back.
+
+### Receiving Events from Widget
+
+Use the `onEvent` config option to handle events sent by `PocketPing.trigger()` in the widget:
+
+```javascript
+const pp = new PocketPing({
+  bridgeUrl: process.env.BRIDGE_URL,
+
+  // Handle custom events from widget
+  onEvent: (event, session) => {
+    console.log(`Event: ${event.name}`, event.data);
+
+    // Track in analytics
+    analytics.track(event.name, {
+      ...event.data,
+      sessionId: session.id,
+      visitorId: session.visitorId,
+    });
+
+    // Trigger automation
+    if (event.name === 'clicked_pricing') {
+      // Send a follow-up message
+      pp.sendMessage(session.id, {
+        content: 'I see you\'re checking our pricing! Would you like help choosing a plan?',
+        type: 'operator',
+      });
+    }
+  },
+});
+```
+
+### Sending Events to Widget
+
+Use `emitEvent()` to send events that the widget can listen to with `PocketPing.onEvent()`:
+
+```javascript
+// Send a promotional offer to a specific session
+pp.emitEvent('sess_xxx', 'show_offer', {
+  discount: 20,
+  code: 'SAVE20',
+  message: 'Special offer just for you!'
+});
+
+// Open the chat widget remotely
+pp.emitEvent('sess_xxx', 'open_chat');
+
+// Show a notification
+pp.emitEvent('sess_xxx', 'notification', {
+  title: 'New feature!',
+  message: 'Check out our new dashboard.'
+});
+```
+
+### Event Flow
+
+```
+Widget                              Backend SDK
+───────                             ───────────
+PocketPing.trigger('event', data)
+         ─────────────────────────►  onEvent(event, session)
+
+PocketPing.onEvent('event', handler)
+         ◄─────────────────────────  pp.emitEvent(sessionId, 'event', data)
+```
+
 ## Custom Storage
 
 Implement the `Storage` interface for persistence:

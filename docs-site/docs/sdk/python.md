@@ -147,6 +147,56 @@ await pp.identify("sess_xxx", {
 })
 ```
 
+## Custom Events
+
+Handle events from the widget and send events back.
+
+### Receiving Events from Widget
+
+Use the `on_event` callback to handle events sent by `PocketPing.trigger()` in the widget:
+
+```python
+from pocketping import PocketPing
+
+def handle_event(event, session):
+    print(f"Event: {event.name}", event.data)
+
+    # Track in analytics
+    analytics.track(event.name, {
+        **event.data,
+        "session_id": session.id,
+        "visitor_id": session.visitor_id,
+    })
+
+    # Trigger automation
+    if event.name == "clicked_pricing":
+        pp.send_message(session.id, {
+            "content": "I see you're checking our pricing! Need help?",
+            "type": "operator",
+        })
+
+pp = PocketPing(
+    bridge_url="http://localhost:3001",
+    on_event=handle_event,
+)
+```
+
+### Sending Events to Widget
+
+Use `emit_event()` to send events that the widget can listen to:
+
+```python
+# Send a promotional offer to a specific session
+pp.emit_event("sess_xxx", "show_offer", {
+    "discount": 20,
+    "code": "SAVE20",
+    "message": "Special offer just for you!"
+})
+
+# Open the chat widget remotely
+pp.emit_event("sess_xxx", "open_chat")
+```
+
 ## Custom Storage
 
 Implement the `Storage` class for persistence:
