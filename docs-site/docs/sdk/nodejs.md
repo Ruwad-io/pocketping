@@ -146,6 +146,112 @@ const pp = new PocketPing({
 | `onSessionStart` | function | No | Called when new session starts |
 | `onMessage` | function | No | Called on each message |
 | `onEvent` | function | No | Called on custom events from widget |
+| `webhookUrl` | string | No | URL to forward custom events (Zapier, Make, n8n, etc.) |
+| `webhookSecret` | string | No | Secret for HMAC-SHA256 signature verification |
+| `webhookTimeout` | number | No | Webhook request timeout in ms (default: 5000) |
+
+---
+
+## Webhook Forwarding
+
+Forward custom events to external services like Zapier, Make, n8n, or your own backend for automation.
+
+```mermaid
+flowchart LR
+    W["Widget"] -->|"trigger('clicked_pricing')"| SDK["Node.js SDK"]
+    SDK --> H["onEvent handler"]
+    SDK --> B["Bridges (Telegram/Discord)"]
+    SDK --> WH["Webhook URL"]
+    WH --> Z["Zapier / Make / n8n"]
+```
+
+### Basic Setup
+
+```javascript
+const pp = new PocketPing({
+  bridgeUrl: process.env.BRIDGE_URL,
+
+  // Forward all custom events to your webhook
+  webhookUrl: 'https://hooks.zapier.com/hooks/catch/123456/abcdef',
+});
+```
+
+### With HMAC Signature
+
+For security, add a webhook secret to verify requests:
+
+```javascript
+const pp = new PocketPing({
+  bridgeUrl: process.env.BRIDGE_URL,
+  webhookUrl: 'https://your-backend.com/pocketping/events',
+  webhookSecret: process.env.WEBHOOK_SECRET,  // e.g., 'whsec_xxx'
+  webhookTimeout: 10000,  // 10 seconds (default: 5000)
+});
+```
+
+### Webhook Payload
+
+Every event is sent as a POST request with this JSON body:
+
+```json
+{
+  "event": {
+    "name": "clicked_pricing",
+    "data": { "plan": "pro", "source": "homepage" },
+    "timestamp": "2026-01-21T12:00:00.000Z",
+    "sessionId": "sess_abc123"
+  },
+  "session": {
+    "id": "sess_abc123",
+    "visitorId": "visitor_xyz",
+    "metadata": {
+      "url": "https://example.com/pricing",
+      "country": "France",
+      "browser": "Chrome",
+      "deviceType": "desktop"
+    }
+  },
+  "sentAt": "2026-01-21T12:00:00.123Z"
+}
+```
+
+### Verifying Signatures
+
+If `webhookSecret` is set, requests include `X-PocketPing-Signature` header:
+
+```javascript
+// Your webhook endpoint
+app.post('/pocketping/events', (req, res) => {
+  const signature = req.headers['x-pocketping-signature'];
+  const body = JSON.stringify(req.body);
+
+  // Verify signature
+  const crypto = require('crypto');
+  const expected = 'sha256=' + crypto
+    .createHmac('sha256', process.env.WEBHOOK_SECRET)
+    .update(body)
+    .digest('hex');
+
+  if (signature !== expected) {
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
+
+  // Process the event
+  const { event, session } = req.body;
+  console.log(`Event: ${event.name} from ${session.metadata.country}`);
+
+  res.json({ ok: true });
+});
+```
+
+### Use Cases
+
+| Integration | Example |
+|-------------|---------|
+| **Zapier** | Create CRM lead when `form_submitted` |
+| **Make (Integromat)** | Send Slack message when `clicked_pricing` |
+| **n8n** | Update Airtable when `started_trial` |
+| **Custom Backend** | Log analytics, trigger emails, sync to data warehouse |
 
 ---
 

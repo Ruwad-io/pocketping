@@ -4,6 +4,9 @@ title: Self-Hosting
 description: Deploy PocketPing on your own infrastructure
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Self-Hosting Guide
 
 Deploy PocketPing on your own infrastructure for complete control over your data.
@@ -22,13 +25,36 @@ A self-hosted PocketPing setup consists of three components:
 
 The simplest self-hosted setup uses the Python or Node.js SDK with embedded bridge support. No separate bridge server needed.
 
-### Python (FastAPI)
+<Tabs groupId="sdk-language">
+<TabItem value="nodejs" label="Node.js" default>
 
-```python
-# Install
+```bash
+npm install @pocketping/sdk-node
+```
+
+```javascript title="server.js"
+const express = require('express');
+const { PocketPing } = require('@pocketping/sdk-node');
+
+const app = express();
+const pp = new PocketPing({
+  bridgeUrl: 'http://localhost:3001', // Bridge server URL
+});
+
+// Mount routes
+app.use('/pocketping', pp.middleware());
+
+app.listen(8000);
+```
+
+</TabItem>
+<TabItem value="python" label="Python">
+
+```bash
 pip install pocketping
+```
 
-# main.py
+```python title="main.py"
 from fastapi import FastAPI
 from pocketping import PocketPing
 from pocketping.bridges import TelegramBridge
@@ -48,26 +74,8 @@ pp.mount_fastapi(app, prefix="/pocketping")
 # Run: uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-### Node.js (Express)
-
-```javascript
-// Install
-npm install @pocketping/sdk-node
-
-// server.js
-const express = require('express');
-const { PocketPing } = require('@pocketping/sdk-node');
-
-const app = express();
-const pp = new PocketPing({
-  bridgeUrl: 'http://localhost:3001', // Bridge server URL
-});
-
-// Mount routes
-app.use('/pocketping', pp.middleware());
-
-app.listen(8000);
-```
+</TabItem>
+</Tabs>
 
 ## Option 2: Full Setup with Bridge Server
 
@@ -97,19 +105,26 @@ services:
 
 Point your backend SDK to the bridge server:
 
+<Tabs groupId="sdk-language">
+<TabItem value="nodejs" label="Node.js" default>
+
+```javascript
+const pp = new PocketPing({
+    bridgeUrl: 'http://bridge:3001'  // Docker network or public URL
+});
+```
+
+</TabItem>
+<TabItem value="python" label="Python">
+
 ```python
-# Python
 pp = PocketPing(
     bridge_url="http://bridge:3001"  # Docker network or public URL
 )
 ```
 
-```javascript
-// Node.js
-const pp = new PocketPing({
-    bridgeUrl: 'http://bridge:3001'
-});
-```
+</TabItem>
+</Tabs>
 
 ### 3. Add Widget to Frontend
 
@@ -139,22 +154,10 @@ By default, sessions and messages are stored **in memory** using `MemoryStorage`
 
 To persist data, implement the `Storage` interface:
 
-```python
-# Python - Required methods
-from pocketping.storage import Storage
-
-class MyStorage(Storage):
-    async def create_session(self, session: Session) -> None: ...
-    async def get_session(self, session_id: str) -> Session | None: ...
-    async def update_session(self, session: Session) -> None: ...
-    async def delete_session(self, session_id: str) -> None: ...
-    async def save_message(self, message: Message) -> None: ...
-    async def get_messages(self, session_id: str, after: str | None = None, limit: int = 50) -> list[Message]: ...
-    async def get_message(self, message_id: str) -> Message | None: ...
-```
+<Tabs groupId="sdk-language">
+<TabItem value="nodejs" label="Node.js" default>
 
 ```typescript
-// Node.js - Required methods
 import { Storage } from '@pocketping/sdk-node';
 
 class MyStorage implements Storage {
@@ -168,56 +171,33 @@ class MyStorage implements Storage {
 }
 ```
 
-### Example: PostgreSQL (Python)
-
-:::note
-This is an example. `PostgresStorage` is **not included** in the SDK—you need to implement it.
-:::
+</TabItem>
+<TabItem value="python" label="Python">
 
 ```python
 from pocketping.storage import Storage
-from pocketping.models import Session, Message
-import asyncpg
 
-class PostgresStorage(Storage):
-    def __init__(self, dsn: str):
-        self.dsn = dsn
-        self.pool = None
-
-    async def connect(self):
-        self.pool = await asyncpg.create_pool(self.dsn)
-
-    async def create_session(self, session: Session) -> None:
-        async with self.pool.acquire() as conn:
-            await conn.execute('''
-                INSERT INTO sessions (id, visitor_id, created_at, last_activity)
-                VALUES ($1, $2, $3, $4)
-            ''', session.id, session.visitor_id, session.created_at, session.last_activity)
-
-    async def get_session(self, session_id: str) -> Session | None:
-        async with self.pool.acquire() as conn:
-            row = await conn.fetchrow('SELECT * FROM sessions WHERE id = $1', session_id)
-            if row:
-                return Session(id=row['id'], visitor_id=row['visitor_id'], ...)
-            return None
-
-    # ... implement remaining methods
-
-# Usage
-storage = PostgresStorage("postgresql://user:pass@localhost/pocketping")
-await storage.connect()
-
-pp = PocketPing(
-    storage=storage,
-    bridge=TelegramBridge(...)
-)
+class MyStorage(Storage):
+    async def create_session(self, session: Session) -> None: ...
+    async def get_session(self, session_id: str) -> Session | None: ...
+    async def update_session(self, session: Session) -> None: ...
+    async def delete_session(self, session_id: str) -> None: ...
+    async def save_message(self, message: Message) -> None: ...
+    async def get_messages(self, session_id: str, after: str | None = None, limit: int = 50) -> list[Message]: ...
+    async def get_message(self, message_id: str) -> Message | None: ...
 ```
 
-### Example: PostgreSQL (Node.js)
+</TabItem>
+</Tabs>
+
+### Example: PostgreSQL
 
 :::note
 This is an example. `PostgresStorage` is **not included** in the SDK—you need to implement it.
 :::
+
+<Tabs groupId="sdk-language">
+<TabItem value="nodejs" label="Node.js" default>
 
 ```typescript
 import { Storage, Session, Message } from '@pocketping/sdk-node';
@@ -265,6 +245,51 @@ const pp = new PocketPing({
 });
 ```
 
+</TabItem>
+<TabItem value="python" label="Python">
+
+```python
+from pocketping.storage import Storage
+from pocketping.models import Session, Message
+import asyncpg
+
+class PostgresStorage(Storage):
+    def __init__(self, dsn: str):
+        self.dsn = dsn
+        self.pool = None
+
+    async def connect(self):
+        self.pool = await asyncpg.create_pool(self.dsn)
+
+    async def create_session(self, session: Session) -> None:
+        async with self.pool.acquire() as conn:
+            await conn.execute('''
+                INSERT INTO sessions (id, visitor_id, created_at, last_activity)
+                VALUES ($1, $2, $3, $4)
+            ''', session.id, session.visitor_id, session.created_at, session.last_activity)
+
+    async def get_session(self, session_id: str) -> Session | None:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow('SELECT * FROM sessions WHERE id = $1', session_id)
+            if row:
+                return Session(id=row['id'], visitor_id=row['visitor_id'], ...)
+            return None
+
+    # ... implement remaining methods
+
+# Usage
+storage = PostgresStorage("postgresql://user:pass@localhost/pocketping")
+await storage.connect()
+
+pp = PocketPing(
+    storage=storage,
+    bridge=TelegramBridge(...)
+)
+```
+
+</TabItem>
+</Tabs>
+
 ## Deployment Checklist
 
 - [ ] Backend deployed with SSL (HTTPS)
@@ -285,6 +310,28 @@ const pp = new PocketPing({
 | `TELEGRAM_FORUM_CHAT_ID` | If using Telegram | Telegram supergroup ID |
 | `DISCORD_BOT_TOKEN` | If using Discord | Discord bot token |
 | `DISCORD_CHANNEL_ID` | If using Discord | Discord channel ID for threads |
+| `EVENTS_WEBHOOK_URL` | No | URL to forward custom events (Zapier, Make, n8n) |
+| `EVENTS_WEBHOOK_SECRET` | No | Secret for HMAC-SHA256 signature verification |
+
+## Webhook Integration
+
+Forward custom events to external services for automation:
+
+```yaml title="docker-compose.yml"
+services:
+  bridge:
+    image: ghcr.io/pocketping/pocketping-bridge:latest
+    ports:
+      - "3001:3001"
+    environment:
+      - TELEGRAM_BOT_TOKEN=your_token
+      - TELEGRAM_FORUM_CHAT_ID=your_chat_id
+      # Forward events to Zapier, Make, n8n, etc.
+      - EVENTS_WEBHOOK_URL=https://hooks.zapier.com/hooks/catch/123456/abcdef
+      - EVENTS_WEBHOOK_SECRET=your_secret_key  # Optional
+```
+
+See [Node.js SDK - Webhook Forwarding](/sdk/nodejs#webhook-forwarding) for payload structure and signature verification.
 
 ## Next Steps
 
