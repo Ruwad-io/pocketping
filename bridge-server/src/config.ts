@@ -67,12 +67,22 @@ export function loadConfig(): BridgeServerConfig {
   const eventsWebhookUrl = process.env.EVENTS_WEBHOOK_URL;
   const eventsWebhookSecret = process.env.EVENTS_WEBHOOK_SECRET;
 
+  // Version management
+  const minWidgetVersion = process.env.MIN_WIDGET_VERSION;
+  const latestWidgetVersion = process.env.LATEST_WIDGET_VERSION;
+  const versionWarningMessage = process.env.VERSION_WARNING_MESSAGE;
+  const versionUpgradeUrl = process.env.VERSION_UPGRADE_URL;
+
   const config: BridgeServerConfig = {
     port,
     apiKey,
     backendWebhookUrl,
     eventsWebhookUrl,
     eventsWebhookSecret,
+    minWidgetVersion,
+    latestWidgetVersion,
+    versionWarningMessage,
+    versionUpgradeUrl,
     telegram: getTelegramConfig(),
     discord: getDiscordConfig(),
     slack: getSlackConfig(),

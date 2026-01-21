@@ -9,6 +9,7 @@ import type {
   WebSocketEvent,
   CustomEvent,
   CustomEventHandler,
+  VersionWarning,
 } from './types';
 import { VERSION } from './version';
 
@@ -475,6 +476,50 @@ export class PocketPingClient {
         const customEvent = event.data as CustomEvent;
         this.emitCustomEvent(customEvent);
         break;
+
+      case 'version_warning':
+        // Version mismatch warning from backend
+        const versionWarning = event.data as VersionWarning;
+        this.handleVersionWarning(versionWarning);
+        break;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Version Management
+  // ─────────────────────────────────────────────────────────────────
+
+  private handleVersionWarning(warning: VersionWarning): void {
+    // Console output based on severity
+    const prefix = '[PocketPing]';
+    const upgradeHint = warning.upgradeUrl
+      ? ` Upgrade: ${warning.upgradeUrl}`
+      : ' Update your widget to the latest version.';
+
+    switch (warning.severity) {
+      case 'error':
+        console.error(`${prefix} 🚨 VERSION ERROR: ${warning.message}${upgradeHint}`);
+        console.error(`${prefix} Current: ${warning.currentVersion}, Required: ${warning.minVersion || 'unknown'}`);
+        break;
+      case 'warning':
+        console.warn(`${prefix} ⚠️ VERSION WARNING: ${warning.message}${upgradeHint}`);
+        console.warn(`${prefix} Current: ${warning.currentVersion}, Latest: ${warning.latestVersion || 'unknown'}`);
+        break;
+      case 'info':
+        console.info(`${prefix} ℹ️ ${warning.message}`);
+        break;
+    }
+
+    // Emit event for application handlers
+    this.emit('versionWarning', warning);
+
+    // Call config callback if provided
+    this.config.onVersionWarning?.(warning);
+
+    // If critical, prevent further operation
+    if (!warning.canContinue) {
+      console.error(`${prefix} Widget is incompatible with backend. Please update immediately.`);
+      this.disconnect();
     }
   }
 
@@ -537,12 +582,51 @@ export class PocketPingClient {
       },
     });
 
+    // Check for version warnings in response headers
+    this.checkVersionHeaders(response);
+
     if (!response.ok) {
       const error = await response.text();
       throw new Error(`PocketPing API error: ${response.status} ${error}`);
     }
 
     return response.json();
+  }
+
+  private checkVersionHeaders(response: Response): void {
+    const versionStatus = response.headers.get('X-PocketPing-Version-Status');
+    const minVersion = response.headers.get('X-PocketPing-Min-Version');
+    const latestVersion = response.headers.get('X-PocketPing-Latest-Version');
+    const versionMessage = response.headers.get('X-PocketPing-Version-Message');
+
+    if (!versionStatus || versionStatus === 'ok') {
+      return;
+    }
+
+    // Parse severity from status
+    let severity: 'info' | 'warning' | 'error' = 'info';
+    let canContinue = true;
+
+    if (versionStatus === 'deprecated') {
+      severity = 'warning';
+    } else if (versionStatus === 'unsupported') {
+      severity = 'error';
+      canContinue = false;
+    } else if (versionStatus === 'outdated') {
+      severity = 'info';
+    }
+
+    const warning: VersionWarning = {
+      severity,
+      message: versionMessage || `Widget version ${VERSION} is ${versionStatus}`,
+      currentVersion: VERSION,
+      minVersion: minVersion || undefined,
+      latestVersion: latestVersion || undefined,
+      canContinue,
+      upgradeUrl: 'https://docs.pocketping.io/widget/installation',
+    };
+
+    this.handleVersionWarning(warning);
   }
 
   // ─────────────────────────────────────────────────────────────────

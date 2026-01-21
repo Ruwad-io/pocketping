@@ -1,9 +1,9 @@
 import { render, h } from 'preact';
 import { ChatWidget } from './components/ChatWidget';
 import { PocketPingClient } from './client';
-import type { PocketPingConfig, Message, CustomEvent, CustomEventHandler } from './types';
+import type { PocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning } from './types';
 
-export type { PocketPingConfig, Message, CustomEvent, CustomEventHandler };
+export type { PocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning };
 
 let client: PocketPingClient | null = null;
 let container: HTMLElement | null = null;
@@ -111,6 +111,26 @@ export function offEvent(eventName: string, handler: CustomEventHandler): void {
   client?.offEvent(eventName, handler);
 }
 
+/**
+ * Subscribe to internal widget events
+ * @param eventName - Event name: 'versionWarning', 'message', 'connect', 'typing', etc.
+ * @param handler - Callback function
+ * @returns Unsubscribe function
+ * @example
+ * PocketPing.on('versionWarning', (warning) => {
+ *   if (warning.severity === 'error') {
+ *     showUpgradeNotice(warning.message);
+ *   }
+ * })
+ */
+export function on<T>(eventName: string, handler: (data: T) => void): () => void {
+  if (!client) {
+    console.warn('[PocketPing] Not initialized, cannot subscribe to event');
+    return () => {};
+  }
+  return client.on(eventName, handler);
+}
+
 // Auto-init from script tag data attributes
 if (typeof document !== 'undefined') {
   const script = document.currentScript as HTMLScriptElement | null;
@@ -124,4 +144,4 @@ if (typeof document !== 'undefined') {
 }
 
 // Global export for IIFE build
-export default { init, destroy, open, close, toggle, sendMessage, trigger, onEvent, offEvent };
+export default { init, destroy, open, close, toggle, sendMessage, trigger, onEvent, offEvent, on };

@@ -196,3 +196,43 @@ class CustomEvent(BaseModel):
 
 # Type alias for custom event handler
 CustomEventHandler = Any  # Callable[[CustomEvent, Session], Any]
+
+
+# ─────────────────────────────────────────────────────────────────
+# Version Management
+# ─────────────────────────────────────────────────────────────────
+
+
+class VersionStatus(str, Enum):
+    OK = "ok"
+    OUTDATED = "outdated"
+    DEPRECATED = "deprecated"
+    UNSUPPORTED = "unsupported"
+
+
+class VersionCheckResult(BaseModel):
+    """Result of checking widget version against backend requirements."""
+
+    status: VersionStatus
+    message: Optional[str] = None
+    min_version: Optional[str] = Field(None, alias="minVersion")
+    latest_version: Optional[str] = Field(None, alias="latestVersion")
+    can_continue: bool = Field(True, alias="canContinue")
+
+    class Config:
+        populate_by_name = True
+
+
+class VersionWarning(BaseModel):
+    """Version warning sent to widget."""
+
+    severity: str  # "info", "warning", "error"
+    message: str
+    current_version: str = Field(alias="currentVersion")
+    min_version: Optional[str] = Field(None, alias="minVersion")
+    latest_version: Optional[str] = Field(None, alias="latestVersion")
+    can_continue: bool = Field(True, alias="canContinue")
+    upgrade_url: Optional[str] = Field(None, alias="upgradeUrl")
+
+    class Config:
+        populate_by_name = True

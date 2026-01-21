@@ -39,6 +39,22 @@ export interface PocketPingConfig {
 
   /** Webhook request timeout in milliseconds (default: 5000) */
   webhookTimeout?: number;
+
+  // ─────────────────────────────────────────────────────────────────
+  // Version Management
+  // ─────────────────────────────────────────────────────────────────
+
+  /** Minimum supported widget version (e.g., "0.2.0") */
+  minWidgetVersion?: string;
+
+  /** Latest available widget version (e.g., "0.3.0") */
+  latestWidgetVersion?: string;
+
+  /** Custom message for version warnings */
+  versionWarningMessage?: string;
+
+  /** URL to upgrade instructions */
+  versionUpgradeUrl?: string;
 }
 
 export interface AIConfig {
@@ -189,6 +205,20 @@ export type CustomEventHandler = (
   event: CustomEvent,
   session: Session
 ) => void | Promise<void>;
+
+// ─────────────────────────────────────────────────────────────────
+// Version Management Types
+// ─────────────────────────────────────────────────────────────────
+
+export type VersionStatus = 'ok' | 'outdated' | 'deprecated' | 'unsupported';
+
+export interface VersionCheckResult {
+  status: VersionStatus;
+  message?: string;
+  minVersion?: string;
+  latestVersion?: string;
+  canContinue: boolean;
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Webhook Types

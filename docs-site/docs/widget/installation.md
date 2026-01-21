@@ -36,7 +36,7 @@ Add these lines before the closing `</body>` tag:
 
 ```html title="index.html"
 <!-- Step 1: Load the widget -->
-<script src="https://cdn.pocketping.io/widget.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget@latest/dist/index.global.js"></script>
 
 <!-- Step 2: Initialize -->
 <script>
@@ -50,17 +50,12 @@ Add these lines before the closing `</body>` tag:
 That's it. Refresh your page and you'll see the chat bubble.
 
 :::tip Auto-updates
-The CDN always serves the latest version. You'll automatically get new features and bug fixes without changing anything.
+Using `@latest` means you automatically get new features and bug fixes without changing anything.
 :::
 
-### Alternative: npm CDN
-
-You can also use jsdelivr or unpkg:
+### Alternative CDN options
 
 ```html
-<!-- jsdelivr (recommended) -->
-<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget@latest/dist/index.global.js"></script>
-
 <!-- unpkg -->
 <script src="https://unpkg.com/@pocketping/widget@latest/dist/index.global.js"></script>
 

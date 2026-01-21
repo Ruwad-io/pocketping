@@ -20,6 +20,8 @@ import type {
   CustomEvent,
   CustomEventHandler,
   WebhookPayload,
+  VersionCheckResult,
+  VersionStatus,
 } from './types';
 import type { Storage } from './storage/types';
 import { MemoryStorage } from './storage/memory';
@@ -86,6 +88,39 @@ function parseUserAgent(userAgent: string | undefined): {
   return { deviceType, browser, os };
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Version Helpers
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Parse semver version string to comparable array
+ * @example "0.2.1" -> [0, 2, 1]
+ */
+function parseVersion(version: string): number[] {
+  return version
+    .replace(/^v/, '')
+    .split('.')
+    .map((n) => parseInt(n, 10) || 0);
+}
+
+/**
+ * Compare two semver versions
+ * @returns -1 if a < b, 0 if a == b, 1 if a > b
+ */
+function compareVersions(a: string, b: string): number {
+  const vA = parseVersion(a);
+  const vB = parseVersion(b);
+  const len = Math.max(vA.length, vB.length);
+
+  for (let i = 0; i < len; i++) {
+    const numA = vA[i] ?? 0;
+    const numB = vB[i] ?? 0;
+    if (numA < numB) return -1;
+    if (numA > numB) return 1;
+  }
+  return 0;
+}
+
 export class PocketPing {
   private storage: Storage;
   private bridges: Bridge[];
@@ -120,11 +155,32 @@ export class PocketPing {
       // CORS headers
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-PocketPing-Version');
+      res.setHeader('Access-Control-Expose-Headers', 'X-PocketPing-Version-Status, X-PocketPing-Min-Version, X-PocketPing-Latest-Version, X-PocketPing-Version-Message');
 
       if (req.method === 'OPTIONS') {
         res.statusCode = 204;
         res.end();
+        return;
+      }
+
+      // Check widget version
+      const widgetVersion = req.headers['x-pocketping-version'] as string | undefined;
+      const versionCheck = this.checkWidgetVersion(widgetVersion);
+
+      // Set version warning headers
+      this.setVersionHeaders(res, versionCheck);
+
+      // If version is unsupported, reject the request
+      if (!versionCheck.canContinue) {
+        res.statusCode = 426; // Upgrade Required
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({
+          error: 'Widget version unsupported',
+          message: versionCheck.message,
+          minVersion: versionCheck.minVersion,
+          upgradeUrl: this.config.versionUpgradeUrl || 'https://docs.pocketping.io/widget/installation',
+        }));
         return;
       }
 
@@ -133,6 +189,7 @@ export class PocketPing {
         const query = Object.fromEntries(url.searchParams);
 
         let result: unknown;
+        let sessionId: string | undefined;
 
         switch (path) {
           case 'connect': {
@@ -155,7 +212,9 @@ export class PocketPing {
               };
             }
 
-            result = await this.handleConnect(connectReq);
+            const connectResult = await this.handleConnect(connectReq);
+            sessionId = connectResult.sessionId;
+            result = connectResult;
             break;
           }
           case 'message':
@@ -186,6 +245,13 @@ export class PocketPing {
         res.setHeader('Content-Type', 'application/json');
         res.statusCode = 200;
         res.end(JSON.stringify(result));
+
+        // Send version warning via WebSocket after connect (with slight delay to ensure WS is connected)
+        if (sessionId && versionCheck.status !== 'ok') {
+          setTimeout(() => {
+            this.sendVersionWarning(sessionId!, versionCheck);
+          }, 500);
+        }
       } catch (error) {
         console.error('[PocketPing] Error:', error);
         res.statusCode = 500;
@@ -773,5 +839,110 @@ export class PocketPing {
 
   getStorage(): Storage {
     return this.storage;
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Version Management
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Check widget version against configured min/latest versions
+   * @param widgetVersion - Version from X-PocketPing-Version header
+   * @returns Version check result with status and headers to set
+   */
+  checkWidgetVersion(widgetVersion: string | undefined): VersionCheckResult {
+    // No version header = unknown (treat as outdated for logging)
+    if (!widgetVersion) {
+      return {
+        status: 'ok',
+        canContinue: true,
+      };
+    }
+
+    const { minWidgetVersion, latestWidgetVersion } = this.config;
+
+    // No version constraints configured
+    if (!minWidgetVersion && !latestWidgetVersion) {
+      return {
+        status: 'ok',
+        canContinue: true,
+      };
+    }
+
+    let status: VersionStatus = 'ok';
+    let message: string | undefined;
+    let canContinue = true;
+
+    // Check against minimum version
+    if (minWidgetVersion && compareVersions(widgetVersion, minWidgetVersion) < 0) {
+      // Widget is older than minimum supported
+      status = 'unsupported';
+      message = this.config.versionWarningMessage ||
+        `Widget version ${widgetVersion} is no longer supported. Minimum version: ${minWidgetVersion}`;
+      canContinue = false;
+    }
+    // Check against latest version (for deprecation warnings)
+    else if (latestWidgetVersion && compareVersions(widgetVersion, latestWidgetVersion) < 0) {
+      // Widget is older than latest (but still supported)
+      const majorDiff = parseVersion(latestWidgetVersion)[0] - parseVersion(widgetVersion)[0];
+
+      if (majorDiff >= 1) {
+        // Major version behind = deprecated
+        status = 'deprecated';
+        message = this.config.versionWarningMessage ||
+          `Widget version ${widgetVersion} is deprecated. Please update to ${latestWidgetVersion}`;
+      } else {
+        // Minor/patch behind = just outdated (info only)
+        status = 'outdated';
+        message = `A newer widget version ${latestWidgetVersion} is available`;
+      }
+    }
+
+    return {
+      status,
+      message,
+      minVersion: minWidgetVersion,
+      latestVersion: latestWidgetVersion,
+      canContinue,
+    };
+  }
+
+  /**
+   * Set version warning headers on HTTP response
+   */
+  private setVersionHeaders(res: ServerResponse, versionCheck: VersionCheckResult): void {
+    if (versionCheck.status !== 'ok') {
+      res.setHeader('X-PocketPing-Version-Status', versionCheck.status);
+      if (versionCheck.minVersion) {
+        res.setHeader('X-PocketPing-Min-Version', versionCheck.minVersion);
+      }
+      if (versionCheck.latestVersion) {
+        res.setHeader('X-PocketPing-Latest-Version', versionCheck.latestVersion);
+      }
+      if (versionCheck.message) {
+        res.setHeader('X-PocketPing-Version-Message', versionCheck.message);
+      }
+    }
+  }
+
+  /**
+   * Send version warning via WebSocket to a session
+   */
+  sendVersionWarning(sessionId: string, versionCheck: VersionCheckResult): void {
+    if (versionCheck.status === 'ok') return;
+
+    this.broadcastToSession(sessionId, {
+      type: 'version_warning',
+      data: {
+        severity: versionCheck.status === 'unsupported' ? 'error' :
+                  versionCheck.status === 'deprecated' ? 'warning' : 'info',
+        message: versionCheck.message,
+        currentVersion: 'unknown', // Will be filled by widget
+        minVersion: versionCheck.minVersion,
+        latestVersion: versionCheck.latestVersion,
+        canContinue: versionCheck.canContinue,
+        upgradeUrl: this.config.versionUpgradeUrl || 'https://docs.pocketping.io/widget/installation',
+      },
+    });
   }
 }

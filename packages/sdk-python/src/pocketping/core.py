@@ -27,6 +27,9 @@ from pocketping.models import (
     SendMessageResponse,
     Session,
     TypingRequest,
+    VersionCheckResult,
+    VersionStatus,
+    VersionWarning,
     WebSocketEvent,
 )
 from pocketping.storage import MemoryStorage, Storage
@@ -50,6 +53,11 @@ class PocketPing:
         webhook_url: Optional[str] = None,
         webhook_secret: Optional[str] = None,
         webhook_timeout: float = 5.0,
+        # Version management
+        min_widget_version: Optional[str] = None,
+        latest_widget_version: Optional[str] = None,
+        version_warning_message: Optional[str] = None,
+        version_upgrade_url: Optional[str] = None,
     ):
         self.storage = storage or MemoryStorage()
         self.bridges = bridges or []
@@ -70,6 +78,12 @@ class PocketPing:
         self.webhook_secret = webhook_secret
         self.webhook_timeout = webhook_timeout
         self._http_client: Optional[httpx.AsyncClient] = None
+
+        # Version management config
+        self.min_widget_version = min_widget_version
+        self.latest_widget_version = latest_widget_version
+        self.version_warning_message = version_warning_message
+        self.version_upgrade_url = version_upgrade_url or "https://docs.pocketping.io/widget/installation"
 
         self._operator_online = False
         self._last_operator_activity: dict[str, float] = {}  # session_id -> timestamp
@@ -753,3 +767,157 @@ class PocketPing:
         """Add a bridge dynamically."""
         self.bridges.append(bridge)
         asyncio.create_task(bridge.init(self))
+
+    # ─────────────────────────────────────────────────────────────────
+    # Version Management
+    # ─────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _parse_version(version: str) -> tuple[int, int, int]:
+        """Parse a semver string into (major, minor, patch) tuple."""
+        parts = version.lstrip("v").split(".")
+        major = int(parts[0]) if len(parts) > 0 else 0
+        minor = int(parts[1]) if len(parts) > 1 else 0
+        patch = int(parts[2].split("-")[0]) if len(parts) > 2 else 0  # Handle pre-release
+        return (major, minor, patch)
+
+    @staticmethod
+    def _compare_versions(v1: str, v2: str) -> int:
+        """Compare two semver strings. Returns: -1 if v1 < v2, 0 if equal, 1 if v1 > v2."""
+        p1 = PocketPing._parse_version(v1)
+        p2 = PocketPing._parse_version(v2)
+        if p1 < p2:
+            return -1
+        elif p1 > p2:
+            return 1
+        return 0
+
+    def check_widget_version(self, widget_version: str | None) -> VersionCheckResult:
+        """Check widget version compatibility.
+
+        Args:
+            widget_version: Version string from X-PocketPing-Version header
+
+        Returns:
+            VersionCheckResult with status and message
+        """
+        if not widget_version:
+            return VersionCheckResult(
+                status=VersionStatus.OK,
+                min_version=self.min_widget_version,
+                latest_version=self.latest_widget_version,
+                can_continue=True,
+            )
+
+        # Check against minimum version
+        if self.min_widget_version:
+            comparison = self._compare_versions(widget_version, self.min_widget_version)
+            if comparison < 0:
+                default_msg = (
+                    f"Widget version {widget_version} is no longer supported. "
+                    f"Please upgrade to {self.min_widget_version} or later."
+                )
+                return VersionCheckResult(
+                    status=VersionStatus.UNSUPPORTED,
+                    message=self.version_warning_message or default_msg,
+                    min_version=self.min_widget_version,
+                    latest_version=self.latest_widget_version,
+                    can_continue=False,
+                )
+
+        # Check if outdated (behind latest)
+        if self.latest_widget_version:
+            comparison = self._compare_versions(widget_version, self.latest_widget_version)
+            if comparison < 0:
+                # Check how far behind
+                current = self._parse_version(widget_version)
+                latest = self._parse_version(self.latest_widget_version)
+
+                if current[0] < latest[0]:
+                    # Major version behind - deprecated
+                    default_msg = (
+                        f"Widget version {widget_version} is deprecated. "
+                        f"Please upgrade to {self.latest_widget_version}."
+                    )
+                    return VersionCheckResult(
+                        status=VersionStatus.DEPRECATED,
+                        message=self.version_warning_message or default_msg,
+                        min_version=self.min_widget_version,
+                        latest_version=self.latest_widget_version,
+                        can_continue=True,
+                    )
+                else:
+                    # Minor/patch behind - outdated
+                    return VersionCheckResult(
+                        status=VersionStatus.OUTDATED,
+                        message=f"A newer widget version ({self.latest_widget_version}) is available.",
+                        min_version=self.min_widget_version,
+                        latest_version=self.latest_widget_version,
+                        can_continue=True,
+                    )
+
+        return VersionCheckResult(
+            status=VersionStatus.OK,
+            min_version=self.min_widget_version,
+            latest_version=self.latest_widget_version,
+            can_continue=True,
+        )
+
+    def get_version_headers(self, version_check: VersionCheckResult) -> dict[str, str]:
+        """Get HTTP headers to set for version information.
+
+        Args:
+            version_check: Result from check_widget_version
+
+        Returns:
+            Dictionary of header name -> value
+        """
+        headers = {
+            "X-PocketPing-Version-Status": version_check.status.value,
+        }
+
+        if version_check.min_version:
+            headers["X-PocketPing-Min-Version"] = version_check.min_version
+
+        if version_check.latest_version:
+            headers["X-PocketPing-Latest-Version"] = version_check.latest_version
+
+        if version_check.message:
+            headers["X-PocketPing-Version-Message"] = version_check.message
+
+        return headers
+
+    async def send_version_warning(
+        self,
+        session_id: str,
+        version_check: VersionCheckResult,
+        current_version: str,
+    ) -> None:
+        """Send a version warning via WebSocket.
+
+        Args:
+            session_id: Session to send warning to
+            version_check: Result from check_widget_version
+            current_version: The widget's current version
+        """
+        severity_map = {
+            VersionStatus.OK: "info",
+            VersionStatus.OUTDATED: "info",
+            VersionStatus.DEPRECATED: "warning",
+            VersionStatus.UNSUPPORTED: "error",
+        }
+
+        warning = VersionWarning(
+            severity=severity_map.get(version_check.status, "info"),
+            message=version_check.message or "",
+            current_version=current_version,
+            min_version=version_check.min_version,
+            latest_version=version_check.latest_version,
+            can_continue=version_check.can_continue,
+            upgrade_url=self.version_upgrade_url,
+        )
+
+        await self._broadcast_to_session(
+            session_id,
+            WebSocketEvent(type="version_warning", data=warning.model_dump(by_alias=True)),
+        )

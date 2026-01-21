@@ -114,7 +114,7 @@ const pp = new PocketPing({
 ### 3. Add Widget to Frontend
 
 ```html
-<script src="https://cdn.pocketping.io/widget.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget@latest/dist/index.global.js"></script>
 <script>
   PocketPing.init({
     endpoint: 'https://yourbackend.com/pocketping',

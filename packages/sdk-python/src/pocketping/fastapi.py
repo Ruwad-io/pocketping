@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 
 from pocketping.core import PocketPing
 from pocketping.models import (
@@ -13,6 +13,14 @@ from pocketping.models import (
     SessionMetadata,
     TypingRequest,
 )
+
+# Headers exposed to the widget for version management
+VERSION_EXPOSE_HEADERS = [
+    "X-PocketPing-Version-Status",
+    "X-PocketPing-Min-Version",
+    "X-PocketPing-Latest-Version",
+    "X-PocketPing-Version-Message",
+]
 
 
 def _get_client_ip(request: Request) -> str:
@@ -78,6 +86,37 @@ def _parse_user_agent(user_agent: str | None) -> dict:
     return {"device_type": device_type, "browser": browser, "os": os_name}
 
 
+def _check_version_and_set_headers(pp: PocketPing, request: Request, response: Response) -> None:
+    """Check widget version from request header and set response headers.
+
+    Args:
+        pp: PocketPing instance
+        request: FastAPI request
+        response: FastAPI response
+
+    Raises:
+        HTTPException: If widget version is unsupported (426 Upgrade Required)
+    """
+    widget_version = request.headers.get("x-pocketping-version")
+    version_check = pp.check_widget_version(widget_version)
+
+    # Set version headers on response
+    for header_name, header_value in pp.get_version_headers(version_check).items():
+        response.headers[header_name] = header_value
+
+    # Block unsupported versions
+    if not version_check.can_continue:
+        raise HTTPException(
+            status_code=426,
+            detail={
+                "error": "Widget version unsupported",
+                "message": version_check.message,
+                "minVersion": version_check.min_version,
+                "latestVersion": version_check.latest_version,
+            },
+        )
+
+
 def create_router(pp: PocketPing, prefix: str = "") -> APIRouter:
     """Create a FastAPI router for PocketPing endpoints.
 
@@ -94,8 +133,11 @@ def create_router(pp: PocketPing, prefix: str = "") -> APIRouter:
     router = APIRouter(prefix=prefix)
 
     @router.post("/connect")
-    async def connect(body: ConnectRequest, request: Request):
+    async def connect(body: ConnectRequest, request: Request, response: Response):
         """Initialize or resume a chat session."""
+        # Check widget version
+        _check_version_and_set_headers(pp, request, response)
+
         # Enrich metadata with server-side info
         client_ip = _get_client_ip(request)
         ua_info = _parse_user_agent(body.metadata.user_agent if body.metadata else request.headers.get("user-agent"))
@@ -112,8 +154,8 @@ def create_router(pp: PocketPing, prefix: str = "") -> APIRouter:
                 **ua_info,
             )
 
-        response = await pp.handle_connect(body)
-        return response.model_dump(by_alias=True)
+        connect_response = await pp.handle_connect(body)
+        return connect_response.model_dump(by_alias=True)
 
     @router.post("/message")
     async def send_message(request: SendMessageRequest):
@@ -225,5 +267,6 @@ def add_cors_middleware(app, origins: list[str] = None):
         allow_origins=origins or ["*"],
         allow_credentials=True,
         allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["*"],
+        allow_headers=["Content-Type", "X-PocketPing-Version"],
+        expose_headers=VERSION_EXPOSE_HEADERS,
     )

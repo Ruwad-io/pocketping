@@ -178,6 +178,23 @@ export interface BridgeServerConfig {
   backendWebhookUrl?: string; // URL to send operator messages to
   eventsWebhookUrl?: string; // URL to forward custom events to (Zapier, Make, n8n, etc.)
   eventsWebhookSecret?: string; // HMAC secret for X-PocketPing-Signature header
+
+  // Version management
+  minWidgetVersion?: string; // Minimum supported widget version (e.g., "0.2.0")
+  latestWidgetVersion?: string; // Latest available widget version (e.g., "0.3.0")
+  versionWarningMessage?: string; // Custom message for version warnings
+  versionUpgradeUrl?: string; // URL to upgrade instructions
+}
+
+// Version management types
+export type VersionStatus = "ok" | "outdated" | "deprecated" | "unsupported";
+
+export interface VersionCheckResult {
+  status: VersionStatus;
+  message?: string;
+  minVersion?: string;
+  latestVersion?: string;
+  canContinue: boolean;
 }
 
 // Callback for sending events back to the backend

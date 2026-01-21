@@ -19,6 +19,8 @@ import type {
   BridgeServerConfig,
   CustomEvent,
   Session,
+  VersionCheckResult,
+  VersionStatus,
 } from "../types";
 
 interface AppContext {
@@ -244,4 +246,124 @@ async function forwardToEventsWebhook(
   if (!response.ok) {
     console.error(`[API] Events webhook returned ${response.status}: ${response.statusText}`);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Version Checking Helpers (exported for custom integrations)
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Parse semver version string to comparable array
+ * @example "0.2.1" -> [0, 2, 1]
+ */
+function parseVersion(version: string): number[] {
+  return version
+    .replace(/^v/, "")
+    .split(".")
+    .map((n) => parseInt(n, 10) || 0);
+}
+
+/**
+ * Compare two semver versions
+ * @returns -1 if a < b, 0 if a == b, 1 if a > b
+ */
+function compareVersions(a: string, b: string): number {
+  const vA = parseVersion(a);
+  const vB = parseVersion(b);
+  const len = Math.max(vA.length, vB.length);
+
+  for (let i = 0; i < len; i++) {
+    const numA = vA[i] ?? 0;
+    const numB = vB[i] ?? 0;
+    if (numA < numB) return -1;
+    if (numA > numB) return 1;
+  }
+  return 0;
+}
+
+/**
+ * Check widget version against configured min/latest versions
+ * Exported for custom integrations that need version checking
+ */
+export function checkWidgetVersion(
+  widgetVersion: string | undefined,
+  config: BridgeServerConfig
+): VersionCheckResult {
+  // No version header = unknown
+  if (!widgetVersion) {
+    return {
+      status: "ok",
+      canContinue: true,
+    };
+  }
+
+  const { minWidgetVersion, latestWidgetVersion } = config;
+
+  // No version constraints configured
+  if (!minWidgetVersion && !latestWidgetVersion) {
+    return {
+      status: "ok",
+      canContinue: true,
+    };
+  }
+
+  let status: VersionStatus = "ok";
+  let message: string | undefined;
+  let canContinue = true;
+
+  // Check against minimum version
+  if (minWidgetVersion && compareVersions(widgetVersion, minWidgetVersion) < 0) {
+    status = "unsupported";
+    message =
+      config.versionWarningMessage ||
+      `Widget version ${widgetVersion} is no longer supported. Minimum version: ${minWidgetVersion}`;
+    canContinue = false;
+  }
+  // Check against latest version (for deprecation warnings)
+  else if (latestWidgetVersion && compareVersions(widgetVersion, latestWidgetVersion) < 0) {
+    const majorDiff = parseVersion(latestWidgetVersion)[0] - parseVersion(widgetVersion)[0];
+
+    if (majorDiff >= 1) {
+      status = "deprecated";
+      message =
+        config.versionWarningMessage ||
+        `Widget version ${widgetVersion} is deprecated. Please update to ${latestWidgetVersion}`;
+    } else {
+      status = "outdated";
+      message = `A newer widget version ${latestWidgetVersion} is available`;
+    }
+  }
+
+  return {
+    status,
+    message,
+    minVersion: minWidgetVersion,
+    latestVersion: latestWidgetVersion,
+    canContinue,
+  };
+}
+
+/**
+ * Get version warning headers for HTTP response
+ */
+export function getVersionHeaders(versionCheck: VersionCheckResult): Record<string, string> {
+  if (versionCheck.status === "ok") {
+    return {};
+  }
+
+  const headers: Record<string, string> = {
+    "X-PocketPing-Version-Status": versionCheck.status,
+  };
+
+  if (versionCheck.minVersion) {
+    headers["X-PocketPing-Min-Version"] = versionCheck.minVersion;
+  }
+  if (versionCheck.latestVersion) {
+    headers["X-PocketPing-Latest-Version"] = versionCheck.latestVersion;
+  }
+  if (versionCheck.message) {
+    headers["X-PocketPing-Version-Message"] = versionCheck.message;
+  }
+
+  return headers;
 }

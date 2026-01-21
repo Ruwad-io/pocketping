@@ -108,6 +108,9 @@ export interface PocketPingConfig {
 
   /** Called when connection fails */
   onError?: (error: Error) => void;
+
+  /** Called when a version mismatch is detected */
+  onVersionWarning?: (warning: VersionWarning) => void;
 }
 
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
@@ -158,11 +161,34 @@ export interface PresenceResponse {
   aiActiveAfter?: number;
 }
 
-export type WebSocketEventType = 'message' | 'typing' | 'presence' | 'ai_takeover' | 'read' | 'event';
+export type WebSocketEventType = 'message' | 'typing' | 'presence' | 'ai_takeover' | 'read' | 'event' | 'version_warning';
 
 export interface WebSocketEvent {
   type: WebSocketEventType;
   data: unknown;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Version Management
+// ─────────────────────────────────────────────────────────────────
+
+export type VersionWarningSeverity = 'info' | 'warning' | 'error';
+
+export interface VersionWarning {
+  /** Severity level of the warning */
+  severity: VersionWarningSeverity;
+  /** Human-readable warning message */
+  message: string;
+  /** Current widget version */
+  currentVersion: string;
+  /** Minimum supported version (if applicable) */
+  minVersion?: string;
+  /** Latest available version (if applicable) */
+  latestVersion?: string;
+  /** Whether the widget should still function */
+  canContinue: boolean;
+  /** URL to upgrade instructions */
+  upgradeUrl?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────
