@@ -1,57 +1,249 @@
 ---
 sidebar_position: 3
 title: Slack
-description: Configure Slack notifications with PocketPing
+description: Configure Slack notifications with PocketPing using threads
 ---
 
-# Slack Setup
+# Slack Bridge Setup
 
-Receive customer messages as Slack notifications using threads for organized conversations.
+Receive website chat messages directly in Slack using threads.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       HOW IT WORKS                               │
+│                                                                 │
+│   Website Visitor              Your Slack Workspace             │
+│   ┌─────────────────┐         ┌─────────────────────────────┐  │
+│   │ Widget          │         │  #support                    │  │
+│   │ "Hi, I need     │ ──────► │  ├── 🧵 New visitor (Paris)  │  │
+│   │  help with..."  │         │  │   └── "Hi, I need help.." │  │
+│   └─────────────────┘         │  │                           │  │
+│                               │  │   You reply in thread:    │  │
+│   ┌─────────────────┐         │  │   └── "Sure, how can..."  │  │
+│   │ "Sure! How can  │ ◄────── │  │                           │  │
+│   │  I help?"       │         │  └── 🧵 Another visitor      │  │
+│   └─────────────────┘         └─────────────────────────────┘  │
+│                                                                 │
+│   Each visitor = Separate thread (organized in your channel)   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Prerequisites
+
+- Slack workspace where you have admin permissions
+- Ability to install apps to your workspace
+
+---
 
 ## Step 1: Create a Slack App
 
-1. Go to [api.slack.com/apps](https://api.slack.com/apps)
-2. Click "Create New App"
-3. Choose "From scratch"
-4. Name your app (e.g., "PocketPing") and select your workspace
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 1: Create App                                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   1. Go to api.slack.com/apps                                   │
+│                                                                 │
+│   2. Click "Create New App"                                     │
+│      └── Choose "From scratch"                                  │
+│      └── App Name: "PocketPing" (or your brand)                │
+│      └── Select your workspace                                  │
+│      └── Click "Create App"                                     │
+│                                                                 │
+│   ┌─────────────────────────────────────────────────┐          │
+│   │ Your app is created!                            │          │
+│   │                                                 │          │
+│   │ App ID: A0123456789                             │          │
+│   │ (You'll configure permissions next)             │          │
+│   └─────────────────────────────────────────────────┘          │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-## Step 2: Configure Bot
+---
 
-1. Go to "OAuth & Permissions"
-2. Under "Bot Token Scopes", add:
-   - `channels:history`
-   - `channels:read`
-   - `chat:write`
-   - `users:read`
-3. Click "Install to Workspace"
-4. **Save the Bot User OAuth Token** (starts with `xoxb-`)
+## Step 2: Configure Bot Permissions
+
+Add the necessary OAuth scopes.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 2: Add Bot Scopes                                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   1. Go to "OAuth & Permissions" in the sidebar                 │
+│                                                                 │
+│   2. Scroll to "Bot Token Scopes"                               │
+│      └── Click "Add an OAuth Scope"                             │
+│      └── Add these scopes:                                      │
+│                                                                 │
+│      ┌─────────────────────────────────────────────┐           │
+│      │ Bot Token Scopes                            │           │
+│      ├─────────────────────────────────────────────┤           │
+│      │ ✅ channels:history    (read messages)      │           │
+│      │ ✅ channels:read       (list channels)      │           │
+│      │ ✅ chat:write          (post messages)      │           │
+│      │ ✅ users:read          (user info)          │           │
+│      └─────────────────────────────────────────────┘           │
+│                                                                 │
+│   3. Click "Install to Workspace" at the top                    │
+│      └── Review permissions → Allow                             │
+│                                                                 │
+│   4. Copy the "Bot User OAuth Token"                            │
+│      └── Starts with: xoxb-                                     │
+│      └── Save this! You'll need it later.                       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## Step 3: Enable Socket Mode
 
-1. Go to "Socket Mode" in the sidebar
-2. Enable Socket Mode
-3. Create an App-Level Token with `connections:write` scope
-4. **Save the App-Level Token** (starts with `xapp-`)
+Socket Mode allows real-time communication without public webhooks.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 3: Enable Socket Mode                                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   1. Go to "Socket Mode" in the sidebar                         │
+│                                                                 │
+│   2. Toggle "Enable Socket Mode" ON                             │
+│                                                                 │
+│   3. Create an App-Level Token                                  │
+│      └── Token Name: "pocketping-socket"                        │
+│      └── Add scope: connections:write                           │
+│      └── Click "Generate"                                       │
+│                                                                 │
+│   4. Copy the App-Level Token                                   │
+│      └── Starts with: xapp-                                     │
+│      └── Save this! You'll need it later.                       │
+│                                                                 │
+│   ┌─────────────────────────────────────────────────┐          │
+│   │ You should now have TWO tokens:                 │          │
+│   │                                                 │          │
+│   │ Bot Token: xoxb-xxxxx... (from Step 2)         │          │
+│   │ App Token: xapp-xxxxx... (from Step 3)         │          │
+│   └─────────────────────────────────────────────────┘          │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+:::info Why Socket Mode?
+Socket Mode lets your bot receive events without exposing a public webhook URL. This is especially useful for self-hosted setups behind firewalls.
+:::
+
+---
 
 ## Step 4: Enable Events
 
-1. Go to "Event Subscriptions"
-2. Enable Events
-3. Subscribe to bot events:
-   - `message.channels`
-   - `message.groups`
+Subscribe to message events to receive visitor replies.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 4: Subscribe to Events                                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   1. Go to "Event Subscriptions" in the sidebar                 │
+│                                                                 │
+│   2. Toggle "Enable Events" ON                                  │
+│                                                                 │
+│   3. Click "Subscribe to bot events"                            │
+│      └── Add these events:                                      │
+│                                                                 │
+│      ┌─────────────────────────────────────────────┐           │
+│      │ Bot Events                                  │           │
+│      ├─────────────────────────────────────────────┤           │
+│      │ ✅ message.channels   (public channels)     │           │
+│      │ ✅ message.groups     (private channels)    │           │
+│      └─────────────────────────────────────────────┘           │
+│                                                                 │
+│   4. Click "Save Changes"                                       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## Step 5: Get Channel ID
 
-1. Open Slack and go to the channel where you want notifications
-2. Click the channel name at the top
-3. Scroll down to find the Channel ID (starts with C)
+Find the ID of your support channel.
 
-## Step 6: Configure PocketPing
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 5: Get Channel ID                                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   1. Open Slack                                                 │
+│                                                                 │
+│   2. Go to your support channel (e.g., #support)                │
+│                                                                 │
+│   3. Click the channel name at the top                          │
+│                                                                 │
+│   4. Scroll down in the popup to find "Channel ID"              │
+│      └── Copy it (starts with C)                                │
+│                                                                 │
+│   ┌─────────────────────────────────────────────────┐          │
+│   │ #support                                        │          │
+│   │ ─────────────────────────────────────────────── │          │
+│   │                                                 │          │
+│   │ Channel ID: C0123456789                         │          │
+│   │             ↑                                   │          │
+│   │             Copy this                           │          │
+│   └─────────────────────────────────────────────────┘          │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Step 6: Add Bot to Channel
+
+Invite the bot to your support channel.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 6: Invite Bot to Channel                                   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   1. Open your support channel                                  │
+│                                                                 │
+│   2. Type: /invite @PocketPing                                  │
+│      (Replace "PocketPing" with your app name)                  │
+│                                                                 │
+│   3. Press Enter                                                │
+│                                                                 │
+│   ┌─────────────────────────────────────────────────┐          │
+│   │ #support                                        │          │
+│   │                                                 │          │
+│   │ Slackbot:                                       │          │
+│   │ @PocketPing was added to #support               │          │
+│   └─────────────────────────────────────────────────┘          │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+:::warning Don't forget this step!
+The bot won't receive messages until it's invited to the channel.
+:::
+
+---
+
+## Step 7: Configure PocketPing
 
 ### SaaS Users
 
-Go to your [Bridge Settings](https://app.pocketping.io/settings/bridges) and enter your tokens and Channel ID.
+1. Go to [app.pocketping.io/settings/bridges](https://app.pocketping.io/settings/bridges)
+2. Click "Add Slack"
+3. Enter:
+   - **Bot Token:** `xoxb-xxxxx...`
+   - **App Token:** `xapp-xxxxx...`
+   - **Channel ID:** `C0123456789`
+4. Click "Save"
 
 ### Self-Hosted Users
 
@@ -63,40 +255,153 @@ SLACK_APP_TOKEN=xapp-your-app-token
 SLACK_CHANNEL_ID=C0123456789
 ```
 
-## How It Works
+Then restart your bridge server:
 
-1. New visitor starts a chat on your website
-2. A message is posted in your Slack channel
-3. Replies to that thread sync back to the widget
-4. Each visitor conversation is a separate thread
+```bash
+docker compose restart bridge
+```
+
+---
+
+## Test Your Setup
+
+1. **Open your website** with the widget installed
+2. **Send a test message** in the chat widget
+3. **Check Slack** - a new message with thread should appear:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ #support                                                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  PocketPing                                        10:30 AM     │
+│  ┌───────────────────────────────────────────────────────────┐ │
+│  │ 🆕 New conversation                                       │ │
+│  │                                                           │ │
+│  │ 📍 Location: Paris, France                                │ │
+│  │ 🌐 Page: yoursite.com/pricing                             │ │
+│  │ ─────────────────────────────────────────                 │ │
+│  │ "Hello, this is a test!"                                  │ │
+│  │                                                           │ │
+│  │ 💬 2 replies                                              │ │
+│  └───────────────────────────────────────────────────────────┘ │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+4. **Click "2 replies"** to open the thread and respond!
+
+---
 
 ## Bot Commands
 
 Mention the bot in a thread with these commands:
 
-| Command | Description |
+| Command | What it does |
 |---------|-------------|
-| `@PocketPing info` | Show session details |
-| `@PocketPing close` | Close the conversation |
-| `@PocketPing ai on` | Enable AI for this conversation |
-| `@PocketPing ai off` | Disable AI for this conversation |
+| `@PocketPing info` | Shows visitor details |
+| `@PocketPing close` | Closes the conversation |
+| `@PocketPing ai on` | Enables AI fallback |
+| `@PocketPing ai off` | Disables AI fallback |
+
+### Example Usage
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Thread: New conversation                                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  You: @PocketPing info                                          │
+│                                                                 │
+│  PocketPing:                                                    │
+│  ┌───────────────────────────────────────────────────────────┐ │
+│  │ Session Information                                       │ │
+│  │ ─────────────────────────────────────────                 │ │
+│  │ Session: sess_abc123                                      │ │
+│  │ Location: Paris, France                                   │ │
+│  │ Browser: Chrome 120 / macOS                               │ │
+│  │ Page: https://yoursite.com/pricing                        │ │
+│  │ Started: 5 minutes ago                                    │ │
+│  │                                                           │ │
+│  │ User: john@example.com (Pro plan)                         │ │
+│  └───────────────────────────────────────────────────────────┘ │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## Troubleshooting
 
 ### Bot not responding?
 
-- Check the bot token is correct
-- Verify Socket Mode is enabled
-- Make sure bot is added to the channel (`/invite @PocketPing`)
-- Check bridge server logs: `docker logs pocketping-bridge`
+| Problem | Solution |
+|---------|----------|
+| Bot not in channel | Use `/invite @PocketPing` in the channel |
+| Wrong Bot Token | Check it starts with `xoxb-` |
+| Socket Mode disabled | Enable in app settings |
+| Missing App Token | Generate new token with `connections:write` |
 
 ### Not receiving messages?
 
-- Verify event subscriptions are enabled
-- Check the channel ID is correct
-- Ensure bot has required scopes
+| Problem | Solution |
+|---------|----------|
+| Events not subscribed | Add `message.channels` and `message.groups` events |
+| Missing scopes | Add `channels:history` scope |
+| Wrong Channel ID | Re-copy from channel details (starts with C) |
+
+### Messages not syncing?
+
+| Problem | Solution |
+|---------|----------|
+| Bot can't write | Add `chat:write` scope |
+| Server not running | Check logs: `docker logs pocketping-bridge` |
+| Channel is private | Ensure `channels:history` and `message.groups` are enabled |
+
+### Debug checklist
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ □ Bot Token starts with xoxb-                                   │
+│ □ App Token starts with xapp-                                   │
+│ □ Socket Mode is enabled                                        │
+│ □ Bot events are subscribed (message.channels, message.groups)  │
+│ □ Bot scopes are correct (channels:history, chat:write, etc.)   │
+│ □ Bot is invited to the channel (/invite @PocketPing)           │
+│ □ Channel ID starts with C                                      │
+│ □ Bridge server is running and healthy                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Token Summary
+
+| Token | Starts with | Purpose | Where to find |
+|-------|-------------|---------|---------------|
+| Bot Token | `xoxb-` | Post messages, read history | OAuth & Permissions |
+| App Token | `xapp-` | Socket Mode connection | Socket Mode settings |
+
+---
+
+## Advanced: Notification Settings
+
+Get notified on your phone for new visitor messages:
+
+1. Open Slack mobile app
+2. Go to the support channel
+3. Tap channel name → Notifications
+4. Set to "All new messages"
+
+Or use Slack's keyword notifications:
+- Go to Preferences → Notifications
+- Add "New conversation" as a highlight word
+
+---
 
 ## Next Steps
 
-- [Add Telegram](/bridges/telegram) - Connect Telegram as another bridge
-- [Setup AI Fallback](/ai-fallback) - Auto-respond when you're away
+- **[Telegram Bridge](/bridges/telegram)** - Add Telegram as another channel
+- **[Discord Bridge](/bridges/discord)** - Add Discord as another channel
+- **[AI Fallback](/ai-fallback)** - Auto-respond when you're away
+- **[Backend SDK](/sdk/nodejs)** - Handle events programmatically
