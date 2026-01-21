@@ -14,11 +14,13 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'SDKs',
+      link: { type: 'doc', id: 'sdk/index' },
       items: ['sdk/nodejs', 'sdk/python'],
     },
     {
       type: 'category',
       label: 'Bridges',
+      link: { type: 'doc', id: 'bridges/index' },
       items: ['bridges/telegram', 'bridges/discord', 'bridges/slack', 'bridges/docker'],
     },
     'self-hosting',
