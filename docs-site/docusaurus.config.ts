@@ -2,6 +2,9 @@ import { themes as prismThemes } from 'prism-react-renderer'
 import type { Config } from '@docusaurus/types'
 import type * as Preset from '@docusaurus/preset-classic'
 
+// Use GitHub Pages config when deploying there
+const isGitHubPages = process.env.DEPLOY_TARGET === 'gh-pages'
+
 const config: Config = {
   title: 'PocketPing',
   tagline: 'Customer chat that pings your phone',
@@ -11,10 +14,10 @@ const config: Config = {
     v4: true,
   },
 
-  url: 'https://docs.pocketping.io',
-  baseUrl: '/',
+  url: isGitHubPages ? 'https://ruwad-io.github.io' : 'https://docs.pocketping.io',
+  baseUrl: isGitHubPages ? '/pocketping/' : '/',
 
-  organizationName: 'pocketping',
+  organizationName: 'ruwad-io',
   projectName: 'pocketping',
 
   onBrokenLinks: 'throw',

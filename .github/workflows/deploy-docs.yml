@@ -33,6 +33,8 @@ jobs:
 
       - name: Build documentation
         run: npm run build
+        env:
+          DEPLOY_TARGET: gh-pages
 
       - name: Upload build artifact
         uses: actions/upload-pages-artifact@v3
