@@ -40,7 +40,7 @@ Sign up at [app.pocketping.io](https://app.pocketping.io) to get your project ID
 Add these two lines before the closing `</body>` tag:
 
 ```html title="index.html"
-<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget@latest/dist/index.global.js"></script>
+<script src="https://cdn.pocketping.io/widget.js"></script>
 <script>
   PocketPing.init({
     projectId: 'proj_xxxxxxxxxxxxx', // Get this from dashboard
@@ -61,7 +61,7 @@ import { useEffect } from 'react';
 export default function App() {
   useEffect(() => {
     const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/@pocketping/widget@latest/dist/index.global.js';
+    script.src = 'https://cdn.pocketping.io/widget.js';
     script.onload = () => {
       window.PocketPing.init({
         projectId: 'proj_xxxxxxxxxxxxx',

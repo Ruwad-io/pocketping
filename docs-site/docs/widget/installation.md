@@ -36,7 +36,7 @@ Add these lines before the closing `</body>` tag:
 
 ```html title="index.html"
 <!-- Step 1: Load the widget -->
-<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget@latest/dist/index.global.js"></script>
+<script src="https://cdn.pocketping.io/widget.js"></script>
 
 <!-- Step 2: Initialize -->
 <script>
@@ -56,11 +56,11 @@ Using `@latest` means you automatically get new features and bug fixes without c
 ### Alternative CDN options
 
 ```html
-<!-- unpkg -->
-<script src="https://unpkg.com/@pocketping/widget@latest/dist/index.global.js"></script>
-
 <!-- Pin to specific version (no auto-updates) -->
-<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget@0.1.0/dist/index.global.js"></script>
+<script src="https://cdn.pocketping.io/widget@0.1.0.js"></script>
+
+<!-- Alternative: jsdelivr or unpkg -->
+<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget@latest/dist/pocketping.iife.js"></script>
 ```
 
 ### SaaS vs Self-Hosted

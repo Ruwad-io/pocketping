@@ -113,7 +113,7 @@ Minimal impact on your page load time.
 ### Step 1: Add the widget (30 seconds)
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget@latest/dist/index.global.js"></script>
+<script src="https://cdn.pocketping.io/widget.js"></script>
 <script>
   PocketPing.init({ projectId: 'YOUR_PROJECT_ID' });
 </script>
