@@ -73,6 +73,7 @@ describe('PocketPingClient', () => {
       (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockResponse),
+        headers: new Headers(),
       });
 
       const session = await client.connect();
@@ -94,6 +95,7 @@ describe('PocketPingClient', () => {
       (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockResponse),
+        headers: new Headers(),
       });
 
       await client.connect();
@@ -120,6 +122,7 @@ describe('PocketPingClient', () => {
       (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockResponse),
+        headers: new Headers(),
       });
 
       await client.connect();
@@ -140,6 +143,7 @@ describe('PocketPingClient', () => {
       (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockResponse),
+        headers: new Headers(),
       });
 
       await client.connect();
@@ -164,6 +168,7 @@ describe('PocketPingClient', () => {
       (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockResponse),
+        headers: new Headers(),
       });
 
       await client.connect();
@@ -178,6 +183,7 @@ describe('PocketPingClient', () => {
       (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockMessageResponse),
+        headers: new Headers(),
       });
 
       const message = await client.sendMessage('Hello!');
@@ -196,6 +202,7 @@ describe('PocketPingClient', () => {
       (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockMessageResponse),
+        headers: new Headers(),
       });
 
       // Capture snapshots of status at each emit
@@ -241,6 +248,7 @@ describe('PocketPingClient', () => {
       (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockResponse),
+        headers: new Headers(),
       });
 
       await client.connect();
@@ -308,6 +316,7 @@ describe('PocketPingClient', () => {
       (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockMessageResponse),
+        headers: new Headers(),
       });
 
       await client.sendMessage('Hello!');
@@ -346,6 +355,7 @@ describe('PocketPingClient', () => {
       (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockResponse),
+        headers: new Headers(),
       });
 
       await client.connect();
@@ -355,6 +365,7 @@ describe('PocketPingClient', () => {
       (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({}),
+        headers: new Headers(),
       });
 
       await client.sendReadStatus(['operator-msg-1'], 'read');
@@ -418,6 +429,7 @@ describe('PocketPingClient', () => {
       (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockResponse),
+        headers: new Headers(),
       });
 
       await client.connect();
