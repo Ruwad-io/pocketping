@@ -10,6 +10,7 @@ import type {
   CustomEvent,
   CustomEventHandler,
 } from './types';
+import { VERSION } from './version';
 
 type Listener<T> = (data: T) => void;
 
@@ -531,6 +532,7 @@ export class PocketPingClient {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        'X-PocketPing-Version': VERSION,
         ...options.headers,
       },
     });

@@ -49,6 +49,25 @@ Add these lines before the closing `</body>` tag:
 
 That's it. Refresh your page and you'll see the chat bubble.
 
+:::tip Auto-updates
+The CDN always serves the latest version. You'll automatically get new features and bug fixes without changing anything.
+:::
+
+### Alternative: npm CDN
+
+You can also use jsdelivr or unpkg:
+
+```html
+<!-- jsdelivr (recommended) -->
+<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget@latest/dist/index.global.js"></script>
+
+<!-- unpkg -->
+<script src="https://unpkg.com/@pocketping/widget@latest/dist/index.global.js"></script>
+
+<!-- Pin to specific version (no auto-updates) -->
+<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget@0.1.0/dist/index.global.js"></script>
+```
+
 ### SaaS vs Self-Hosted
 
 ```javascript
