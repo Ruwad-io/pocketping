@@ -14,40 +14,26 @@ This page explains how PocketPing works under the hood. Understanding these conc
 
 PocketPing has a modular architecture with three main components:
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              YOUR WEBSITE                                    │
-│                                                                             │
-│   ┌─────────────────┐                                                       │
-│   │  Widget (~14KB) │ ◄──── Embedded in your pages                         │
-│   │   - Chat UI     │                                                       │
-│   │   - Events      │                                                       │
-│   └────────┬────────┘                                                       │
-└────────────┼────────────────────────────────────────────────────────────────┘
-             │
-             │ WebSocket
-             ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            BRIDGE SERVER                                     │
-│                                                                             │
-│   - Routes messages between widget and platforms                            │
-│   - Manages sessions and message history                                    │
-│   - Handles custom events                                                   │
-│   - AI fallback (optional)                                                  │
-│                                                                             │
-└────────────┬─────────────────────┬─────────────────────┬────────────────────┘
-             │                     │                     │
-             ▼                     ▼                     ▼
-      ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-      │   Telegram   │     │   Discord    │     │    Slack     │
-      │   Bridge     │     │   Bridge     │     │   Bridge     │
-      └──────────────┘     └──────────────┘     └──────────────┘
-             │                     │                     │
-             ▼                     ▼                     ▼
-      ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-      │  Your Phone  │     │ Your Server  │     │ Your Team    │
-      │  (Topics)    │     │ (Threads)    │     │ (Channels)   │
-      └──────────────┘     └──────────────┘     └──────────────┘
+```mermaid
+flowchart TB
+    subgraph website["Your Website"]
+        widget["Widget (~14KB)<br/>Chat UI + Events"]
+    end
+
+    subgraph bridge["Bridge Server"]
+        router["Message Router<br/>Sessions & History<br/>Custom Events<br/>AI Fallback"]
+    end
+
+    subgraph platforms["Messaging Platforms"]
+        tg["Telegram<br/>(Topics)"]
+        dc["Discord<br/>(Threads)"]
+        sl["Slack<br/>(Channels)"]
+    end
+
+    widget <-->|WebSocket| router
+    router <--> tg
+    router <--> dc
+    router <--> sl
 ```
 
 ### Component Details
@@ -67,25 +53,13 @@ A **session** represents a conversation between a visitor and your team.
 
 ### Session Lifecycle
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        SESSION LIFECYCLE                         │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  1. CREATED                    2. ACTIVE                        │
-│  ┌─────────────────────┐      ┌─────────────────────┐          │
-│  │ Visitor opens chat  │ ───► │ Messages exchanged  │          │
-│  │ New topic/thread    │      │ Events triggered    │          │
-│  └─────────────────────┘      └──────────┬──────────┘          │
-│                                          │                      │
-│                                          ▼                      │
-│                               3. CLOSED (optional)              │
-│                               ┌─────────────────────┐          │
-│                               │ Marked resolved     │          │
-│                               │ Thread archived     │          │
-│                               └─────────────────────┘          │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+stateDiagram-v2
+    [*] --> Created: Visitor opens chat
+    Created --> Active: New topic/thread created
+    Active --> Active: Messages exchanged
+    Active --> Closed: Marked resolved
+    Closed --> [*]: Thread archived
 ```
 
 ### Session Properties
@@ -113,23 +87,21 @@ Sessions persist across page refreshes using a browser fingerprint:
 
 ### Same Visitor, Same Session
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         SAME VISITOR                             │
-│                                                                 │
-│   Day 1: Opens chat           Day 2: Returns                    │
-│   ┌─────────────────┐        ┌─────────────────┐               │
-│   │ "Hi, I need     │        │ Session restored │               │
-│   │  help with..."  │        │ ► Previous msgs  │               │
-│   └────────┬────────┘        │ ► Same thread    │               │
-│            │                 └────────┬────────┘               │
-│            │                          │                         │
-│            └─────────┬────────────────┘                         │
-│                      ▼                                          │
-│            Same Telegram/Discord thread                         │
-│            (Continuous conversation)                            │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+    participant V as Visitor
+    participant W as Widget
+    participant B as Bridge
+
+    Note over V,B: Day 1
+    V->>W: "Hi, I need help..."
+    W->>B: Create session + thread
+
+    Note over V,B: Day 2 - Visitor returns
+    V->>W: Opens chat again
+    W->>B: Restore session
+    B->>W: Previous messages + same thread
+    Note over V,B: Continuous conversation
 ```
 
 ---
@@ -148,47 +120,42 @@ Bridges connect PocketPing to messaging platforms. They handle bidirectional syn
 
 ### How Bridges Work
 
+```mermaid
+flowchart LR
+    subgraph bridge["Bridge Server"]
+        data["Sessions<br/>Messages<br/>Events"]
+    end
+
+    subgraph tg["Telegram Group"]
+        t1["📁 General"]
+        t2["📁 John (visitor 1)"]
+        t3["📁 Sarah (visitor 2)"]
+        t4["📁 Mike (visitor 3)"]
+    end
+
+    data <-->|"Bidirectional<br/>Real-time"| tg
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      BRIDGE ARCHITECTURE                         │
-│                                                                 │
-│   Bridge Server                       Your Telegram Group       │
-│   ┌──────────────┐                   ┌──────────────────────┐  │
-│   │              │    WebSocket      │  📁 General          │  │
-│   │  Sessions    │ ◄────────────────►│  📁 John (visitor 1) │  │
-│   │  Messages    │    Bidirectional  │  📁 Sarah (visitor 2)│  │
-│   │  Events      │                   │  📁 Mike (visitor 3) │  │
-│   │              │                   └──────────────────────┘  │
-│   └──────────────┘                                              │
-│                                                                 │
-│   Each visitor = 1 topic/thread                                │
-│   All messages sync in real-time                                │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+
+Each visitor = 1 topic/thread. All messages sync in real-time.
 
 ### Multi-Bridge Sync
 
 You can connect multiple bridges simultaneously. Messages sync across all platforms:
 
-```
-                      ┌──────────────────────┐
-                      │    Bridge Server     │
-                      └──────────┬───────────┘
-                                 │
-           ┌─────────────────────┼─────────────────────┐
-           │                     │                     │
-           ▼                     ▼                     ▼
-    ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-    │  Telegram   │      │   Discord   │      │    Slack    │
-    │             │      │             │      │             │
-    │ You reply   │      │ Teammate    │      │ Manager     │
-    │ here...     │      │ sees it     │      │ sees it     │
-    │             │      │ here too    │      │ here too    │
-    └─────────────┘      └─────────────┘      └─────────────┘
+```mermaid
+flowchart TB
+    bridge["Bridge Server"]
 
-    Reply from ANY platform → Delivered to visitor instantly
+    bridge --> tg["Telegram<br/>You reply here..."]
+    bridge --> dc["Discord<br/>Teammate sees it"]
+    bridge --> sl["Slack<br/>Manager sees it"]
+
+    tg --> widget["Visitor sees reply instantly"]
+    dc --> widget
+    sl --> widget
 ```
+
+**Reply from ANY platform → Delivered to visitor instantly**
 
 :::tip Team Flexibility
 Your team can use their preferred platform. Mobile users might prefer Telegram, while office-based team members use Slack.
@@ -202,45 +169,33 @@ Here's exactly what happens when a message is sent:
 
 ### Visitor → You
 
-```
-1. Visitor types message in widget
-         │
-         ▼
-2. Widget sends via WebSocket
-         │
-         ▼
-3. Bridge Server receives & stores
-         │
-         ▼
-4. Server broadcasts to all bridges
-         │
-         ├──────────────┬──────────────┐
-         ▼              ▼              ▼
-5. Telegram        Discord        Slack
-   creates/updates creates/updates creates/updates
-   topic           thread         thread
-         │              │              │
-         ▼              ▼              ▼
-6. You see the message on all your platforms
+```mermaid
+sequenceDiagram
+    participant V as Visitor
+    participant W as Widget
+    participant B as Bridge Server
+    participant P as Platforms
+
+    V->>W: Types message
+    W->>B: WebSocket
+    B->>B: Store message
+    B->>P: Broadcast to all bridges
+    Note over P: Telegram, Discord, Slack<br/>create/update topics/threads
 ```
 
 ### You → Visitor
 
-```
-1. You reply in Telegram/Discord/Slack
-         │
-         ▼
-2. Bridge picks up the message
-         │
-         ▼
-3. Sends to Bridge Server
-         │
-         ▼
-4. Server broadcasts to:
-         │
-         ├──► Widget (visitor sees it instantly)
-         │
-         └──► Other bridges (team sees it on all platforms)
+```mermaid
+sequenceDiagram
+    participant Y as You (Telegram/Discord/Slack)
+    participant B as Bridge Server
+    participant W as Widget
+    participant V as Visitor
+
+    Y->>B: Reply in thread
+    B->>W: Forward to widget
+    B->>Y: Sync to other platforms
+    W->>V: Shows instantly
 ```
 
 ---
@@ -251,21 +206,25 @@ Beyond chat messages, you can send **custom events** between the widget and your
 
 ### Event Flow
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      CUSTOM EVENTS                               │
-│                                                                 │
-│   Widget                    Backend                    Bridges  │
-│   ┌───────┐                 ┌───────┐                 ┌───────┐│
-│   │       │  trigger()      │       │  notification   │       ││
-│   │ ─────────────────────► │       │ ─────────────► │       ││
-│   │       │                 │       │                 │       ││
-│   │       │  onEvent()      │       │  emitEvent()    │       ││
-│   │ ◄───────────────────── │       │                 │       ││
-│   │       │                 │       │                 │       ││
-│   └───────┘                 └───────┘                 └───────┘│
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph widget["Widget"]
+        trigger["trigger()"]
+        listen["onEvent()"]
+    end
+
+    subgraph backend["Backend"]
+        handler["Event Handler"]
+        emit["emitEvent()"]
+    end
+
+    subgraph bridges["Bridges"]
+        notif["Notifications"]
+    end
+
+    trigger -->|"clicked_pricing"| handler
+    handler --> notif
+    emit -->|"show_discount"| listen
 ```
 
 ### Use Cases
@@ -311,58 +270,23 @@ A **project** represents one website or application in PocketPing.
 
 ### Project Structure
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                          PROJECT                                 │
-│                                                                 │
-│   Name: "My SaaS App"                                           │
-│   ID: proj_def456                                               │
-│                                                                 │
-│   ┌─────────────────────────────────────────────────────────┐   │
-│   │ Keys                                                     │   │
-│   ├─────────────────────────────────────────────────────────┤   │
-│   │ Public:  pk_live_xxxxxxxxx  (used in widget)            │   │
-│   │ Secret:  sk_live_xxxxxxxxx  (used in backend SDK)       │   │
-│   └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│   ┌─────────────────────────────────────────────────────────┐   │
-│   │ Widget Settings                                          │   │
-│   ├─────────────────────────────────────────────────────────┤   │
-│   │ Primary Color:   #6366f1                                 │   │
-│   │ Operator Name:   Sarah from Support                      │   │
-│   │ Welcome Message: Hi! How can I help?                     │   │
-│   │ Position:        bottom-right                            │   │
-│   └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│   ┌─────────────────────────────────────────────────────────┐   │
-│   │ Connected Bridges                                        │   │
-│   ├─────────────────────────────────────────────────────────┤   │
-│   │ ✓ Telegram  @mysaas_support_bot  →  -1001234567890      │   │
-│   │ ✓ Discord   MySaaS Support Bot   →  #support-chat       │   │
-│   │ ○ Slack     (not configured)                             │   │
-│   └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+A project contains:
+
+| Section | Contents |
+|---------|----------|
+| **Keys** | `pk_live_xxx` (widget), `sk_live_xxx` (backend SDK) |
+| **Widget Settings** | Color, operator name, welcome message, position |
+| **Connected Bridges** | Telegram, Discord, Slack configurations |
 
 ### Multiple Projects
 
 You can have multiple projects for different sites or environments:
 
-```
-Your Account
-├── Production (proj_abc123)
-│   ├── Widget on yoursite.com
-│   └── Bridges → Production Telegram group
-│
-├── Staging (proj_def456)
-│   ├── Widget on staging.yoursite.com
-│   └── Bridges → Test Telegram group
-│
-└── Another Site (proj_ghi789)
-    ├── Widget on otherbrand.com
-    └── Bridges → Different Telegram group
-```
+| Project | Domain | Bridges |
+|---------|--------|---------|
+| Production | `yoursite.com` | Production Telegram group |
+| Staging | `staging.yoursite.com` | Test Telegram group |
+| Another Site | `otherbrand.com` | Different Telegram group |
 
 ---
 
@@ -372,32 +296,22 @@ When you're away, AI can respond to visitors using your custom instructions.
 
 ### How It Works
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                       AI FALLBACK FLOW                           │
-│                                                                 │
-│   1. Visitor sends message                                      │
-│      │                                                          │
-│      ▼                                                          │
-│   2. Message delivered to all bridges                           │
-│      │                                                          │
-│      ▼                                                          │
-│   3. Timer starts (configurable, default 2 min)                 │
-│      │                                                          │
-│      ├──► You reply within time? ──► Normal flow (AI disabled) │
-│      │                                                          │
-│      └──► No reply? ──────────────────────┐                     │
-│                                           │                     │
-│                                           ▼                     │
-│   4. AI takes over                                              │
-│      ├── Uses your custom system prompt                         │
-│      ├── References your knowledge base                         │
-│      └── Responds as your brand                                 │
-│                                                                 │
-│   5. You can jump back in anytime                               │
-│      (AI stops when you send a message)                         │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    msg["1. Visitor sends message"]
+    delivered["2. Delivered to bridges"]
+    timer["3. Timer starts (2 min)"]
+
+    msg --> delivered --> timer
+
+    timer -->|You reply| normal["Normal flow<br/>AI disabled"]
+    timer -->|No reply| ai["4. AI takes over"]
+
+    ai --> prompt["Uses your system prompt"]
+    ai --> kb["References knowledge base"]
+    ai --> brand["Responds as your brand"]
+
+    human["5. You can jump back anytime<br/>AI stops when you reply"]
 ```
 
 ### Configuration
@@ -426,23 +340,19 @@ When you're away, AI can respond to visitors using your custom instructions.
 
 ### Data Flow
 
+```mermaid
+flowchart LR
+    visitor["Visitor"]
+    bridge["Bridge Server<br/>(Encrypted at rest)"]
+    platforms["Your Platforms"]
+
+    visitor <-->|HTTPS/WSS| bridge
+    bridge <-->|HTTPS| platforms
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         DATA FLOW                                │
-│                                                                 │
-│   Visitor                Bridge Server              Your Platforms
-│   ┌───────┐              ┌───────────┐              ┌───────┐  │
-│   │       │   HTTPS/WSS  │           │   HTTPS     │       │  │
-│   │       │ ───────────► │  Encrypted│ ───────────►│       │  │
-│   │       │ ◄─────────── │  at rest  │ ◄───────────│       │  │
-│   └───────┘              └───────────┘              └───────┘  │
-│                                                                 │
-│   All connections encrypted (TLS 1.3)                          │
-│   Messages encrypted at rest (AES-256)                          │
-│   No visitor PII stored without consent                         │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+
+- All connections encrypted (TLS 1.3)
+- Messages encrypted at rest (AES-256)
+- No visitor PII stored without consent
 
 ### Self-Hosting Option
 

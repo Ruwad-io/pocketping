@@ -8,25 +8,15 @@ description: Configure Telegram notifications with PocketPing using Forum Topics
 
 Receive website chat messages directly in Telegram using Forum Topics.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                       HOW IT WORKS                               │
-│                                                                 │
-│   Website Visitor              Your Telegram Group              │
-│   ┌─────────────────┐         ┌─────────────────────────────┐  │
-│   │ Widget          │         │  📁 General                 │  │
-│   │ "Hi, I need     │ ──────► │  📁 Visitor from Paris      │  │
-│   │  help with..."  │         │  └── "Hi, I need help..."   │  │
-│   └─────────────────┘         │                             │  │
-│                               │  You reply in the topic     │  │
-│   ┌─────────────────┐         │  └── "Sure! How can I..."   │  │
-│   │ "Sure! How can  │ ◄────── │                             │  │
-│   │  I help?"       │         └─────────────────────────────┘  │
-│   └─────────────────┘                                          │
-│                                                                 │
-│   Each visitor = Separate topic (organized, no clutter)        │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+    participant V as Website Visitor
+    participant T as Telegram Group
+
+    V->>T: "Hi, I need help..."
+    Note over T: 📁 Visitor from Paris (new topic)
+    T->>V: "Sure! How can I help?"
+    Note over V,T: Each visitor = Separate topic
 ```
 
 ---
@@ -40,29 +30,11 @@ Receive website chat messages directly in Telegram using Forum Topics.
 
 ## Step 1: Create a Bot with BotFather
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 1: Create Bot                                              │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   1. Open Telegram                                              │
-│   2. Search for @BotFather                                      │
-│   3. Send: /newbot                                              │
-│   4. Choose display name: "Acme Support Bot"                    │
-│   5. Choose username: "acme_support_bot" (must end in "bot")   │
-│                                                                 │
-│   ┌─────────────────────────────────────────────────┐          │
-│   │ BotFather                                       │          │
-│   ├─────────────────────────────────────────────────┤          │
-│   │ Done! Your new bot is created.                  │          │
-│   │                                                 │          │
-│   │ Token: 123456789:ABCdefGHIjklMNOpqrs...        │          │
-│   │        ↑                                        │          │
-│   │        SAVE THIS! You'll need it later.         │          │
-│   └─────────────────────────────────────────────────┘          │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+1. Open Telegram and search for **@BotFather**
+2. Send `/newbot`
+3. Choose display name: `Acme Support Bot`
+4. Choose username: `acme_support_bot` (must end in "bot")
+5. **Save the token** BotFather gives you
 
 **Your bot token looks like:** `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`
 
@@ -76,35 +48,10 @@ Never share your bot token publicly. It gives full control over your bot.
 
 Forum Topics let each visitor have their own organized thread.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 2: Create Supergroup                                       │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   1. Create a new group in Telegram                             │
-│      └── Name it: "Acme Support Chat"                           │
-│                                                                 │
-│   2. Open Group Settings                                        │
-│      └── Tap group name → Edit                                  │
-│                                                                 │
-│   3. Enable Topics                                              │
-│      └── Group Type → Enable "Topics"                           │
-│      └── This converts the group to a supergroup                │
-│                                                                 │
-│   4. (Optional) Add team members                                │
-│      └── They'll all see visitor messages                       │
-│                                                                 │
-│   Result:                                                       │
-│   ┌─────────────────────────────────────────────────┐          │
-│   │ Acme Support Chat                               │          │
-│   ├─────────────────────────────────────────────────┤          │
-│   │  📁 General                                     │          │
-│   │  📁 Guidelines                                  │          │
-│   │  (visitor topics will appear here)             │          │
-│   └─────────────────────────────────────────────────┘          │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+1. **Create a new group** in Telegram → Name it `Acme Support Chat`
+2. **Open Group Settings** → Tap group name → Edit
+3. **Enable Topics** → Group Type → Enable "Topics" (converts to supergroup)
+4. (Optional) **Add team members** → They'll all see visitor messages
 
 :::info Why Forum Topics?
 Without topics, all messages go to a single chat → chaos. With topics, each visitor conversation is isolated → organized support.
@@ -116,31 +63,20 @@ Without topics, all messages go to a single chat → chaos. With topics, each vi
 
 The bot needs admin permissions to create topics and post messages.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 3: Add Bot as Admin                                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   1. Open your support group                                    │
-│   2. Go to Settings → Administrators                            │
-│   3. Tap "Add Administrator"                                    │
-│   4. Search for your bot (e.g., @acme_support_bot)             │
-│   5. Grant these permissions:                                   │
-│                                                                 │
-│   Required Permissions:                                         │
-│   ┌─────────────────────────────────────────────────┐          │
-│   │ ✅ Manage Topics      (create visitor threads)  │          │
-│   │ ✅ Post Messages      (send messages)           │          │
-│   │ ✅ Edit Messages      (update messages)         │          │
-│   │ ✅ Delete Messages    (cleanup)                 │          │
-│   │ ○  Change Group Info  (not needed)             │          │
-│   │ ○  Add Users          (not needed)             │          │
-│   └─────────────────────────────────────────────────┘          │
-│                                                                 │
-│   6. Tap "Done"                                                 │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+1. Open your support group → **Settings** → **Administrators**
+2. Tap **Add Administrator** → Search for your bot (`@acme_support_bot`)
+3. Grant these permissions:
+
+| Permission | Required | Why |
+|------------|----------|-----|
+| Manage Topics | ✅ Yes | Create visitor threads |
+| Post Messages | ✅ Yes | Send messages |
+| Edit Messages | ✅ Yes | Update messages |
+| Delete Messages | ✅ Yes | Cleanup |
+| Change Group Info | ❌ No | Not needed |
+| Add Users | ❌ No | Not needed |
+
+4. Tap **Done**
 
 ---
 
@@ -150,27 +86,9 @@ You need the group's Chat ID (a number starting with `-100`).
 
 ### Method A: Using @userinfobot (Easiest)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ Option A: @userinfobot                                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   1. Temporarily add @userinfobot to your group                 │
-│                                                                 │
-│   2. It automatically replies with the chat info:               │
-│      ┌─────────────────────────────────────────────┐           │
-│      │ @userinfobot                                │           │
-│      │                                             │           │
-│      │ This group:                                 │           │
-│      │ ID: -1001234567890                          │           │
-│      │      ↑                                      │           │
-│      │      COPY THIS NUMBER                       │           │
-│      └─────────────────────────────────────────────┘           │
-│                                                                 │
-│   3. Remove @userinfobot from the group                         │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+1. Temporarily add **@userinfobot** to your group
+2. It replies with: `ID: -1001234567890` → **Copy this number**
+3. Remove @userinfobot from the group
 
 ### Method B: Using the Telegram API
 
@@ -224,20 +142,7 @@ docker compose restart bridge
 
 1. **Open your website** with the widget installed
 2. **Send a test message** in the chat widget
-3. **Check Telegram** - a new topic should appear:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ Acme Support Chat                                               │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  📁 General                                                     │
-│  📁 New Visitor (Paris, France)     ← New topic created!       │
-│  └── 🆕 "Hello, this is a test!"                               │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
+3. **Check Telegram** - a new topic appears: `📁 New Visitor (Paris, France)`
 4. **Reply in the topic** - your reply appears in the widget!
 
 ---
@@ -256,21 +161,17 @@ Inside a visitor's topic thread, use these commands:
 ### Example: `/info` Response
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ Session Information                                             │
-├─────────────────────────────────────────────────────────────────┤
-│ Session ID: sess_abc123                                         │
-│ Visitor ID: vis_xyz789                                          │
-│                                                                 │
-│ Location: Paris, France                                         │
-│ Browser: Chrome 120 on macOS                                    │
-│ Page: https://yoursite.com/pricing                              │
-│ Started: 2 minutes ago                                          │
-│                                                                 │
-│ User Info (if identified):                                      │
-│ Email: john@example.com                                         │
-│ Plan: Pro                                                       │
-└─────────────────────────────────────────────────────────────────┘
+Session ID: sess_abc123
+Visitor ID: vis_xyz789
+
+Location: Paris, France
+Browser: Chrome 120 on macOS
+Page: https://yoursite.com/pricing
+Started: 2 minutes ago
+
+User Info (if identified):
+Email: john@example.com
+Plan: Pro
 ```
 
 ---
@@ -304,17 +205,13 @@ Inside a visitor's topic thread, use these commands:
 
 ### Debug checklist
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ □ Bot token is correct (no extra spaces)                        │
-│ □ Chat ID starts with -100                                       │
-│ □ Bot is admin in the group                                      │
-│ □ "Manage Topics" permission is granted                          │
-│ □ Topics are enabled in group settings                           │
-│ □ Bridge server is running and healthy                           │
-│ □ Widget is correctly configured with projectId/endpoint        │
-└─────────────────────────────────────────────────────────────────┘
-```
+- [ ] Bot token is correct (no extra spaces)
+- [ ] Chat ID starts with `-100`
+- [ ] Bot is admin in the group
+- [ ] "Manage Topics" permission is granted
+- [ ] Topics are enabled in group settings
+- [ ] Bridge server is running and healthy
+- [ ] Widget is correctly configured with projectId/endpoint
 
 ---
 

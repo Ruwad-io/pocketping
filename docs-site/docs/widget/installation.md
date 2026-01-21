@@ -8,25 +8,11 @@ description: Add the PocketPing chat widget to your website
 
 Add the PocketPing chat widget to your website. Choose the method that fits your stack.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    INSTALLATION OPTIONS                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   CDN                 npm/yarn/pnpm        Framework-specific   │
-│   ┌─────────────┐    ┌─────────────┐      ┌─────────────┐      │
-│   │ 2 lines     │    │ Full control│      │ React/Next  │      │
-│   │ Quick setup │    │ TypeScript  │      │ Vue/Nuxt    │      │
-│   │ No build    │    │ Tree-shaking│      │ Angular     │      │
-│   └─────────────┘    └─────────────┘      └─────────────┘      │
-│                                                                 │
-│   Best for:           Best for:           Best for:            │
-│   Static sites        SPAs, Apps          Framework apps       │
-│   Landing pages       Production          Type safety          │
-│   Quick prototypes    Custom builds       Component lifecycle  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+| Method | Best For | Features |
+|--------|----------|----------|
+| **CDN** | Static sites, landing pages, quick prototypes | 2 lines, no build |
+| **npm/yarn/pnpm** | SPAs, production apps | Full control, TypeScript, tree-shaking |
+| **Framework** | React/Next, Vue/Nuxt, Angular | Type safety, component lifecycle |
 
 ---
 
@@ -276,25 +262,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
 ## Verify Installation
 
-After adding the widget:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                 │
-│                      Your Website                               │
-│                                                                 │
-│                                                                 │
-│                                                                 │
-│                                                                 │
-│                                               ┌───────────┐    │
-│                                               │    💬     │    │
-│                                               │  (click)  │    │
-│                                               └───────────┘    │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-                                                      ↑
-                                          Chat bubble appears here
-```
+After adding the widget, you should see a **chat bubble** in the bottom-right corner of your page (or wherever you configured it).
 
 ### Check the Console
 
@@ -350,18 +318,12 @@ If self-hosting, configure your bridge server to allow requests from your domain
 
 ### Widget appears but no connection?
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ Checklist:                                                       │
-│                                                                 │
-│ □ Project ID is correct (matches dashboard)                     │
-│ □ Bridge server is running (if self-hosted)                     │
-│ □ At least one bridge is connected (Telegram/Discord/Slack)     │
-│ □ No firewall blocking WebSocket connections                    │
-│ □ Browser allows third-party cookies (if using CDN)             │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+**Checklist:**
+- [ ] Project ID is correct (matches dashboard)
+- [ ] Bridge server is running (if self-hosted)
+- [ ] At least one bridge is connected (Telegram/Discord/Slack)
+- [ ] No firewall blocking WebSocket connections
+- [ ] Browser allows third-party cookies (if using CDN)
 
 ---
 

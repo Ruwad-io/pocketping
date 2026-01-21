@@ -8,24 +8,25 @@ description: Backend integration with the PocketPing Node.js SDK
 
 Integrate PocketPing into your Node.js backend for custom event handling, analytics, and automation.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    WHAT THE SDK DOES                             │
-│                                                                 │
-│   Widget                    Your Backend                        │
-│   ┌───────────────┐        ┌───────────────────────────────┐   │
-│   │               │        │  Node.js SDK                   │   │
-│   │  trigger()    │ ─────► │  ├── onEvent()   Handle events │   │
-│   │               │        │  ├── onMessage() Log messages  │   │
-│   │  onEvent()    │ ◄───── │  ├── emitEvent() Send actions  │   │
-│   │               │        │  ├── identify()  CRM sync      │   │
-│   │  Messages     │ ◄────► │  └── sendMessage() Auto-reply  │   │
-│   │               │        │                                 │   │
-│   └───────────────┘        └───────────────────────────────┘   │
-│                                                                 │
-│   The SDK connects your backend to the PocketPing system        │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph widget["Widget"]
+        trigger["trigger()"]
+        listen["onEvent()"]
+        msgs["Messages"]
+    end
+
+    subgraph sdk["Node.js SDK"]
+        onEvent["onEvent()"]
+        onMessage["onMessage()"]
+        emitEvent["emitEvent()"]
+        identify["identify()"]
+        sendMessage["sendMessage()"]
+    end
+
+    trigger -->|"clicked_pricing"| onEvent
+    msgs <--> onMessage
+    emitEvent -->|"show_discount"| listen
 ```
 
 ---
@@ -154,27 +155,16 @@ const pp = new PocketPing({
 
 ### Event Flow Overview
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      EVENT FLOW                                  │
-│                                                                 │
-│   Widget                                           Backend      │
-│   ┌───────────────┐                         ┌───────────────┐  │
-│   │               │                         │               │  │
-│   │  trigger()    │ ────────────────────► │  onEvent()    │  │
-│   │  'clicked_x'  │   "clicked_pricing"    │               │  │
-│   │               │   { plan: 'pro' }      │  Analytics    │  │
-│   │               │                         │  Automation   │  │
-│   │               │                         │  Notifications│  │
-│   │               │                         │               │  │
-│   │  onEvent()    │ ◄──────────────────── │  emitEvent()  │  │
-│   │               │   "show_discount"      │               │  │
-│   │  Show popup   │   { percent: 20 }      │               │  │
-│   │  Highlight UI │                         │               │  │
-│   │               │                         │               │  │
-│   └───────────────┘                         └───────────────┘  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+    participant W as Widget
+    participant B as Backend SDK
+
+    W->>B: trigger("clicked_pricing", {plan: "pro"})
+    Note over B: Analytics, Automation, Notifications
+
+    B->>W: emitEvent("show_discount", {percent: 20})
+    Note over W: Show popup, Highlight UI
 ```
 
 ### Receiving Events from Widget

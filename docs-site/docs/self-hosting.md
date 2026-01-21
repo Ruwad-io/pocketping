@@ -213,6 +213,58 @@ pp = PocketPing(
 )
 ```
 
+### Example: PostgreSQL (Node.js)
+
+:::note
+This is an example. `PostgresStorage` is **not included** in the SDK—you need to implement it.
+:::
+
+```typescript
+import { Storage, Session, Message } from '@pocketping/sdk-node';
+import { Pool } from 'pg';
+
+class PostgresStorage implements Storage {
+  private pool: Pool;
+
+  constructor(connectionString: string) {
+    this.pool = new Pool({ connectionString });
+  }
+
+  async createSession(session: Session): Promise<void> {
+    await this.pool.query(
+      'INSERT INTO sessions (id, visitor_id, created_at, last_activity) VALUES ($1, $2, $3, $4)',
+      [session.id, session.visitorId, session.createdAt, session.lastActivity]
+    );
+  }
+
+  async getSession(sessionId: string): Promise<Session | null> {
+    const result = await this.pool.query(
+      'SELECT * FROM sessions WHERE id = $1',
+      [sessionId]
+    );
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      visitorId: row.visitor_id,
+      createdAt: row.created_at,
+      lastActivity: row.last_activity,
+      // ... other fields
+    };
+  }
+
+  // ... implement remaining methods
+}
+
+// Usage
+const storage = new PostgresStorage('postgresql://user:pass@localhost/pocketping');
+
+const pp = new PocketPing({
+  storage,
+  bridgeUrl: 'http://localhost:3001',
+});
+```
+
 ## Deployment Checklist
 
 - [ ] Backend deployed with SSL (HTTPS)
