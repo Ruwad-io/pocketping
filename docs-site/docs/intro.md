@@ -21,7 +21,7 @@ Traditional live chat tools force you to:
 ```mermaid
 flowchart LR
     subgraph website["Your Website"]
-        widget["Chat Widget<br/>~14KB"]
+        widget["Chat Widget<br/>~15KB"]
     end
 
     subgraph pp["PocketPing"]
@@ -100,14 +100,14 @@ sequenceDiagram
 
 ### 4. Lightweight Widget
 
-Only **~14KB gzipped**—6x smaller than competitors:
+Only **~15KB gzipped**—6x smaller than competitors:
 
 | Widget | Size (gzipped) |
 |--------|----------------|
 | Crisp | ~88KB |
 | Drift | ~61KB |
 | Intercom | ~80KB+ |
-| **PocketPing** | **~14KB** |
+| **PocketPing** | **~15KB** |
 
 Minimal impact on your page load time.
 
@@ -152,7 +152,7 @@ Reply directly from your phone. The visitor sees your response in real-time.
 ```mermaid
 flowchart TB
     subgraph frontend["Frontend"]
-        widget["Chat Widget<br/>(Preact, ~14KB)"]
+        widget["Chat Widget<br/>(Preact, ~15KB)"]
     end
 
     subgraph backend["Backend"]
@@ -173,7 +173,7 @@ flowchart TB
 
 | Component | Description |
 |-----------|-------------|
-| **Widget** | Chat interface embedded on your website (~14KB gzipped) |
+| **Widget** | Chat interface embedded on your website (~15KB gzipped) |
 | **Bridge Server** | Routes messages between widget and messaging apps |
 | **Bridges** | Connectors for Telegram, Discord, and Slack |
 
@@ -187,7 +187,7 @@ flowchart TB
 | Notifications | ✓ Your existing apps | Yet another app |
 | AI fallback | ✓ Built-in | Premium add-on |
 | Self-hosting | ✓ Free | Enterprise only |
-| Widget size | ~14KB | 60-90KB |
+| Widget size | ~15KB | 60-90KB |
 | Per-seat pricing | None | $15-50/seat |
 
 ---

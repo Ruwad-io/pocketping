@@ -17,7 +17,7 @@ PocketPing has a modular architecture with three main components:
 ```mermaid
 flowchart TB
     subgraph website["Your Website"]
-        widget["Widget (~14KB)<br/>Chat UI + Events"]
+        widget["Widget (~15KB)<br/>Chat UI + Events"]
     end
 
     subgraph bridge["Bridge Server"]
@@ -40,7 +40,7 @@ flowchart TB
 
 | Component | Size | Role | You Need To... |
 |-----------|------|------|----------------|
-| **Widget** | ~14KB | Chat UI + event handling | Add 2 lines of code |
+| **Widget** | ~15KB | Chat UI + event handling | Add 2 lines of code |
 | **Bridge Server** | - | Message routing + storage | Use SaaS or self-host |
 | **Bridges** | - | Platform integrations | Configure credentials |
 | **Backend SDK** | Optional | Custom logic + webhooks | `npm install` / `pip install` |
