@@ -110,15 +110,19 @@ const pp = new PocketPing({
 
 ### 4. User Identification
 
-Enrich sessions with user data:
+Enrich sessions with user data so operators can see who they're talking to:
 
 ```javascript
 // After user logs in
-await pp.identify(sessionId, {
-  email: user.email,
-  name: user.name,
-  plan: user.subscription.plan,
-  company: user.company.name,
+await pp.handleIdentify({
+  sessionId,
+  identity: {
+    id: user.id,                    // Required
+    email: user.email,
+    name: user.name,
+    plan: user.subscription.plan,
+    company: user.company.name,
+  },
 });
 ```
 

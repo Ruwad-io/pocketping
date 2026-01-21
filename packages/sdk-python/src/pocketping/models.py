@@ -20,6 +20,22 @@ class MessageStatus(str, Enum):
     READ = "read"
 
 
+class UserIdentity(BaseModel):
+    """User identity data from PocketPing.identify().
+
+    The id field is required; all others are optional.
+    Extra fields are allowed for custom data (plan, company, etc.).
+    """
+
+    id: str
+    email: Optional[str] = None
+    name: Optional[str] = None
+
+    class Config:
+        extra = "allow"  # Allow custom fields
+        populate_by_name = True
+
+
 class SessionMetadata(BaseModel):
     """Metadata about the visitor's session."""
 
@@ -58,6 +74,7 @@ class Session(BaseModel):
     operator_online: bool = Field(False, alias="operatorOnline")
     ai_active: bool = Field(False, alias="aiActive")
     metadata: Optional[SessionMetadata] = None
+    identity: Optional[UserIdentity] = None
 
     class Config:
         populate_by_name = True
@@ -92,6 +109,7 @@ class ConnectRequest(BaseModel):
     visitor_id: str = Field(alias="visitorId")
     session_id: Optional[str] = Field(None, alias="sessionId")
     metadata: Optional[SessionMetadata] = None
+    identity: Optional[UserIdentity] = None
 
     class Config:
         populate_by_name = True
@@ -158,6 +176,25 @@ class ReadResponse(BaseModel):
     """Response after marking messages as read."""
 
     updated: int  # Number of messages updated
+
+    class Config:
+        populate_by_name = True
+
+
+class IdentifyRequest(BaseModel):
+    """Request to identify a user."""
+
+    session_id: str = Field(alias="sessionId")
+    identity: UserIdentity
+
+    class Config:
+        populate_by_name = True
+
+
+class IdentifyResponse(BaseModel):
+    """Response after identifying a user."""
+
+    ok: bool = True
 
     class Config:
         populate_by_name = True

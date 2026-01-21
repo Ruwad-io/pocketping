@@ -419,22 +419,40 @@ await pp.sendMessage('sess_abc123', {
 
 ### Identifying Visitors
 
-Enrich session data with visitor information:
+Enrich session data with visitor information so operators can see who they're talking to:
 
 ```javascript
 // After user logs in on your site
-await pp.identify('sess_abc123', {
-  email: 'john@example.com',
-  name: 'John Doe',
-  userId: 'user_12345',
-  // Any custom properties
-  plan: 'pro',
-  company: 'Acme Inc',
-  mrr: 99,
+await pp.handleIdentify({
+  sessionId: 'sess_abc123',
+  identity: {
+    id: 'user_12345',           // Required - unique user identifier
+    email: 'john@example.com',
+    name: 'John Doe',
+    // Any custom properties
+    plan: 'pro',
+    company: 'Acme Inc',
+    mrr: 99,
+  },
 });
 ```
 
-This data appears in your messaging platform and enables personalized automation.
+**Required field:** `identity.id` must be a non-empty string (typically your user's database ID).
+
+You can also pass identity during connection:
+
+```javascript
+const session = await pp.handleConnect({
+  visitorId: 'visitor-xyz',
+  identity: {
+    id: 'user_12345',
+    email: 'john@example.com',
+    name: 'John Doe',
+  },
+});
+```
+
+This data appears in your messaging platform (Telegram/Discord/Slack) and enables personalized automation.
 
 ---
 
@@ -705,7 +723,7 @@ const pp = new PocketPing(config);
 | `pp.getMessages(sessionId)` | Get session messages |
 | `pp.sendMessage(sessionId, message)` | Send a message |
 | `pp.emitEvent(sessionId, event, data)` | Send event to widget |
-| `pp.identify(sessionId, data)` | Identify visitor |
+| `pp.handleIdentify({ sessionId, identity })` | Identify visitor |
 | `pp.closeSession(sessionId)` | Close a session |
 
 ---

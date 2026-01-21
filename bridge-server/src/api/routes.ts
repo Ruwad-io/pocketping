@@ -15,6 +15,7 @@ import type {
   OperatorStatusEvent,
   MessageReadEvent,
   CustomEventEvent,
+  IdentityUpdateEvent,
   OutgoingEvent,
   BridgeServerConfig,
   CustomEvent,
@@ -80,6 +81,9 @@ export function createApp(context: AppContext): Hono {
           break;
         case "custom_event":
           await handleCustomEvent(context.bridges, event, context.config);
+          break;
+        case "identity_update":
+          await handleIdentityUpdate(context.bridges, event);
           break;
         default:
           return c.json({ error: "Unknown event type" }, 400);
@@ -196,6 +200,10 @@ async function handleCustomEvent(
       console.error("[API] Events webhook error:", err);
     });
   }
+}
+
+async function handleIdentityUpdate(bridges: Bridge[], event: IdentityUpdateEvent): Promise<void> {
+  await Promise.all(bridges.map((bridge) => bridge.onIdentityUpdate(event.session)));
 }
 
 /**

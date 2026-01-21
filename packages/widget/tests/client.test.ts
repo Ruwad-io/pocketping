@@ -656,4 +656,117 @@ describe('PocketPingClient', () => {
       });
     });
   });
+
+  describe('User Identity', () => {
+    beforeEach(async () => {
+      const mockResponse = {
+        sessionId: 'session-123',
+        visitorId: 'visitor-456',
+        operatorOnline: false,
+        messages: [],
+      };
+
+      (globalThis.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+        headers: new Headers(),
+      });
+
+      await client.connect();
+    });
+
+    describe('identify()', () => {
+      it('should send identify request to backend', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ ok: true }),
+          headers: new Headers(),
+        });
+
+        await client.identify({
+          id: 'user_123',
+          email: 'john@example.com',
+          name: 'John Doe',
+        });
+
+        const fetchCalls = (globalThis.fetch as any).mock.calls;
+        const identifyCall = fetchCalls.find((c: any[]) => c[0].includes('/identify'));
+        expect(identifyCall).toBeDefined();
+
+        const body = JSON.parse(identifyCall[1].body);
+        expect(body.sessionId).toBe('session-123');
+        expect(body.identity.id).toBe('user_123');
+      });
+
+      it('should update session identity', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ ok: true }),
+          headers: new Headers(),
+        });
+
+        await client.identify({
+          id: 'user_123',
+          email: 'john@example.com',
+        });
+
+        const session = client.getSession();
+        expect(session?.identity).toEqual({
+          id: 'user_123',
+          email: 'john@example.com',
+        });
+      });
+
+      it('should throw if id is missing', async () => {
+        await expect(
+          client.identify({ id: '' } as any)
+        ).rejects.toThrow('identity.id is required');
+      });
+    });
+
+    describe('reset()', () => {
+      it('should clear identity from localStorage', async () => {
+        await client.reset();
+
+        expect(localStorageMock.removeItem).toHaveBeenCalledWith(
+          'pocketping_user_identity'
+        );
+      });
+
+      it('should emit reset event', async () => {
+        const callback = vi.fn();
+        client.on('reset', callback);
+
+        await client.reset();
+
+        expect(callback).toHaveBeenCalled();
+      });
+    });
+
+    describe('getIdentity()', () => {
+      it('should return null when no identity', () => {
+        const identity = client.getIdentity();
+        expect(identity).toBeNull();
+      });
+
+      it('should return session identity after identify', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ ok: true }),
+          headers: new Headers(),
+        });
+
+        await client.identify({
+          id: 'user_123',
+          name: 'John Doe',
+        });
+
+        const identity = client.getIdentity();
+        expect(identity).toEqual({
+          id: 'user_123',
+          name: 'John Doe',
+        });
+      });
+    });
+  });
 });

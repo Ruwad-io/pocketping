@@ -17,11 +17,14 @@ import type {
   PresenceResponse,
   ReadRequest,
   ReadResponse,
+  IdentifyRequest,
+  IdentifyResponse,
   CustomEvent,
   CustomEventHandler,
   WebhookPayload,
   VersionCheckResult,
   VersionStatus,
+  UserIdentity,
 } from './types';
 import type { Storage } from './storage/types';
 import { MemoryStorage } from './storage/memory';
@@ -232,6 +235,9 @@ export class PocketPing {
           case 'read':
             result = await this.handleRead(body as ReadRequest);
             break;
+          case 'identify':
+            result = await this.handleIdentify(body as IdentifyRequest);
+            break;
           default:
             if (next) {
               next();
@@ -417,6 +423,7 @@ export class PocketPing {
         operatorOnline: this.operatorOnline,
         aiActive: false,
         metadata: request.metadata,
+        identity: request.identity,
       };
       await this.storage.createSession(session);
 
@@ -425,17 +432,31 @@ export class PocketPing {
 
       // Callback
       await this.config.onNewSession?.(session);
-    } else if (request.metadata) {
+    } else {
+      let needsUpdate = false;
+
       // Update metadata for returning visitor (e.g., new page URL)
-      if (session.metadata) {
-        // Preserve server-side fields (IP, country, city)
-        request.metadata.ip = session.metadata.ip ?? request.metadata.ip;
-        request.metadata.country = session.metadata.country ?? request.metadata.country;
-        request.metadata.city = session.metadata.city ?? request.metadata.city;
+      if (request.metadata) {
+        if (session.metadata) {
+          // Preserve server-side fields (IP, country, city)
+          request.metadata.ip = session.metadata.ip ?? request.metadata.ip;
+          request.metadata.country = session.metadata.country ?? request.metadata.country;
+          request.metadata.city = session.metadata.city ?? request.metadata.city;
+        }
+        session.metadata = request.metadata;
+        needsUpdate = true;
       }
-      session.metadata = request.metadata;
-      session.lastActivity = new Date();
-      await this.storage.updateSession(session);
+
+      // Update identity if provided
+      if (request.identity) {
+        session.identity = request.identity;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        session.lastActivity = new Date();
+        await this.storage.updateSession(session);
+      }
     }
 
     // Get existing messages
@@ -563,6 +584,48 @@ export class PocketPing {
     await this.notifyBridgesRead(request.sessionId, request.messageIds, status);
 
     return { updated };
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // User Identity
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Handle user identification from widget
+   * Called when visitor calls PocketPing.identify()
+   */
+  async handleIdentify(request: IdentifyRequest): Promise<IdentifyResponse> {
+    if (!request.identity?.id) {
+      throw new Error('identity.id is required');
+    }
+
+    const session = await this.storage.getSession(request.sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    // Update session with identity
+    session.identity = request.identity;
+    session.lastActivity = new Date();
+    await this.storage.updateSession(session);
+
+    // Notify bridges about identity update
+    await this.notifyBridgesIdentity(session);
+
+    // Callback
+    await this.config.onIdentify?.(session);
+
+    // Forward identity event to webhook
+    this.forwardIdentityToWebhook(session);
+
+    return { ok: true };
+  }
+
+  /**
+   * Get a session by ID
+   */
+  async getSession(sessionId: string): Promise<Session | null> {
+    return this.storage.getSession(sessionId);
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -764,6 +827,16 @@ export class PocketPing {
     }
   }
 
+  private async notifyBridgesIdentity(session: Session): Promise<void> {
+    for (const bridge of this.bridges) {
+      try {
+        await bridge.onIdentityUpdate?.(session);
+      } catch (err) {
+        console.error(`[PocketPing] Bridge ${bridge.name} identity notification error:`, err);
+      }
+    }
+  }
+
   // ─────────────────────────────────────────────────────────────────
   // Webhook Forwarding
   // ─────────────────────────────────────────────────────────────────
@@ -781,6 +854,7 @@ export class PocketPing {
         id: session.id,
         visitorId: session.visitorId,
         metadata: session.metadata,
+        identity: session.identity,
       },
       sentAt: new Date().toISOString(),
     };
@@ -822,6 +896,22 @@ export class PocketPing {
           console.error(`[PocketPing] Webhook error:`, err.message);
         }
       });
+  }
+
+  /**
+   * Forward identity update to webhook as a special event
+   */
+  private forwardIdentityToWebhook(session: Session): void {
+    if (!this.config.webhookUrl || !session.identity) return;
+
+    const event: CustomEvent = {
+      name: 'identify',
+      data: session.identity as Record<string, unknown>,
+      timestamp: new Date().toISOString(),
+      sessionId: session.id,
+    };
+
+    this.forwardToWebhook(event, session);
   }
 
   addBridge(bridge: Bridge): void {

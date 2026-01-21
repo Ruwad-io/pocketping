@@ -79,6 +79,11 @@ export abstract class Bridge {
   abstract onCustomEvent(event: CustomEvent, session: Session): Promise<void>;
 
   /**
+   * Called when a user identifies themselves via PocketPing.identify()
+   */
+  abstract onIdentityUpdate(session: Session): Promise<void>;
+
+  /**
    * Cleanup and disconnect
    */
   abstract destroy(): Promise<void>;

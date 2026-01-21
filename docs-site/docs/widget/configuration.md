@@ -293,30 +293,56 @@ PocketPing.setConfig({
 
 ### Visitor Identification
 
-Associate visitor with your user data (for CRM, analytics, etc.):
+Associate visitor with your user data so operators can see who they're talking to:
 
 ```javascript
 // After user logs in
 PocketPing.identify({
+  id: 'user_12345',          // Required - unique user identifier
   email: 'user@example.com',
   name: 'John Doe',
   // Any custom properties
   plan: 'pro',
   company: 'Acme Inc',
-  userId: '12345',
+  signupDate: '2024-01-15',
 });
 ```
 
-This data appears in your messaging platform when the visitor sends a message:
+**Required field:** `id` must be a non-empty string (typically your user's database ID).
+
+Identity is persisted in localStorage and automatically sent on reconnection, so users stay identified across page refreshes.
+
+This data appears in your messaging platform (Telegram/Discord/Slack):
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│ New message from John Doe                            │
-│ Email: user@example.com                              │
-│ Plan: pro | Company: Acme Inc                        │
+│ 🆕 New conversation                                   │
+│                                                      │
+│ 👤 John Doe                                          │
+│ 📧 user@example.com                                  │
+│ 📋 plan: pro • company: Acme Inc                     │
 ├──────────────────────────────────────────────────────┤
 │ "I need help with the API integration"               │
 └──────────────────────────────────────────────────────┘
+```
+
+#### Reset Identity
+
+Clear identity on logout and optionally start a fresh session:
+
+```javascript
+// Clear identity only (keep session)
+await PocketPing.reset();
+
+// Clear identity AND start new session (recommended on logout)
+await PocketPing.reset({ newSession: true });
+```
+
+#### Get Current Identity
+
+```javascript
+const identity = PocketPing.getIdentity();
+// Returns: { id: 'user_12345', email: '...', name: '...' } or null
 ```
 
 ### Cleanup

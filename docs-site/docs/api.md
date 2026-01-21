@@ -115,20 +115,31 @@ Request:
 #### Identify Visitor
 
 ```http
-POST /sessions/:sessionId/identify
+POST /identify
 ```
 
 Request:
 
 ```json
 {
-  "email": "user@example.com",
-  "name": "John Doe",
-  "customerId": "cust_123",
-  "metadata": {
+  "sessionId": "sess_abc123",
+  "identity": {
+    "id": "user_123",
+    "email": "user@example.com",
+    "name": "John Doe",
     "plan": "pro",
     "company": "Acme Inc"
   }
+}
+```
+
+**Required:** `identity.id` must be a non-empty string.
+
+Response:
+
+```json
+{
+  "ok": true
 }
 ```
 

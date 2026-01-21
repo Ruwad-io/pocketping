@@ -367,4 +367,165 @@ describe('PocketPing', () => {
       expect(pp.handlePresence()).resolves.toMatchObject({ online: false });
     });
   });
+
+  describe('User Identity', () => {
+    let sessionId: string;
+
+    beforeEach(async () => {
+      const response = await pp.handleConnect({ visitorId: 'visitor-123' });
+      sessionId = response.sessionId;
+    });
+
+    describe('handleIdentify', () => {
+      it('should update session with identity', async () => {
+        const response = await pp.handleIdentify({
+          sessionId,
+          identity: {
+            id: 'user_123',
+            email: 'john@example.com',
+            name: 'John Doe',
+          },
+        });
+
+        expect(response.ok).toBe(true);
+
+        // Verify session was updated
+        const session = await pp.getStorage().getSession(sessionId);
+        expect(session?.identity).toEqual({
+          id: 'user_123',
+          email: 'john@example.com',
+          name: 'John Doe',
+        });
+      });
+
+      it('should require identity.id', async () => {
+        await expect(
+          pp.handleIdentify({
+            sessionId,
+            identity: {
+              id: '',
+              email: 'test@example.com',
+            },
+          })
+        ).rejects.toThrow('identity.id is required');
+      });
+
+      it('should throw for unknown session', async () => {
+        await expect(
+          pp.handleIdentify({
+            sessionId: 'unknown-session',
+            identity: { id: 'user_123' },
+          })
+        ).rejects.toThrow('Session not found');
+      });
+
+      it('should call onIdentify callback', async () => {
+        const onIdentify = vi.fn();
+        const ppWithCallback = new PocketPing({ onIdentify });
+        const { sessionId: sid } = await ppWithCallback.handleConnect({
+          visitorId: 'visitor-456',
+        });
+
+        await ppWithCallback.handleIdentify({
+          sessionId: sid,
+          identity: {
+            id: 'user_123',
+            name: 'Test User',
+          },
+        });
+
+        expect(onIdentify).toHaveBeenCalledWith(
+          expect.objectContaining({
+            visitorId: 'visitor-456',
+            identity: expect.objectContaining({ id: 'user_123' }),
+          })
+        );
+      });
+
+      it('should support custom fields', async () => {
+        await pp.handleIdentify({
+          sessionId,
+          identity: {
+            id: 'user_123',
+            plan: 'pro',
+            company: 'Acme Inc',
+            signupDate: '2024-01-15',
+          },
+        });
+
+        const session = await pp.getStorage().getSession(sessionId);
+        expect(session?.identity?.plan).toBe('pro');
+        expect(session?.identity?.company).toBe('Acme Inc');
+        expect(session?.identity?.signupDate).toBe('2024-01-15');
+      });
+
+      it('should notify bridges on identity update', async () => {
+        const mockBridge: Bridge = {
+          name: 'test-bridge',
+          onIdentityUpdate: vi.fn(),
+        };
+
+        const ppWithBridge = new PocketPing({ bridges: [mockBridge] });
+        const { sessionId: sid } = await ppWithBridge.handleConnect({
+          visitorId: 'visitor-456',
+        });
+
+        await ppWithBridge.handleIdentify({
+          sessionId: sid,
+          identity: {
+            id: 'user_123',
+            name: 'Test User',
+          },
+        });
+
+        expect(mockBridge.onIdentityUpdate).toHaveBeenCalledWith(
+          expect.objectContaining({
+            identity: expect.objectContaining({ id: 'user_123' }),
+          })
+        );
+      });
+    });
+
+    describe('handleConnect with identity', () => {
+      it('should accept identity on connect', async () => {
+        const response = await pp.handleConnect({
+          visitorId: 'visitor-789',
+          identity: {
+            id: 'user_456',
+            email: 'jane@example.com',
+            name: 'Jane Doe',
+          },
+        });
+
+        const session = await pp.getStorage().getSession(response.sessionId);
+        expect(session?.identity).toEqual({
+          id: 'user_456',
+          email: 'jane@example.com',
+          name: 'Jane Doe',
+        });
+      });
+
+      it('should preserve identity when reconnecting', async () => {
+        // First connect with identity
+        const first = await pp.handleConnect({
+          visitorId: 'visitor-789',
+          identity: {
+            id: 'user_456',
+            name: 'Jane',
+          },
+        });
+
+        // Reconnect without identity
+        const second = await pp.handleConnect({
+          visitorId: 'visitor-789',
+          sessionId: first.sessionId,
+        });
+
+        expect(second.sessionId).toBe(first.sessionId);
+
+        const session = await pp.getStorage().getSession(second.sessionId);
+        expect(session?.identity?.id).toBe('user_456');
+      });
+    });
+  });
 });

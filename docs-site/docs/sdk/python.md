@@ -134,18 +134,25 @@ await pp.send_message("sess_xxx", {
 
 ### Visitor Identification
 
+Enrich sessions with user data so operators can see who they're talking to:
+
 ```python
+from pocketping.models import IdentifyRequest, UserIdentity
+
 # Identify a visitor
-await pp.identify("sess_xxx", {
-    "email": "user@example.com",
-    "name": "John Doe",
-    "customer_id": "cust_123",
-    "metadata": {
-        "plan": "pro",
-        "company": "Acme Inc",
-    },
-})
+await pp.handle_identify(IdentifyRequest(
+    session_id="sess_xxx",
+    identity=UserIdentity(
+        id="user_123",           # Required
+        email="user@example.com",
+        name="John Doe",
+        plan="pro",              # Custom fields supported
+        company="Acme Inc",
+    ),
+))
 ```
+
+**Required field:** `identity.id` must be a non-empty string.
 
 ## Custom Events
 

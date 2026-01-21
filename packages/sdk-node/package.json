@@ -9,6 +9,8 @@
     "dist"
   ],
   "scripts": {
+    "clean": "rm -rf dist && find src -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' -o -name '*.d.ts.map' | xargs rm -f 2>/dev/null || true",
+    "prebuild": "pnpm clean",
     "build": "tsup src/index.ts --format cjs,esm --dts",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "test": "vitest run",

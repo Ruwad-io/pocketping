@@ -135,6 +135,8 @@ export interface Session {
   visitorId: string;
   operatorOnline: boolean;
   messages: Message[];
+  /** User identity if identified via PocketPing.identify() */
+  identity?: UserIdentity;
 }
 
 export interface ConnectResponse {
@@ -143,6 +145,8 @@ export interface ConnectResponse {
   operatorOnline?: boolean;
   welcomeMessage?: string;
   messages?: Message[];
+  /** User identity if provided on connect */
+  identity?: UserIdentity;
 }
 
 export interface SendMessageResponse {
@@ -207,3 +211,29 @@ export interface CustomEvent {
 
 /** Handler for custom events */
 export type CustomEventHandler = (data: Record<string, unknown> | undefined, event: CustomEvent) => void;
+
+// ─────────────────────────────────────────────────────────────────
+// User Identity
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * User identity data for identifying visitors
+ * @example
+ * PocketPing.identify({
+ *   id: 'user_123',
+ *   email: 'john@example.com',
+ *   name: 'John Doe',
+ *   plan: 'pro',
+ *   company: 'Acme Inc'
+ * })
+ */
+export interface UserIdentity {
+  /** Required unique user identifier */
+  id: string;
+  /** User's email address */
+  email?: string;
+  /** User's display name */
+  name?: string;
+  /** Any custom fields (plan, company, etc.) */
+  [key: string]: unknown;
+}

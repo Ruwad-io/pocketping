@@ -676,6 +676,100 @@ export class DiscordBridge extends Bridge {
     }
   }
 
+  async onIdentityUpdate(session: Session): Promise<void> {
+    const identity = session.identity;
+    if (!identity) return;
+
+    // Build identity description
+    const description = this.formatIdentity(session);
+
+    const embed = new EmbedBuilder()
+      .setTitle("🏷️ User Identified")
+      .setDescription(description)
+      .setFooter({ text: `Session: ${session.id.slice(0, 8)}...` })
+      .setColor(0x3498db);
+
+    if (this.useThreads) {
+      const threadId = this.sessionThreadMap.get(session.id);
+      if (threadId) {
+        try {
+          const thread = (await this.client.channels.fetch(threadId)) as ThreadChannel;
+          if (thread) {
+            await thread.send({ embeds: [embed] });
+
+            // Update thread name to include user name
+            const newName = identity.name
+              ? `🟢 ${identity.name.slice(0, 20)}`
+              : `🟢 ${session.id.slice(0, 8)}`;
+            try {
+              await thread.setName(newName);
+            } catch {
+              // Ignore rename errors
+            }
+            return;
+          }
+        } catch (error) {
+          console.error("[Discord] Failed to send identity update to thread:", error);
+        }
+      }
+    }
+
+    if (this.channel) {
+      await this.channel.send({ embeds: [embed] });
+    }
+  }
+
+  /**
+   * Format user identity for display
+   */
+  private formatIdentity(session: Session): string {
+    const identity = session.identity;
+    if (!identity) {
+      return `Visitor ${session.visitorId.slice(0, 8)}`;
+    }
+
+    const parts: string[] = [];
+
+    // Name or email or ID
+    if (identity.name) {
+      parts.push(`👤 **${identity.name}**`);
+    } else if (identity.email) {
+      parts.push(`👤 **${identity.email}**`);
+    } else {
+      parts.push(`👤 **User ${String(identity.id).slice(0, 8)}**`);
+    }
+
+    // Email if different from name
+    if (identity.email && identity.name) {
+      parts.push(`📧 ${identity.email}`);
+    }
+
+    // Custom fields
+    const standardFields = ['id', 'email', 'name'];
+    const customFields = Object.entries(identity)
+      .filter(([key]) => !standardFields.includes(key))
+      .map(([key, value]) => `${key}: ${value}`);
+
+    if (customFields.length > 0) {
+      parts.push(`📋 ${customFields.join(' • ')}`);
+    }
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Get display name for visitor (uses identity if available)
+   */
+  private getVisitorDisplayName(session: Session): string {
+    if (session.identity?.name) {
+      return session.identity.name;
+    }
+    if (session.identity?.email) {
+      return session.identity.email.split('@')[0];
+    }
+    return 'Visitor';
+  }
+
   async destroy(): Promise<void> {
     this.client.destroy();
     console.log("[Discord] Bridge stopped");

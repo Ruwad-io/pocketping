@@ -38,6 +38,14 @@ def pocketping(memory_storage):
 
 
 @pytest.fixture
+def pocketping_with_callbacks(memory_storage):
+    """Create a PocketPing instance with mock callbacks."""
+    pp = PocketPing(storage=memory_storage)
+    pp.on_identify_callback = MagicMock()
+    return pp
+
+
+@pytest.fixture
 def sample_session():
     """Create a sample session for testing."""
     return Session(
@@ -105,8 +113,10 @@ def mock_bridge():
     """Create a mock bridge for testing."""
     bridge = MagicMock()
     bridge.name = "test-bridge"
+    bridge.init = AsyncMock()
     bridge.on_new_session = AsyncMock()
     bridge.on_visitor_message = AsyncMock()
     bridge.on_operator_message = AsyncMock()
     bridge.on_message_read = AsyncMock()
+    bridge.on_identity_update = AsyncMock()
     return bridge

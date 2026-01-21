@@ -31,6 +31,9 @@ export interface Bridge {
   /** Called when a custom event is triggered from the widget */
   onEvent?(event: CustomEvent, session: Session): void | Promise<void>;
 
+  /** Called when a user identifies themselves via PocketPing.identify() */
+  onIdentityUpdate?(session: Session): void | Promise<void>;
+
   /** Cleanup when bridge is removed */
   destroy?(): void | Promise<void>;
 }

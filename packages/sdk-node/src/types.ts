@@ -27,6 +27,9 @@ export interface PocketPingConfig {
   /** Callback when a custom event is received from widget */
   onEvent?: (event: CustomEvent, session: Session) => void | Promise<void>;
 
+  /** Callback when a user identifies themselves */
+  onIdentify?: (session: Session) => void | Promise<void>;
+
   // ─────────────────────────────────────────────────────────────────
   // Webhook Configuration (forward events to external services)
   // ─────────────────────────────────────────────────────────────────
@@ -65,6 +68,22 @@ export interface AIConfig {
   fallbackAfter?: number; // seconds
 }
 
+// ─────────────────────────────────────────────────────────────────
+// User Identity (from PocketPing.identify())
+// ─────────────────────────────────────────────────────────────────
+
+/** User identity data from PocketPing.identify() */
+export interface UserIdentity {
+  /** Required unique user identifier */
+  id: string;
+  /** User's email address */
+  email?: string;
+  /** User's display name */
+  name?: string;
+  /** Any custom fields (plan, company, etc.) */
+  [key: string]: unknown;
+}
+
 export interface Session {
   id: string;
   visitorId: string;
@@ -73,6 +92,8 @@ export interface Session {
   operatorOnline: boolean;
   aiActive: boolean;
   metadata?: SessionMetadata;
+  /** User identity if identified via PocketPing.identify() */
+  identity?: UserIdentity;
 }
 
 export interface SessionMetadata {
@@ -124,6 +145,8 @@ export interface ConnectRequest {
   visitorId: string;
   sessionId?: string;
   metadata?: SessionMetadata;
+  /** User identity if already identified */
+  identity?: UserIdentity;
 }
 
 export interface ConnectResponse {
@@ -171,6 +194,15 @@ export interface ReadRequest {
 
 export interface ReadResponse {
   updated: number;
+}
+
+export interface IdentifyRequest {
+  sessionId: string;
+  identity: UserIdentity;
+}
+
+export interface IdentifyResponse {
+  ok: boolean;
 }
 
 export interface PresenceResponse {
@@ -233,6 +265,7 @@ export interface WebhookPayload {
     id: string;
     visitorId: string;
     metadata?: SessionMetadata;
+    identity?: UserIdentity;
   };
   /** Timestamp when webhook was sent */
   sentAt: string;

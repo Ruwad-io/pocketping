@@ -10,6 +10,7 @@ import type {
   CustomEvent,
   CustomEventHandler,
   VersionWarning,
+  UserIdentity,
 } from './types';
 import { VERSION } from './version';
 
@@ -37,6 +38,7 @@ export class PocketPingClient {
   async connect(): Promise<Session> {
     const visitorId = this.getOrCreateVisitorId();
     const storedSessionId = this.getStoredSessionId();
+    const storedIdentity = this.getStoredIdentity();
 
     const response = await this.fetch<ConnectResponse>('/connect', {
       method: 'POST',
@@ -52,6 +54,8 @@ export class PocketPingClient {
           language: navigator.language,
           screenResolution: `${window.screen.width}x${window.screen.height}`,
         },
+        // Include stored identity if available
+        identity: storedIdentity || undefined,
       }),
     });
 
@@ -60,6 +64,7 @@ export class PocketPingClient {
       visitorId: response.visitorId,
       operatorOnline: response.operatorOnline ?? false,
       messages: response.messages ?? [],
+      identity: response.identity || storedIdentity || undefined,
     };
 
     // Store session
@@ -213,6 +218,90 @@ export class PocketPingClient {
 
   async getPresence(): Promise<PresenceResponse> {
     return this.fetch<PresenceResponse>('/presence', { method: 'GET' });
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // User Identity
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Identify the current user with metadata
+   * Call after user logs in or when user data becomes available
+   * @param identity - User identity data with required id field
+   * @example
+   * PocketPing.identify({
+   *   id: 'user_123',
+   *   email: 'john@example.com',
+   *   name: 'John Doe',
+   *   plan: 'pro',
+   *   company: 'Acme Inc'
+   * })
+   */
+  async identify(identity: UserIdentity): Promise<void> {
+    if (!identity?.id) {
+      throw new Error('[PocketPing] identity.id is required');
+    }
+
+    // Store identity in localStorage for persistence
+    this.storeIdentity(identity);
+
+    // If connected, send identify request to backend
+    if (this.session) {
+      try {
+        await this.fetch<{ ok: boolean }>('/identify', {
+          method: 'POST',
+          body: JSON.stringify({
+            sessionId: this.session.sessionId,
+            identity,
+          }),
+        });
+
+        // Update local session
+        this.session.identity = identity;
+        this.emit('identify', identity);
+      } catch (err) {
+        console.error('[PocketPing] Failed to identify:', err);
+        throw err;
+      }
+    }
+  }
+
+  /**
+   * Reset the user identity and optionally start a new session
+   * Call on user logout to clear user data
+   * @param options - Optional settings: { newSession: boolean }
+   */
+  async reset(options?: { newSession?: boolean }): Promise<void> {
+    // Clear stored identity
+    this.clearIdentity();
+
+    // Clear session identity
+    if (this.session) {
+      this.session.identity = undefined;
+    }
+
+    // Optionally start a new session
+    if (options?.newSession) {
+      // Clear session and visitor IDs
+      localStorage.removeItem('pocketping_session_id');
+      localStorage.removeItem('pocketping_visitor_id');
+
+      // Disconnect current session
+      this.disconnect();
+
+      // Reconnect with fresh IDs
+      await this.connect();
+    }
+
+    this.emit('reset', null);
+  }
+
+  /**
+   * Get the current user identity
+   * @returns UserIdentity or null if not identified
+   */
+  getIdentity(): UserIdentity | null {
+    return this.session?.identity || this.getStoredIdentity();
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -651,6 +740,23 @@ export class PocketPingClient {
 
   private storeSessionId(sessionId: string): void {
     localStorage.setItem('pocketping_session_id', sessionId);
+  }
+
+  private getStoredIdentity(): UserIdentity | null {
+    try {
+      const stored = localStorage.getItem('pocketping_user_identity');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private storeIdentity(identity: UserIdentity): void {
+    localStorage.setItem('pocketping_user_identity', JSON.stringify(identity));
+  }
+
+  private clearIdentity(): void {
+    localStorage.removeItem('pocketping_user_identity');
   }
 
   private generateId(): string {

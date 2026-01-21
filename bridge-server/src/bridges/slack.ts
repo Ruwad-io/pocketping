@@ -663,6 +663,95 @@ export class SlackBridge extends Bridge {
     }
   }
 
+  async onIdentityUpdate(session: Session): Promise<void> {
+    const identity = session.identity;
+    if (!identity) return;
+
+    const threadTs = this.sessionThreadMap.get(session.id);
+
+    // Build identity description
+    const identityText = this.formatIdentity(session);
+
+    try {
+      await this.webClient.chat.postMessage({
+        channel: this.channelId,
+        thread_ts: threadTs,
+        text: `User Identified: ${identity.name || identity.email || identity.id}`,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `🏷️ *User Identified*\n\n${identityText}`,
+            },
+          },
+          {
+            type: "context",
+            elements: [
+              {
+                type: "mrkdwn",
+                text: `_Session: \`${session.id.slice(0, 8)}...\`_`,
+              },
+            ],
+          },
+        ],
+      });
+    } catch (error) {
+      console.error("[Slack] Failed to send identity update:", error);
+    }
+  }
+
+  /**
+   * Format user identity for display
+   */
+  private formatIdentity(session: Session): string {
+    const identity = session.identity;
+    if (!identity) {
+      return `Visitor ${session.visitorId.slice(0, 8)}`;
+    }
+
+    const parts: string[] = [];
+
+    // Name or email or ID
+    if (identity.name) {
+      parts.push(`👤 *${identity.name}*`);
+    } else if (identity.email) {
+      parts.push(`👤 *${identity.email}*`);
+    } else {
+      parts.push(`👤 *User ${String(identity.id).slice(0, 8)}*`);
+    }
+
+    // Email if different from name
+    if (identity.email && identity.name) {
+      parts.push(`📧 ${identity.email}`);
+    }
+
+    // Custom fields
+    const standardFields = ['id', 'email', 'name'];
+    const customFields = Object.entries(identity)
+      .filter(([key]) => !standardFields.includes(key))
+      .map(([key, value]) => `${key}: ${value}`);
+
+    if (customFields.length > 0) {
+      parts.push(`📋 ${customFields.join(' • ')}`);
+    }
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Get display name for visitor (uses identity if available)
+   */
+  private getVisitorDisplayName(session: Session): string {
+    if (session.identity?.name) {
+      return session.identity.name;
+    }
+    if (session.identity?.email) {
+      return session.identity.email.split('@')[0];
+    }
+    return 'Visitor';
+  }
+
   async destroy(): Promise<void> {
     await this.socketClient.disconnect();
     console.log("[Slack] Bridge stopped");

@@ -17,6 +17,8 @@ from pocketping.models import (
     ConnectRequest,
     ConnectResponse,
     CustomEvent,
+    IdentifyRequest,
+    IdentifyResponse,
     Message,
     MessageStatus,
     PresenceResponse,
@@ -27,6 +29,7 @@ from pocketping.models import (
     SendMessageResponse,
     Session,
     TypingRequest,
+    UserIdentity,
     VersionCheckResult,
     VersionStatus,
     VersionWarning,
@@ -49,6 +52,7 @@ class PocketPing:
         on_new_session: Optional[Callable[[Session], Any]] = None,
         on_message: Optional[Callable[[Message, Session], Any]] = None,
         on_event: Optional[Callable[[CustomEvent, Session], Any]] = None,
+        on_identify: Optional[Callable[[Session], Any]] = None,
         # Webhook configuration
         webhook_url: Optional[str] = None,
         webhook_secret: Optional[str] = None,
@@ -72,6 +76,7 @@ class PocketPing:
         self.on_new_session = on_new_session
         self.on_message = on_message
         self.on_event_callback = on_event
+        self.on_identify_callback = on_identify
 
         # Webhook config
         self.webhook_url = webhook_url
@@ -149,6 +154,7 @@ class PocketPing:
                 operator_online=self._operator_online,
                 ai_active=False,
                 metadata=request.metadata,
+                identity=request.identity,
             )
             await self.storage.create_session(session)
 
@@ -161,6 +167,8 @@ class PocketPing:
                 if asyncio.iscoroutine(result):
                     await result
         else:
+            needs_update = False
+
             # Update metadata if provided (e.g., new page URL)
             if request.metadata:
                 # Merge new metadata with existing, keeping geo info
@@ -170,6 +178,14 @@ class PocketPing:
                     request.metadata.country = session.metadata.country or request.metadata.country
                     request.metadata.city = session.metadata.city or request.metadata.city
                 session.metadata = request.metadata
+                needs_update = True
+
+            # Update identity if provided
+            if request.identity:
+                session.identity = request.identity
+                needs_update = True
+
+            if needs_update:
                 session.last_activity = datetime.utcnow()
                 await self.storage.update_session(session)
 
@@ -331,6 +347,64 @@ class PocketPing:
                     await bridge.on_message_read(session_id, message_ids, status, session)
                 except Exception as e:
                     print(f"[PocketPing] Error notifying {bridge.name} of read status: {e}")
+
+    # ─────────────────────────────────────────────────────────────────
+    # User Identity
+    # ─────────────────────────────────────────────────────────────────
+
+    async def handle_identify(self, request: IdentifyRequest) -> IdentifyResponse:
+        """Handle user identification from widget.
+
+        Called when visitor calls PocketPing.identify().
+
+        Args:
+            request: The identify request with session_id and identity
+
+        Returns:
+            IdentifyResponse with ok=True on success
+
+        Raises:
+            ValueError: If identity.id is missing or session not found
+        """
+        if not request.identity or not request.identity.id:
+            raise ValueError("identity.id is required")
+
+        session = await self.storage.get_session(request.session_id)
+        if not session:
+            raise ValueError("Session not found")
+
+        # Update session with identity
+        session.identity = request.identity
+        session.last_activity = datetime.utcnow()
+        await self.storage.update_session(session)
+
+        # Notify bridges about identity update
+        await self._notify_bridges_identity(session)
+
+        # Callback
+        if self.on_identify_callback:
+            result = self.on_identify_callback(session)
+            if asyncio.iscoroutine(result):
+                await result
+
+        # Forward identity event to webhook
+        if self.webhook_url:
+            asyncio.create_task(self._forward_identity_to_webhook(session))
+
+        return IdentifyResponse(ok=True)
+
+    async def _notify_bridges_identity(self, session: Session) -> None:
+        """Notify all bridges about identity update."""
+        for bridge in self.bridges:
+            if hasattr(bridge, "on_identity_update"):
+                try:
+                    await bridge.on_identity_update(session)
+                except Exception as e:
+                    print(f"[PocketPing] Bridge {bridge.name} identity notification error: {e}")
+
+    async def get_session(self, session_id: str) -> Optional[Session]:
+        """Get a session by ID."""
+        return await self.storage.get_session(session_id)
 
     # ─────────────────────────────────────────────────────────────────
     # Operator Actions
@@ -724,6 +798,7 @@ class PocketPing:
                 "id": session.id,
                 "visitorId": session.visitor_id,
                 "metadata": session.metadata.model_dump(by_alias=True) if session.metadata else None,
+                "identity": session.identity.model_dump(by_alias=True) if session.identity else None,
             },
             "sentAt": datetime.utcnow().isoformat(),
         }
@@ -752,6 +827,20 @@ class PocketPing:
             print(f"[PocketPing] Webhook timed out after {self.webhook_timeout}s")
         except Exception as e:
             print(f"[PocketPing] Webhook error: {e}")
+
+    async def _forward_identity_to_webhook(self, session: Session) -> None:
+        """Forward identity update to webhook as a special event."""
+        if not self.webhook_url or not session.identity:
+            return
+
+        event = CustomEvent(
+            name="identify",
+            data=session.identity.model_dump(by_alias=True),
+            timestamp=datetime.utcnow(),
+            session_id=session.id,
+        )
+
+        await self._forward_to_webhook(event, session)
 
     # ─────────────────────────────────────────────────────────────────
     # Utilities

@@ -2,6 +2,20 @@
  * Core types for PocketPing Bridge Server
  */
 
+/**
+ * User identity data from PocketPing.identify()
+ */
+export interface UserIdentity {
+  /** Required unique user identifier */
+  id: string;
+  /** User's email address */
+  email?: string;
+  /** User's display name */
+  name?: string;
+  /** Any custom fields (plan, company, etc.) */
+  [key: string]: unknown;
+}
+
 export interface SessionMetadata {
   // Page info
   url?: string;
@@ -33,6 +47,8 @@ export interface Session {
   operatorOnline: boolean;
   aiActive: boolean;
   metadata?: SessionMetadata;
+  /** User identity if identified via PocketPing.identify() */
+  identity?: UserIdentity;
 }
 
 export type SenderType = "visitor" | "operator" | "ai";
@@ -98,13 +114,19 @@ export interface CustomEventEvent {
   session: Session;
 }
 
+export interface IdentityUpdateEvent {
+  type: "identity_update";
+  session: Session;
+}
+
 export type IncomingEvent =
   | NewSessionEvent
   | VisitorMessageEvent
   | AITakeoverEvent
   | OperatorStatusEvent
   | MessageReadEvent
-  | CustomEventEvent;
+  | CustomEventEvent
+  | IdentityUpdateEvent;
 
 // Events sent FROM the Bridge Server (to backends)
 export interface OperatorMessageEvent {

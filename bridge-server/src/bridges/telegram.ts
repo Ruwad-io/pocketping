@@ -346,18 +346,24 @@ export class TelegramBridge extends Bridge {
   private async createForumTopic(session: Session): Promise<void> {
     if (!this.forumChatId) return;
 
-    // Build topic name
-    let pageInfo = "";
-    if (session.metadata?.url) {
-      const parts = session.metadata.url.split("/");
-      const lastPart = parts.at(-1) ?? "home";
-      const withoutQuery = lastPart.split("?").at(0) ?? lastPart;
-      pageInfo = withoutQuery.slice(0, 20);
+    // Build topic name - use identity name if available
+    let topicName: string;
+    if (session.identity?.name) {
+      topicName = `💬 ${session.identity.name.slice(0, 20)}`;
+    } else if (session.identity?.email) {
+      topicName = `💬 ${session.identity.email.split('@')[0].slice(0, 20)}`;
+    } else {
+      let pageInfo = "";
+      if (session.metadata?.url) {
+        const parts = session.metadata.url.split("/");
+        const lastPart = parts.at(-1) ?? "home";
+        const withoutQuery = lastPart.split("?").at(0) ?? lastPart;
+        pageInfo = withoutQuery.slice(0, 20);
+      }
+      topicName = pageInfo
+        ? `💬 ${session.id.slice(0, 8)} • ${pageInfo}`
+        : `💬 ${session.id.slice(0, 8)}`;
     }
-
-    const topicName = pageInfo
-      ? `💬 ${session.id.slice(0, 8)} • ${pageInfo}`
-      : `💬 ${session.id.slice(0, 8)}`;
 
     try {
       const result = await this.bot.telegram.createForumTopic(this.forumChatId, topicName);
@@ -369,7 +375,14 @@ export class TelegramBridge extends Bridge {
 
       // Build welcome message with all available metadata
       const meta = session.metadata;
-      let welcomeText = `🆕 *New conversation*\n\nSession: \`${session.id.slice(0, 8)}...\``;
+      let welcomeText = `🆕 *New conversation*\n\n`;
+
+      // Show identity info prominently at the top if available
+      if (session.identity) {
+        welcomeText += this.formatIdentity(session) + '\n\n';
+      }
+
+      welcomeText += `Session: \`${session.id.slice(0, 8)}...\``;
 
       // Page info
       if (meta?.url) {
@@ -511,9 +524,10 @@ export class TelegramBridge extends Bridge {
     if (!topicId) return;
 
     try {
+      const displayName = this.getVisitorDisplayName(session);
       const result = await this.bot.telegram.sendMessage(
         this.forumChatId,
-        `👤 *Visitor:*\n\n${message.content}`,
+        `👤 *${displayName}:*\n\n${message.content}`,
         {
           message_thread_id: topicId,
           parse_mode: "Markdown",
@@ -696,6 +710,96 @@ export class TelegramBridge extends Bridge {
     } catch (error) {
       console.error("[Telegram] Failed to send custom event:", error);
     }
+  }
+
+  async onIdentityUpdate(session: Session): Promise<void> {
+    const targetChatId = this.forumChatId || this.chatId;
+    if (!targetChatId) return;
+
+    const identity = session.identity;
+    if (!identity) return;
+
+    // Format identity info
+    let text = `🏷️ *User Identified*\n\n`;
+    text += this.formatIdentity(session);
+
+    const options: Parameters<typeof this.bot.telegram.sendMessage>[2] = {
+      parse_mode: "Markdown" as const,
+    };
+
+    if (this.useForumTopics) {
+      const topicId = this.sessionTopicMap.get(session.id);
+      if (topicId) {
+        options.message_thread_id = topicId;
+
+        // Update topic name to include user name
+        try {
+          const newName = identity.name
+            ? `💬 ${identity.name.slice(0, 20)}`
+            : `💬 ${session.id.slice(0, 8)}`;
+          await this.bot.telegram.editForumTopic(this.forumChatId!, topicId, { name: newName });
+        } catch {
+          // Ignore rename errors (may not have permission)
+        }
+      }
+    }
+
+    try {
+      await this.bot.telegram.sendMessage(targetChatId, text, options);
+    } catch (error) {
+      console.error("[Telegram] Failed to send identity update:", error);
+    }
+  }
+
+  /**
+   * Format user identity for display
+   */
+  private formatIdentity(session: Session): string {
+    const identity = session.identity;
+    if (!identity) {
+      return `Visitor ${session.visitorId.slice(0, 8)}`;
+    }
+
+    const parts: string[] = [];
+
+    // Name or email or ID
+    if (identity.name) {
+      parts.push(`👤 *${identity.name}*`);
+    } else if (identity.email) {
+      parts.push(`👤 *${identity.email}*`);
+    } else {
+      parts.push(`👤 *User ${identity.id.slice(0, 8)}*`);
+    }
+
+    // Email if different from name
+    if (identity.email && identity.name) {
+      parts.push(`📧 ${identity.email}`);
+    }
+
+    // Custom fields
+    const standardFields = ['id', 'email', 'name'];
+    const customFields = Object.entries(identity)
+      .filter(([key]) => !standardFields.includes(key))
+      .map(([key, value]) => `${key}: ${value}`);
+
+    if (customFields.length > 0) {
+      parts.push(`📋 ${customFields.join(' • ')}`);
+    }
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Get display name for visitor (uses identity if available)
+   */
+  private getVisitorDisplayName(session: Session): string {
+    if (session.identity?.name) {
+      return session.identity.name;
+    }
+    if (session.identity?.email) {
+      return session.identity.email.split('@')[0];
+    }
+    return 'Visitor';
   }
 
   async destroy(): Promise<void> {

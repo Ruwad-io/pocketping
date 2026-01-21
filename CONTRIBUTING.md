@@ -390,6 +390,68 @@ Create `tests/integration/whatsapp-bridge.test.ts` with mock server.
 
 ---
 
+## Troubleshooting
+
+### Tests fail with "X is not a function" after adding new methods
+
+**Symptom:** After adding a new method to a class (e.g., `identify()` to `PocketPingClient`), tests fail with:
+```
+TypeError: client.identify is not a function
+```
+
+**Cause:** Stale compiled `.js` files in `src/` directories. When TypeScript compiles with `tsc --declaration`, it may leave `.js` files in `src/`. Vitest can pick up these old `.js` files instead of transforming the `.ts` source files, causing the new methods to be missing.
+
+**Solution:**
+```bash
+# Run the clean script (automatically runs before build via prebuild)
+pnpm clean
+
+# Or manually delete stale files
+find src -name '*.js' -o -name '*.js.map' | xargs rm -f
+```
+
+**Prevention:** The `prebuild` script now runs `clean` automatically before every build. The `.gitignore` already excludes these files, so they won't be committed.
+
+### Vitest caching issues
+
+If tests fail unexpectedly after code changes:
+```bash
+# Clear all vitest caches
+rm -rf node_modules/.vite node_modules/.cache .vitest
+
+# Rebuild and test
+pnpm build && pnpm test
+```
+
+### Vitest/esbuild class duplication issue
+
+**Symptom:** Static properties like `MockWebSocket.OPEN` are undefined, or mocks don't work as expected in tests.
+
+**Cause:** There's a known issue with esbuild/vitest where importing a class from a `setupFile` creates **duplicate class instances**:
+1. Vitest runs `setup.ts` as a setupFile (first execution)
+2. When tests import from `./setup`, the module is processed again (second execution)
+3. esbuild may use different import paths internally, creating two separate class definitions
+4. Static properties set on one class copy don't exist on the other
+
+**Solution:** Access mocks from `globalThis` instead of importing them:
+
+```typescript
+// ❌ DON'T import mocks from setup file
+import { MockWebSocket, localStorageMock } from './setup';
+
+// ✅ DO access mocks from globalThis (set in setupFile)
+const MockWebSocket = globalThis.WebSocket as any;
+const localStorageMock = globalThis.localStorage as any;
+```
+
+**References:**
+- https://github.com/evanw/esbuild/issues/2195
+- https://github.com/vitest-dev/vitest/issues/3328
+
+See the comment at the top of `packages/widget/tests/client.test.ts` for detailed explanation.
+
+---
+
 ## Questions?
 
 - Open an issue on GitHub
