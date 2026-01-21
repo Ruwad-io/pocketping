@@ -5,7 +5,7 @@ import type * as Preset from '@docusaurus/preset-classic'
 const config: Config = {
   title: 'PocketPing',
   tagline: 'Customer chat that pings your phone',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicon.svg',
 
   future: {
     v4: true,
@@ -47,7 +47,8 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: 'img/social-card.png',
+    // TODO: Add social-card.png for Open Graph
+    // image: 'img/social-card.png',
     colorMode: {
       defaultMode: 'light',
       respectPrefersColorScheme: true,
