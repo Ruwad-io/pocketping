@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import { createHmac } from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import type {
   PocketPingConfig,
@@ -18,6 +19,7 @@ import type {
   ReadResponse,
   CustomEvent,
   CustomEventHandler,
+  WebhookPayload,
 } from './types';
 import type { Storage } from './storage/types';
 import { MemoryStorage } from './storage/memory';
@@ -305,6 +307,9 @@ export class PocketPing {
 
     // Notify bridges about the event
     await this.notifyBridgesEvent(event, session);
+
+    // Forward to webhook if configured (fire and forget)
+    this.forwardToWebhook(event, session);
   }
 
   private broadcastToSession(sessionId: string, event: unknown): void {
@@ -621,6 +626,33 @@ export class PocketPing {
     }
   }
 
+  /**
+   * Process a custom event server-side (runs handlers, bridges, webhooks)
+   * Useful for server-side automation or triggering events programmatically
+   * @param sessionId - The session ID to associate with the event
+   * @param eventName - The name of the event
+   * @param data - Optional payload for the event
+   * @example
+   * // Trigger event from backend logic (e.g., after purchase)
+   * await pp.triggerEvent('session-123', 'purchase_completed', {
+   *   orderId: 'order-456',
+   *   amount: 99.99
+   * })
+   */
+  async triggerEvent(
+    sessionId: string,
+    eventName: string,
+    data?: Record<string, unknown>
+  ): Promise<void> {
+    const event: CustomEvent = {
+      name: eventName,
+      data,
+      timestamp: new Date().toISOString(),
+      sessionId,
+    };
+    await this.handleCustomEvent(sessionId, event);
+  }
+
   // ─────────────────────────────────────────────────────────────────
   // Bridges
   // ─────────────────────────────────────────────────────────────────
@@ -664,6 +696,66 @@ export class PocketPing {
         console.error(`[PocketPing] Bridge ${bridge.name} event notification error:`, err);
       }
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Webhook Forwarding
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Forward custom event to configured webhook URL (non-blocking)
+   * Used for integrations with Zapier, Make, n8n, or custom backends
+   */
+  private forwardToWebhook(event: CustomEvent, session: Session): void {
+    if (!this.config.webhookUrl) return;
+
+    const payload: WebhookPayload = {
+      event,
+      session: {
+        id: session.id,
+        visitorId: session.visitorId,
+        metadata: session.metadata,
+      },
+      sentAt: new Date().toISOString(),
+    };
+
+    const body = JSON.stringify(payload);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Add HMAC signature if secret is configured
+    if (this.config.webhookSecret) {
+      const signature = createHmac('sha256', this.config.webhookSecret)
+        .update(body)
+        .digest('hex');
+      headers['X-PocketPing-Signature'] = `sha256=${signature}`;
+    }
+
+    const timeout = this.config.webhookTimeout ?? 5000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    fetch(this.config.webhookUrl, {
+      method: 'POST',
+      headers,
+      body,
+      signal: controller.signal,
+    })
+      .then((response) => {
+        clearTimeout(timeoutId);
+        if (!response.ok) {
+          console.error(`[PocketPing] Webhook returned ${response.status}: ${response.statusText}`);
+        }
+      })
+      .catch((err) => {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+          console.error(`[PocketPing] Webhook timed out after ${timeout}ms`);
+        } else {
+          console.error(`[PocketPing] Webhook error:`, err.message);
+        }
+      });
   }
 
   addBridge(bridge: Bridge): void {

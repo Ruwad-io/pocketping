@@ -1,0 +1,56 @@
+# Pre-commit hooks for PocketPing monorepo
+# Install: pip install pre-commit && pre-commit install
+
+repos:
+  # General
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  # TypeScript/JavaScript - ESLint
+  - repo: local
+    hooks:
+      - id: eslint
+        name: ESLint (TypeScript)
+        entry: pnpm eslint --fix
+        language: system
+        files: \.(ts|tsx|js|jsx)$
+        exclude: (node_modules|dist|\.d\.ts)
+
+      - id: typecheck
+        name: TypeScript Type Check
+        entry: pnpm typecheck
+        language: system
+        files: \.(ts|tsx)$
+        pass_filenames: false
+
+  # Python - Ruff
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.9
+    hooks:
+      - id: ruff
+        args: ['--fix']
+        types_or: [python, pyi]
+        files: ^packages/sdk-python/
+      - id: ruff-format
+        types_or: [python, pyi]
+        files: ^packages/sdk-python/
+
+  # Prettier for JSON, YAML, Markdown
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        types_or: [json, yaml, markdown]
+        exclude: (pnpm-lock\.yaml|package-lock\.json)
+
+# Run before each commit
+default_install_hook_types: [pre-commit, pre-push]

@@ -26,6 +26,19 @@ export interface PocketPingConfig {
 
   /** Callback when a custom event is received from widget */
   onEvent?: (event: CustomEvent, session: Session) => void | Promise<void>;
+
+  // ─────────────────────────────────────────────────────────────────
+  // Webhook Configuration (forward events to external services)
+  // ─────────────────────────────────────────────────────────────────
+
+  /** Webhook URL to forward custom events (Zapier, Make, n8n, etc.) */
+  webhookUrl?: string;
+
+  /** Secret key for HMAC-SHA256 signature (X-PocketPing-Signature header) */
+  webhookSecret?: string;
+
+  /** Webhook request timeout in milliseconds (default: 5000) */
+  webhookTimeout?: number;
 }
 
 export interface AIConfig {
@@ -176,3 +189,21 @@ export type CustomEventHandler = (
   event: CustomEvent,
   session: Session
 ) => void | Promise<void>;
+
+// ─────────────────────────────────────────────────────────────────
+// Webhook Types
+// ─────────────────────────────────────────────────────────────────
+
+/** Payload sent to webhook URL */
+export interface WebhookPayload {
+  /** The custom event */
+  event: CustomEvent;
+  /** Session information */
+  session: {
+    id: string;
+    visitorId: string;
+    metadata?: SessionMetadata;
+  };
+  /** Timestamp when webhook was sent */
+  sentAt: string;
+}

@@ -1,11 +1,11 @@
 """Base bridge classes."""
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pocketping.core import PocketPing
-    from pocketping.models import Message, Session, CustomEvent
+    from pocketping.models import CustomEvent, Message, Session
 
 
 class Bridge(ABC):

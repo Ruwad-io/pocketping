@@ -1,16 +1,13 @@
 """Tests for the PocketPing core functionality."""
 
 import pytest
-from datetime import datetime
-from unittest.mock import AsyncMock, patch
 
-from pocketping import PocketPing
 from pocketping.models import (
     ConnectRequest,
-    SendMessageRequest,
+    MessageStatus,
     ReadRequest,
     Sender,
-    MessageStatus,
+    SendMessageRequest,
 )
 
 
@@ -48,9 +45,7 @@ class TestPocketPingConnect:
         assert response.visitor_id == sample_session.visitor_id
 
     @pytest.mark.asyncio
-    async def test_connect_returns_existing_messages(
-        self, pocketping, sample_session, sample_visitor_message
-    ):
+    async def test_connect_returns_existing_messages(self, pocketping, sample_session, sample_visitor_message):
         """Test that connect returns messages from existing session."""
         await pocketping.storage.save_session(sample_session)
         await pocketping.storage.save_message(sample_visitor_message)
@@ -108,9 +103,7 @@ class TestPocketPingMessage:
         assert messages[0].content == "Hello!"
 
     @pytest.mark.asyncio
-    async def test_handle_message_updates_session_activity(
-        self, pocketping, sample_session
-    ):
+    async def test_handle_message_updates_session_activity(self, pocketping, sample_session):
         """Test that message updates session last_activity."""
         await pocketping.storage.save_session(sample_session)
         original_activity = sample_session.last_activity
@@ -160,9 +153,7 @@ class TestPocketPingReadReceipts:
     """Tests for read receipt handling."""
 
     @pytest.mark.asyncio
-    async def test_handle_read_updates_message_status(
-        self, pocketping, sample_session, sample_visitor_message
-    ):
+    async def test_handle_read_updates_message_status(self, pocketping, sample_session, sample_visitor_message):
         """Test that read receipt updates message status."""
         await pocketping.storage.save_session(sample_session)
         await pocketping.storage.save_message(sample_visitor_message)
@@ -179,9 +170,7 @@ class TestPocketPingReadReceipts:
         assert messages[0].status == MessageStatus.DELIVERED
 
     @pytest.mark.asyncio
-    async def test_handle_read_sets_delivered_at(
-        self, pocketping, sample_session, sample_visitor_message
-    ):
+    async def test_handle_read_sets_delivered_at(self, pocketping, sample_session, sample_visitor_message):
         """Test that delivered status sets delivered_at timestamp."""
         await pocketping.storage.save_session(sample_session)
         await pocketping.storage.save_message(sample_visitor_message)
@@ -198,9 +187,7 @@ class TestPocketPingReadReceipts:
         assert messages[0].delivered_at is not None
 
     @pytest.mark.asyncio
-    async def test_handle_read_sets_read_at(
-        self, pocketping, sample_session, sample_visitor_message
-    ):
+    async def test_handle_read_sets_read_at(self, pocketping, sample_session, sample_visitor_message):
         """Test that read status sets read_at timestamp."""
         await pocketping.storage.save_session(sample_session)
         await pocketping.storage.save_message(sample_visitor_message)
@@ -233,9 +220,7 @@ class TestPocketPingWebSocket:
         assert mock_websocket in connections
 
     @pytest.mark.asyncio
-    async def test_unregister_websocket(
-        self, pocketping, sample_session, mock_websocket
-    ):
+    async def test_unregister_websocket(self, pocketping, sample_session, mock_websocket):
         """Test unregistering a WebSocket connection."""
         await pocketping.storage.save_session(sample_session)
         pocketping.register_websocket(sample_session.id, mock_websocket)
@@ -246,9 +231,7 @@ class TestPocketPingWebSocket:
         assert mock_websocket not in connections
 
     @pytest.mark.asyncio
-    async def test_broadcast_to_session(
-        self, pocketping, sample_session, mock_websocket
-    ):
+    async def test_broadcast_to_session(self, pocketping, sample_session, mock_websocket):
         """Test broadcasting a message to session WebSockets."""
         await pocketping.storage.save_session(sample_session)
         pocketping.register_websocket(sample_session.id, mock_websocket)
@@ -299,9 +282,7 @@ class TestPocketPingOperator:
         assert pocketping.is_operator_online() is True
 
     @pytest.mark.asyncio
-    async def test_operator_online_broadcasts_presence(
-        self, pocketping, sample_session, mock_websocket
-    ):
+    async def test_operator_online_broadcasts_presence(self, pocketping, sample_session, mock_websocket):
         """Test that operator status change broadcasts presence."""
         await pocketping.storage.save_session(sample_session)
         pocketping.register_websocket(sample_session.id, mock_websocket)
@@ -344,9 +325,7 @@ class TestPocketPingBridges:
         mock_bridge.on_new_session.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_bridge_notified_on_visitor_message(
-        self, pocketping, sample_session, mock_bridge
-    ):
+    async def test_bridge_notified_on_visitor_message(self, pocketping, sample_session, mock_bridge):
         """Test that bridge is notified on visitor message."""
         await pocketping.storage.save_session(sample_session)
         pocketping.register_bridge(mock_bridge)

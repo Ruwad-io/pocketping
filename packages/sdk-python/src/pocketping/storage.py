@@ -36,9 +36,7 @@ class Storage(ABC):
         pass
 
     @abstractmethod
-    async def get_messages(
-        self, session_id: str, after: Optional[str] = None, limit: int = 50
-    ) -> list[Message]:
+    async def get_messages(self, session_id: str, after: Optional[str] = None, limit: int = 50) -> list[Message]:
         """Get messages for a session."""
         pass
 
@@ -84,9 +82,7 @@ class MemoryStorage(Storage):
         self._messages[message.session_id].append(message)
         self._message_by_id[message.id] = message
 
-    async def get_messages(
-        self, session_id: str, after: Optional[str] = None, limit: int = 50
-    ) -> list[Message]:
+    async def get_messages(self, session_id: str, after: Optional[str] = None, limit: int = 50) -> list[Message]:
         messages = self._messages.get(session_id, [])
 
         if after:
@@ -125,10 +121,7 @@ class MemoryStorage(Storage):
 
     async def get_session_by_visitor_id(self, visitor_id: str) -> Optional[Session]:
         """Get the most recent session for a visitor."""
-        visitor_sessions = [
-            s for s in self._sessions.values()
-            if s.visitor_id == visitor_id
-        ]
+        visitor_sessions = [s for s in self._sessions.values() if s.visitor_id == visitor_id]
         if not visitor_sessions:
             return None
         # Return most recent by last_activity

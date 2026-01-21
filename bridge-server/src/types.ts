@@ -176,6 +176,8 @@ export interface BridgeServerConfig {
   discord?: DiscordConfig;
   slack?: SlackConfig;
   backendWebhookUrl?: string; // URL to send operator messages to
+  eventsWebhookUrl?: string; // URL to forward custom events to (Zapier, Make, n8n, etc.)
+  eventsWebhookSecret?: string; // HMAC secret for X-PocketPing-Signature header
 }
 
 // Callback for sending events back to the backend

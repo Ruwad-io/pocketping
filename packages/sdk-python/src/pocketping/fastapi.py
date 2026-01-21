@@ -1,11 +1,9 @@
 """FastAPI integration for PocketPing."""
 
-import re
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 
 from pocketping.core import PocketPing
 from pocketping.models import (
@@ -100,9 +98,7 @@ def create_router(pp: PocketPing, prefix: str = "") -> APIRouter:
         """Initialize or resume a chat session."""
         # Enrich metadata with server-side info
         client_ip = _get_client_ip(request)
-        ua_info = _parse_user_agent(
-            body.metadata.user_agent if body.metadata else request.headers.get("user-agent")
-        )
+        ua_info = _parse_user_agent(body.metadata.user_agent if body.metadata else request.headers.get("user-agent"))
 
         if body.metadata:
             body.metadata.ip = client_ip

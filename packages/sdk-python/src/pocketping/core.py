@@ -1,27 +1,35 @@
 """Core PocketPing implementation."""
 
 import asyncio
+import hashlib
+import hmac
+import json
 import secrets
 import time
 from datetime import datetime
 from typing import Any, Callable, Optional
 
+import httpx
+
+from pocketping.ai.base import AIProvider
+from pocketping.bridges import Bridge
 from pocketping.models import (
     ConnectRequest,
     ConnectResponse,
     CustomEvent,
     Message,
+    MessageStatus,
     PresenceResponse,
+    ReadRequest,
+    ReadResponse,
+    Sender,
     SendMessageRequest,
     SendMessageResponse,
-    Sender,
     Session,
     TypingRequest,
     WebSocketEvent,
 )
 from pocketping.storage import MemoryStorage, Storage
-from pocketping.bridges import Bridge
-from pocketping.ai.base import AIProvider
 
 
 class PocketPing:
@@ -38,6 +46,10 @@ class PocketPing:
         on_new_session: Optional[Callable[[Session], Any]] = None,
         on_message: Optional[Callable[[Message, Session], Any]] = None,
         on_event: Optional[Callable[[CustomEvent, Session], Any]] = None,
+        # Webhook configuration
+        webhook_url: Optional[str] = None,
+        webhook_secret: Optional[str] = None,
+        webhook_timeout: float = 5.0,
     ):
         self.storage = storage or MemoryStorage()
         self.bridges = bridges or []
@@ -52,6 +64,12 @@ class PocketPing:
         self.on_new_session = on_new_session
         self.on_message = on_message
         self.on_event_callback = on_event
+
+        # Webhook config
+        self.webhook_url = webhook_url
+        self.webhook_secret = webhook_secret
+        self.webhook_timeout = webhook_timeout
+        self._http_client: Optional[httpx.AsyncClient] = None
 
         self._operator_online = False
         self._last_operator_activity: dict[str, float] = {}  # session_id -> timestamp
@@ -68,6 +86,10 @@ class PocketPing:
         for bridge in self.bridges:
             await bridge.init(self)
 
+        # Initialize HTTP client for webhook
+        if self.webhook_url:
+            self._http_client = httpx.AsyncClient(timeout=self.webhook_timeout)
+
         # Start presence check task
         self._presence_check_task = asyncio.create_task(self._presence_check_loop())
 
@@ -80,6 +102,10 @@ class PocketPing:
             except asyncio.CancelledError:
                 pass
 
+        # Close HTTP client
+        if self._http_client:
+            await self._http_client.aclose()
+
         for bridge in self.bridges:
             await bridge.destroy()
 
@@ -90,7 +116,6 @@ class PocketPing:
     async def handle_connect(self, request: ConnectRequest) -> ConnectResponse:
         """Handle a connection request from the widget."""
         session: Optional[Session] = None
-        is_new_session = False
 
         # Try to resume existing session by session_id
         if request.session_id:
@@ -102,7 +127,6 @@ class PocketPing:
 
         # Create new session if needed
         if not session:
-            is_new_session = True
             session = Session(
                 id=self._generate_id(),
                 visitor_id=request.visitor_id,
@@ -196,9 +220,7 @@ class PocketPing:
             timestamp=message.timestamp,
         )
 
-    async def handle_get_messages(
-        self, session_id: str, after: Optional[str] = None, limit: int = 50
-    ) -> dict:
+    async def handle_get_messages(self, session_id: str, after: Optional[str] = None, limit: int = 50) -> dict:
         """Get messages for a session."""
         limit = min(limit, 100)
         messages = await self.storage.get_messages(session_id, after, limit + 1)
@@ -231,10 +253,8 @@ class PocketPing:
             ai_active_after=self.ai_takeover_delay,
         )
 
-    async def handle_read(self, request: "ReadRequest") -> "ReadResponse":
+    async def handle_read(self, request: ReadRequest) -> ReadResponse:
         """Handle message read/delivered status update."""
-        from pocketping.models import ReadRequest, ReadResponse, MessageStatus
-        from datetime import datetime
 
         updated = 0
         now = datetime.utcnow()
@@ -278,9 +298,7 @@ class PocketPing:
             # Notify bridges about read status
             session = await self.storage.get_session(request.session_id)
             if session:
-                await self._notify_bridges_read(
-                    request.session_id, request.message_ids, request.status, session
-                )
+                await self._notify_bridges_read(request.session_id, request.message_ids, request.status, session)
 
         return ReadResponse(updated=updated)
 
@@ -288,11 +306,10 @@ class PocketPing:
         self,
         session_id: str,
         message_ids: list[str],
-        status: "MessageStatus",
-        session: "Session",
+        status: MessageStatus,
+        session: Session,
     ) -> None:
         """Notify all bridges about message read status."""
-        from pocketping.models import MessageStatus
 
         for bridge in self.bridges:
             if hasattr(bridge, "on_message_read"):
@@ -339,9 +356,7 @@ class PocketPing:
         # Notify all bridges about this operator message (for cross-bridge sync)
         session = await self.storage.get_session(session_id)
         if session:
-            await self._notify_bridges_operator_message(
-                message, session, source_bridge or "api", operator_name
-            )
+            await self._notify_bridges_operator_message(message, session, source_bridge or "api", operator_name)
 
         return message
 
@@ -437,9 +452,7 @@ class PocketPing:
 
         try:
             # Generate response
-            response_content = await self.ai_provider.generate_response(
-                messages, self.ai_system_prompt
-            )
+            response_content = await self.ai_provider.generate_response(messages, self.ai_system_prompt)
 
             # Send as AI message
             ai_message = Message(
@@ -547,9 +560,7 @@ class PocketPing:
         """Notify all bridges about an operator message (for cross-bridge sync)."""
         for bridge in self.bridges:
             try:
-                await bridge.on_operator_message(
-                    message, session, source_bridge, operator_name
-                )
+                await bridge.on_operator_message(message, session, source_bridge, operator_name)
             except Exception as e:
                 print(f"[PocketPing] Bridge {bridge.name} sync error: {e}")
 
@@ -663,6 +674,10 @@ class PocketPing:
         # Notify bridges
         await self._notify_bridges_event(event, session)
 
+        # Forward to webhook (fire and forget)
+        if self.webhook_url:
+            asyncio.create_task(self._forward_to_webhook(event, session))
+
     async def _notify_bridges_event(self, event: CustomEvent, session: Session) -> None:
         """Notify all bridges about a custom event."""
         for bridge in self.bridges:
@@ -671,6 +686,58 @@ class PocketPing:
                     await bridge.on_event(event, session)
                 except Exception as e:
                     print(f"[PocketPing] Bridge {bridge.name} error on custom event: {e}")
+
+    # ─────────────────────────────────────────────────────────────────
+    # Webhook Forwarding
+    # ─────────────────────────────────────────────────────────────────
+
+    async def _forward_to_webhook(self, event: CustomEvent, session: Session) -> None:
+        """Forward a custom event to the configured webhook URL.
+
+        Used for integrations with Zapier, Make, n8n, or custom backends.
+        """
+        if not self.webhook_url:
+            return
+
+        payload = {
+            "event": {
+                "name": event.name,
+                "data": event.data,
+                "timestamp": event.timestamp.isoformat() if event.timestamp else None,
+                "sessionId": event.session_id,
+            },
+            "session": {
+                "id": session.id,
+                "visitorId": session.visitor_id,
+                "metadata": session.metadata.model_dump(by_alias=True) if session.metadata else None,
+            },
+            "sentAt": datetime.utcnow().isoformat(),
+        }
+
+        body = json.dumps(payload)
+        headers = {"Content-Type": "application/json"}
+
+        # Add HMAC signature if secret is configured
+        if self.webhook_secret:
+            signature = hmac.new(self.webhook_secret.encode(), body.encode(), hashlib.sha256).hexdigest()
+            headers["X-PocketPing-Signature"] = f"sha256={signature}"
+
+        try:
+            # Create client on-demand if not initialized via start()
+            client = self._http_client or httpx.AsyncClient(timeout=self.webhook_timeout)
+            response = await client.post(self.webhook_url, content=body, headers=headers)
+
+            if not response.is_success:
+                print(f"[PocketPing] Webhook returned {response.status_code}: {response.text}")
+
+            # Close client if created on-demand
+            if not self._http_client:
+                await client.aclose()
+
+        except httpx.TimeoutException:
+            print(f"[PocketPing] Webhook timed out after {self.webhook_timeout}s")
+        except Exception as e:
+            print(f"[PocketPing] Webhook error: {e}")
 
     # ─────────────────────────────────────────────────────────────────
     # Utilities

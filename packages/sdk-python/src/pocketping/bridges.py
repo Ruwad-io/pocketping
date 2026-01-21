@@ -1,7 +1,7 @@
 """Bridge interface for notification channels."""
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from pocketping.models import Message, Session
 

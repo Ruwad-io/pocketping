@@ -25,7 +25,7 @@ const localStorageMock = (() => {
 
 Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock });
 
-// Mock WebSocket with explicit constants
+// Mock WebSocket class
 class MockWebSocket {
   static instances: MockWebSocket[] = [];
 
@@ -35,6 +35,12 @@ class MockWebSocket {
   onmessage: ((event: { data: string }) => void) | null = null;
   onclose: (() => void) | null = null;
   onerror: ((error: any) => void) | null = null;
+
+  // Instance constants for compatibility
+  CONNECTING = 0;
+  OPEN = 1;
+  CLOSING = 2;
+  CLOSED = 3;
 
   constructor(url: string) {
     this.url = url;
@@ -63,19 +69,26 @@ class MockWebSocket {
   }
 }
 
-// Add WebSocket constants to both the class and instances
-Object.defineProperty(MockWebSocket, 'CONNECTING', { value: 0, writable: false });
-Object.defineProperty(MockWebSocket, 'OPEN', { value: 1, writable: false });
-Object.defineProperty(MockWebSocket, 'CLOSING', { value: 2, writable: false });
-Object.defineProperty(MockWebSocket, 'CLOSED', { value: 3, writable: false });
+// Add static constants after class definition (avoids esbuild transformation issues)
+(MockWebSocket as any).CONNECTING = 0;
+(MockWebSocket as any).OPEN = 1;
+(MockWebSocket as any).CLOSING = 2;
+(MockWebSocket as any).CLOSED = 3;
 
-// Also add to prototype for instance access
-Object.defineProperty(MockWebSocket.prototype, 'CONNECTING', { value: 0, writable: false });
-Object.defineProperty(MockWebSocket.prototype, 'OPEN', { value: 1, writable: false });
-Object.defineProperty(MockWebSocket.prototype, 'CLOSING', { value: 2, writable: false });
-Object.defineProperty(MockWebSocket.prototype, 'CLOSED', { value: 3, writable: false });
-
-Object.defineProperty(globalThis, 'WebSocket', { value: MockWebSocket, writable: true, configurable: true });
+// Replace WebSocket globally - use Object.defineProperty to ensure it overrides jsdom's WebSocket
+Object.defineProperty(globalThis, 'WebSocket', {
+  value: MockWebSocket,
+  writable: true,
+  configurable: true
+});
+// Also set on window for browser-like access
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'WebSocket', {
+    value: MockWebSocket,
+    writable: true,
+    configurable: true
+  });
+}
 
 // Mock fetch
 globalThis.fetch = vi.fn();

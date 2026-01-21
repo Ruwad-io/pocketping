@@ -26,6 +26,7 @@ classifiers = [
 ]
 dependencies = [
     "pydantic>=2.0.0",
+    "httpx>=0.25.0",
 ]
 
 [project.optional-dependencies]
@@ -66,11 +67,16 @@ Repository = "https://github.com/Ruwad-io/pocketping"
 packages = ["src/pocketping"]
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py39"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

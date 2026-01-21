@@ -14,4 +14,5 @@ export type {
   PresenceResponse,
   CustomEvent,
   CustomEventHandler,
+  WebhookPayload,
 } from './types';

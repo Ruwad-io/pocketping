@@ -25,15 +25,11 @@ class AnthropicProvider(AIProvider):
             try:
                 from anthropic import AsyncAnthropic
             except ImportError:
-                raise ImportError(
-                    "anthropic package required. Install with: pip install pocketping[ai]"
-                )
+                raise ImportError("anthropic package required. Install with: pip install pocketping[ai]")
             self._client = AsyncAnthropic(api_key=self.api_key)
         return self._client
 
-    async def generate_response(
-        self, messages: list[Message], system_prompt: str | None = None
-    ) -> str:
+    async def generate_response(self, messages: list[Message], system_prompt: str | None = None) -> str:
         client = self._get_client()
 
         # Convert messages to Anthropic format

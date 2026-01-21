@@ -376,6 +376,47 @@ Custom events are automatically forwarded to all configured bridges (Telegram, D
 Session: abc123...
 ```
 
+### Webhook Forwarding
+
+Forward all events to your own webhook for integrations with Zapier, Make, n8n, or custom backends:
+
+```python
+pp = PocketPing(
+    # Forward events to your webhook
+    webhook_url='https://your-server.com/pocketping-events',
+    webhook_secret='your-hmac-secret',  # Optional: adds X-PocketPing-Signature header
+    webhook_timeout=5.0,  # Timeout in seconds (default: 5.0)
+)
+```
+
+**Webhook payload:**
+```json
+{
+  "event": {
+    "name": "clicked_pricing",
+    "data": { "plan": "pro" },
+    "timestamp": "2026-01-21T00:00:00.000Z",
+    "sessionId": "sess_abc123"
+  },
+  "session": {
+    "id": "sess_abc123",
+    "visitorId": "visitor_xyz",
+    "metadata": { "url": "...", "country": "France" }
+  },
+  "sentAt": "2026-01-21T00:00:00.000Z"
+}
+```
+
+**Verifying signatures:**
+```python
+import hmac
+import hashlib
+
+def verify_signature(body: bytes, signature: str, secret: str) -> bool:
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return signature == f"sha256={expected}"
+```
+
 ## License
 
 MIT

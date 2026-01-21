@@ -4,7 +4,7 @@ import asyncio
 from typing import TYPE_CHECKING, Optional
 
 from pocketping.bridges.base import Bridge
-from pocketping.models import Message, Session, Sender
+from pocketping.models import Message, Sender, Session
 
 if TYPE_CHECKING:
     from pocketping.core import PocketPing
@@ -106,9 +106,7 @@ class DiscordBridge(Bridge):
             import discord
             from discord.ext import commands
         except ImportError:
-            raise ImportError(
-                "discord.py required. Install with: pip install pocketping[discord]"
-            )
+            raise ImportError("discord.py required. Install with: pip install pocketping[discord]")
 
         # Set up intents
         intents = discord.Intents.default()
@@ -216,6 +214,7 @@ class DiscordBridge(Bridge):
             # Accept commands from main channel or threads in that channel
             try:
                 import discord
+
                 if isinstance(ctx.channel, discord.Thread):
                     return ctx.channel.parent_id == self.channel_id
                 return ctx.channel.id == self.channel_id
@@ -380,7 +379,10 @@ class DiscordBridge(Bridge):
             if meta.device_type or meta.browser or meta.os:
                 device_icon = "📱" if meta.device_type in ("mobile", "tablet") else "💻"
                 device_parts = [p for p in [meta.device_type, meta.browser, meta.os] if p]
-                description += f"{device_icon} **Device:** {' • '.join(p.title() if p == meta.device_type else p for p in device_parts)}\n"
+                device_str = " • ".join(
+                    p.title() if p == meta.device_type else p for p in device_parts
+                )
+                description += f"{device_icon} **Device:** {device_str}\n"
             if meta.language:
                 description += f"🌍 **Language:** {meta.language}\n"
             if meta.timezone:
@@ -439,7 +441,9 @@ class DiscordBridge(Bridge):
                 description += f"\n🌐 IP: `{meta.ip}`"
             if meta.device_type or meta.browser or meta.os:
                 device_parts = [p for p in [meta.device_type, meta.browser, meta.os] if p]
-                description += f"\n💻 Device: {' • '.join(p.title() if p == meta.device_type else p for p in device_parts)}"
+                description += (
+                    f"\n💻 Device: {' • '.join(p.title() if p == meta.device_type else p for p in device_parts)}"
+                )
 
         embed = discord.Embed(
             title="🆕 New Visitor",

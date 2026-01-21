@@ -4,7 +4,7 @@ import asyncio
 from typing import TYPE_CHECKING, Optional
 
 from pocketping.bridges.base import Bridge
-from pocketping.models import Message, Session, Sender
+from pocketping.models import Message, Sender, Session
 
 if TYPE_CHECKING:
     from pocketping.core import PocketPing
@@ -66,14 +66,12 @@ class SlackBridge(Bridge):
         self._pocketping = pocketping
 
         try:
-            from slack_sdk.web.async_client import AsyncWebClient
             from slack_sdk.socket_mode.aiohttp import SocketModeClient
             from slack_sdk.socket_mode.request import SocketModeRequest
             from slack_sdk.socket_mode.response import SocketModeResponse
+            from slack_sdk.web.async_client import AsyncWebClient
         except ImportError:
-            raise ImportError(
-                "slack-sdk required. Install with: pip install pocketping[slack]"
-            )
+            raise ImportError("slack-sdk required. Install with: pip install pocketping[slack]")
 
         self._client = AsyncWebClient(token=self.bot_token)
         self._socket_client = SocketModeClient(
@@ -226,40 +224,52 @@ class SlackBridge(Bridge):
         ]
 
         if self.show_url and session.metadata and session.metadata.url:
-            fields.append({
-                "type": "mrkdwn",
-                "text": f"*📍 Page*\n{session.metadata.url}",
-            })
+            fields.append(
+                {
+                    "type": "mrkdwn",
+                    "text": f"*📍 Page*\n{session.metadata.url}",
+                }
+            )
 
         if self.show_metadata and session.metadata:
             meta = session.metadata
             if meta.referrer:
-                fields.append({
-                    "type": "mrkdwn",
-                    "text": f"*↩️ From*\n{meta.referrer}",
-                })
+                fields.append(
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*↩️ From*\n{meta.referrer}",
+                    }
+                )
             if meta.ip:
-                fields.append({
-                    "type": "mrkdwn",
-                    "text": f"*🌐 IP*\n`{meta.ip}`",
-                })
+                fields.append(
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*🌐 IP*\n`{meta.ip}`",
+                    }
+                )
             if meta.device_type or meta.browser or meta.os:
                 device_parts = [p for p in [meta.device_type, meta.browser, meta.os] if p]
                 device_str = " • ".join(p.title() if p == meta.device_type else p for p in device_parts)
-                fields.append({
-                    "type": "mrkdwn",
-                    "text": f"*💻 Device*\n{device_str}",
-                })
+                fields.append(
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*💻 Device*\n{device_str}",
+                    }
+                )
             if meta.language:
-                fields.append({
-                    "type": "mrkdwn",
-                    "text": f"*🌍 Language*\n{meta.language}",
-                })
+                fields.append(
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*🌍 Language*\n{meta.language}",
+                    }
+                )
             if meta.timezone:
-                fields.append({
-                    "type": "mrkdwn",
-                    "text": f"*🕐 Timezone*\n{meta.timezone}",
-                })
+                fields.append(
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*🕐 Timezone*\n{meta.timezone}",
+                    }
+                )
 
         result = await self._client.chat_postMessage(
             channel=self.channel_id,

@@ -1,0 +1,5 @@
+# Run linting on TypeScript files
+pnpm lint:ts
+
+# Run linting on Python files
+pnpm lint:py

@@ -29,15 +29,11 @@ class OpenAIProvider(AIProvider):
             try:
                 from openai import AsyncOpenAI
             except ImportError:
-                raise ImportError(
-                    "openai package required. Install with: pip install pocketping[ai]"
-                )
+                raise ImportError("openai package required. Install with: pip install pocketping[ai]")
             self._client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
         return self._client
 
-    async def generate_response(
-        self, messages: list[Message], system_prompt: str | None = None
-    ) -> str:
+    async def generate_response(self, messages: list[Message], system_prompt: str | None = None) -> str:
         client = self._get_client()
 
         # Convert messages to OpenAI format

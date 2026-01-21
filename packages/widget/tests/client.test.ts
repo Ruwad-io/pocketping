@@ -1,6 +1,38 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PocketPingClient } from '../src/client';
-import { MockWebSocket, localStorageMock } from './setup';
+
+/**
+ * =====================================================================================
+ * IMPORTANT: DO NOT REMOVE THIS COMMENT OR CHANGE HOW MOCKS ARE ACCESSED!
+ * =====================================================================================
+ *
+ * Why we access mocks from globalThis instead of importing from './setup':
+ *
+ * There is a known issue with esbuild/vitest where importing a class from a setupFile
+ * creates DUPLICATE class instances. This happens because:
+ *
+ * 1. Vitest runs setup.ts as a setupFile (first execution)
+ * 2. When tests import from './setup', the module is processed AGAIN (second execution)
+ * 3. esbuild may use different import paths internally, creating two separate class definitions
+ * 4. Static properties set on one class copy don't exist on the other
+ *
+ * Symptoms of this bug:
+ * - MockWebSocket.OPEN is undefined even though it's set in setup.ts
+ * - globalThis.WebSocket === MockWebSocket is true, but WebSocket.OPEN is undefined
+ * - Tests fail with "Cannot trigger event: WebSocket not connected"
+ *
+ * The fix is to access mocks from globalThis, which is set in the setupFile and
+ * remains consistent across the test runtime.
+ *
+ * References:
+ * - https://vcfvct.wordpress.com/2021/12/05/inconsistent-static-field-in-typescript-with-bundler/
+ * - https://github.com/evanw/esbuild/issues/2195
+ * - https://github.com/vitest-dev/vitest/issues/3328
+ *
+ * =====================================================================================
+ */
+const MockWebSocket = globalThis.WebSocket as any;
+const localStorageMock = globalThis.localStorage as any;
 
 describe('PocketPingClient', () => {
   let client: PocketPingClient;
@@ -14,12 +46,7 @@ describe('PocketPingClient', () => {
     MockWebSocket.reset();
     localStorageMock.clear();
 
-    // Ensure WebSocket constants are properly set (jsdom may not have them)
-    (globalThis as any).WebSocket.CONNECTING = 0;
-    (globalThis as any).WebSocket.OPEN = 1;
-    (globalThis as any).WebSocket.CLOSING = 2;
-    (globalThis as any).WebSocket.CLOSED = 3;
-
+    // WebSocket constants are defined in setup.ts
     client = new PocketPingClient(mockConfig);
   });
 
@@ -394,7 +421,17 @@ describe('PocketPingClient', () => {
       });
 
       await client.connect();
-      await new Promise((r) => setTimeout(r, 10));
+
+      // Wait for WebSocket to be fully connected
+      await new Promise<void>((resolve) => {
+        const ws = MockWebSocket.instances[0];
+        if (ws?.readyState === 1) {
+          resolve();
+        } else {
+          // Wait for onopen to fire
+          setTimeout(resolve, 20);
+        }
+      });
     });
 
     describe('trigger()', () => {
@@ -402,6 +439,7 @@ describe('PocketPingClient', () => {
         client.trigger('clicked_pricing', { plan: 'pro' });
 
         const ws = MockWebSocket.instances[0];
+
         expect(ws.send).toHaveBeenCalled();
 
         const sentData = JSON.parse(ws.send.mock.calls[0][0]);

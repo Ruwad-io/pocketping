@@ -46,7 +46,50 @@ jobs:
         continue-on-error: true
 
   # ─────────────────────────────────────────────────────────────────
-  # Bridge Server Integration Tests
+  # SDK Node Unit Tests
+  # ─────────────────────────────────────────────────────────────────
+  test-sdk-node:
+    name: SDK Node Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: |
+          cd packages/sdk-node
+          pnpm install
+
+      - name: Build SDK
+        run: |
+          cd packages/sdk-node
+          pnpm run build
+
+      - name: Run tests
+        run: |
+          cd packages/sdk-node
+          pnpm test
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          flags: sdk-node
+          directory: packages/sdk-node/coverage
+        continue-on-error: true
+
+  # ─────────────────────────────────────────────────────────────────
+  # Bridge Server Unit Tests
   # ─────────────────────────────────────────────────────────────────
   test-bridge-server:
     name: Bridge Server Tests
@@ -64,13 +107,11 @@ jobs:
         run: |
           cd bridge-server
           bun install
-          cd ../tests
-          bun install || true
 
-      - name: Run integration tests
+      - name: Run tests
         run: |
           cd bridge-server
-          bun test ../tests/integration || echo "Integration tests completed"
+          bun test
 
   # ─────────────────────────────────────────────────────────────────
   # Python SDK Unit Tests
@@ -130,28 +171,16 @@ jobs:
         with:
           version: 8
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
+      - name: Install dependencies
+        run: pnpm install
 
-      - name: Type check widget
-        run: |
-          cd packages/widget
-          pnpm install
-          pnpm run build || true
+      - name: ESLint (TypeScript)
+        run: pnpm run lint:ts
 
-      - name: Type check bridge-server
-        run: |
-          cd bridge-server
-          bun install
-          bun run typecheck || true
-
-      - name: Python lint
+      - name: Python lint (Ruff)
         run: |
           pip install ruff
-          cd packages/sdk-python
-          ruff check src/ || true
+          pnpm run lint:py
 
   # ─────────────────────────────────────────────────────────────────
   # Build Check

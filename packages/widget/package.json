@@ -13,7 +13,8 @@
     "build": "tsup src/index.ts --format cjs,esm,iife --global-name PocketPing --dts",
     "dev": "tsup src/index.ts --format iife --global-name PocketPing --watch",
     "dev:test": "pnpm build && npx serve . -p 3333 --cors",
-    "test": "vitest"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "preact": "^10.19.0"

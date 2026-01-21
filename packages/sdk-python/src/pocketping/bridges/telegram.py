@@ -4,7 +4,7 @@ import asyncio
 from typing import TYPE_CHECKING, Optional
 
 from pocketping.bridges.base import Bridge
-from pocketping.models import Message, Session, Sender
+from pocketping.models import Message, Sender, Session
 
 if TYPE_CHECKING:
     from pocketping.core import PocketPing
@@ -106,7 +106,6 @@ class TelegramBridge(Bridge):
         self._pocketping = pocketping
 
         try:
-            from telegram import Update
             from telegram.ext import (
                 Application,
                 CommandHandler,
@@ -114,9 +113,7 @@ class TelegramBridge(Bridge):
                 filters,
             )
         except ImportError:
-            raise ImportError(
-                "python-telegram-bot required. Install with: pip install pocketping[telegram]"
-            )
+            raise ImportError("python-telegram-bot required. Install with: pip install pocketping[telegram]")
 
         # Create bot application
         self._app = Application.builder().token(self.bot_token).build()
@@ -132,15 +129,12 @@ class TelegramBridge(Bridge):
             # Forum mode: handle all text messages in topics
             self._app.add_handler(
                 MessageHandler(
-                    filters.TEXT & ~filters.COMMAND & filters.ChatType.SUPERGROUP,
-                    self._handle_forum_message
+                    filters.TEXT & ~filters.COMMAND & filters.ChatType.SUPERGROUP, self._handle_forum_message
                 )
             )
         else:
             # Legacy mode: only handle replies
-            self._app.add_handler(
-                MessageHandler(filters.TEXT & filters.REPLY, self._handle_reply)
-            )
+            self._app.add_handler(MessageHandler(filters.TEXT & filters.REPLY, self._handle_reply))
 
         # Start polling in background
         await self._app.initialize()
@@ -190,16 +184,12 @@ class TelegramBridge(Bridge):
     async def _cmd_online(self, update, context):
         if self._pocketping:
             self._pocketping.set_operator_online(True)
-        await update.message.reply_text(
-            "✅ You're now online. Users will see you as available."
-        )
+        await update.message.reply_text("✅ You're now online. Users will see you as available.")
 
     async def _cmd_offline(self, update, context):
         if self._pocketping:
             self._pocketping.set_operator_online(False)
-        await update.message.reply_text(
-            "🌙 You're now offline. AI will handle conversations if configured."
-        )
+        await update.message.reply_text("🌙 You're now offline. AI will handle conversations if configured.")
 
     async def _cmd_status(self, update, context):
         status = "online" if self._pocketping and self._pocketping.is_operator_online() else "offline"
@@ -207,9 +197,7 @@ class TelegramBridge(Bridge):
         if self.use_forum:
             active_topics = len(self._session_topic_map)
             await update.message.reply_text(
-                f"📊 *Status*: {status}\n"
-                f"💬 Active conversations: {active_topics}",
-                parse_mode="Markdown"
+                f"📊 *Status*: {status}\n💬 Active conversations: {active_topics}", parse_mode="Markdown"
             )
         else:
             await update.message.reply_text(f"📊 *Status*: {status}", parse_mode="Markdown")
@@ -231,10 +219,7 @@ class TelegramBridge(Bridge):
             return
 
         # Send closing message
-        await update.message.reply_text(
-            "✅ Conversation marked as closed.\n"
-            "The topic will remain for reference."
-        )
+        await update.message.reply_text("✅ Conversation marked as closed.\nThe topic will remain for reference.")
 
         # Optionally close the topic (edit name to show closed)
         try:
@@ -377,9 +362,12 @@ class TelegramBridge(Bridge):
                 if meta.ip:
                     text += f"🌐 IP: `{meta.ip}`\n"
                 if meta.device_type or meta.browser or meta.os:
-                    device_icon = "📱" if meta.device_type == "mobile" else "📱" if meta.device_type == "tablet" else "💻"
+                    device_icon = "📱" if meta.device_type in ("mobile", "tablet") else "💻"
                     device_parts = [p for p in [meta.device_type, meta.browser, meta.os] if p]
-                    text += f"{device_icon} Device: {' • '.join(p.title() if p == meta.device_type else p for p in device_parts)}\n"
+                    device_str = " • ".join(
+                        p.title() if p == meta.device_type else p for p in device_parts
+                    )
+                    text += f"{device_icon} Device: {device_str}\n"
                 if meta.language:
                     text += f"🌍 Language: {meta.language}\n"
                 if meta.timezone:
@@ -424,9 +412,7 @@ class TelegramBridge(Bridge):
         text += "\n\n_Reply to any message from this user to respond._"
 
         for chat_id in self.chat_ids:
-            msg = await self._app.bot.send_message(
-                chat_id=chat_id, text=text, parse_mode="Markdown"
-            )
+            msg = await self._app.bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
             self._session_message_map[session.id] = msg.message_id
             self._message_session_map[msg.message_id] = session.id
 
@@ -555,7 +541,7 @@ class TelegramBridge(Bridge):
         # Map status to reaction emoji
         status_reactions = {
             "delivered": "☑️",  # Double check
-            "read": "👁️",       # Eye = seen
+            "read": "👁️",  # Eye = seen
         }
 
         reaction = status_reactions.get(status)

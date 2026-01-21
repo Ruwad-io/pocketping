@@ -1,11 +1,12 @@
 """Tests for custom events functionality."""
 
-import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
-from pocketping import PocketPing, CustomEvent
-from pocketping.models import ConnectRequest, Session, SessionMetadata
+import pytest
+
+from pocketping import CustomEvent, PocketPing
+from pocketping.models import ConnectRequest, SessionMetadata
 
 
 @pytest.fixture
@@ -122,9 +123,7 @@ class TestHandleCustomEvent:
         return await pocketping.storage.get_session(response.session_id)
 
     @pytest.mark.asyncio
-    async def test_handle_custom_event_calls_specific_handler(
-        self, pocketping, session, sample_event
-    ):
+    async def test_handle_custom_event_calls_specific_handler(self, pocketping, session, sample_event):
         """Test that handle_custom_event calls the specific handler."""
         handler = MagicMock()
         pocketping.on_event("clicked_pricing", handler)
@@ -137,9 +136,7 @@ class TestHandleCustomEvent:
         assert call_args[0][1].id == session.id
 
     @pytest.mark.asyncio
-    async def test_handle_custom_event_calls_wildcard_handler(
-        self, pocketping, session, sample_event
-    ):
+    async def test_handle_custom_event_calls_wildcard_handler(self, pocketping, session, sample_event):
         """Test that handle_custom_event calls wildcard handlers."""
         specific_handler = MagicMock()
         wildcard_handler = MagicMock()
@@ -171,9 +168,7 @@ class TestHandleCustomEvent:
         on_event_callback.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_handle_custom_event_supports_async_handlers(
-        self, pocketping, session, sample_event
-    ):
+    async def test_handle_custom_event_supports_async_handlers(self, pocketping, session, sample_event):
         """Test that handle_custom_event supports async handlers."""
         async_handler = AsyncMock()
         pocketping.on_event("clicked_pricing", async_handler)
@@ -183,9 +178,7 @@ class TestHandleCustomEvent:
         async_handler.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_handle_custom_event_sets_session_id(
-        self, pocketping, session, sample_event
-    ):
+    async def test_handle_custom_event_sets_session_id(self, pocketping, session, sample_event):
         """Test that handle_custom_event sets the session_id on the event."""
         handler = MagicMock()
         pocketping.on_event("clicked_pricing", handler)
@@ -196,9 +189,7 @@ class TestHandleCustomEvent:
         assert event_received.session_id == session.id
 
     @pytest.mark.asyncio
-    async def test_handle_custom_event_unknown_session(
-        self, pocketping, sample_event, capsys
-    ):
+    async def test_handle_custom_event_unknown_session(self, pocketping, sample_event, capsys):
         """Test that handle_custom_event handles unknown sessions gracefully."""
         handler = MagicMock()
         pocketping.on_event("clicked_pricing", handler)
@@ -237,9 +228,7 @@ class TestEmitEvent:
         return response.session_id, mock_websocket
 
     @pytest.mark.asyncio
-    async def test_emit_event_broadcasts_to_websocket(
-        self, pocketping, session_with_ws
-    ):
+    async def test_emit_event_broadcasts_to_websocket(self, pocketping, session_with_ws):
         """Test that emit_event broadcasts to WebSocket."""
         session_id, mock_ws = session_with_ws
 
@@ -288,9 +277,7 @@ class TestBridgeEventNotification:
         return PocketPing(bridges=[mock_bridge])
 
     @pytest.mark.asyncio
-    async def test_bridge_notified_on_custom_event(
-        self, pocketping_with_bridge, mock_bridge, sample_event
-    ):
+    async def test_bridge_notified_on_custom_event(self, pocketping_with_bridge, mock_bridge, sample_event):
         """Test that bridge is notified when custom event is received."""
         # Create session
         request = ConnectRequest(
@@ -299,9 +286,7 @@ class TestBridgeEventNotification:
         )
         response = await pocketping_with_bridge.handle_connect(request)
 
-        await pocketping_with_bridge.handle_custom_event(
-            response.session_id, sample_event
-        )
+        await pocketping_with_bridge.handle_custom_event(response.session_id, sample_event)
 
         mock_bridge.on_event.assert_awaited_once()
         event_arg = mock_bridge.on_event.call_args[0][0]

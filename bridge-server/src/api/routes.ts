@@ -2,6 +2,7 @@
  * HTTP API routes for Bridge Server
  */
 
+import { createHmac } from "crypto";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -16,6 +17,8 @@ import type {
   CustomEventEvent,
   OutgoingEvent,
   BridgeServerConfig,
+  CustomEvent,
+  Session,
 } from "../types";
 
 interface AppContext {
@@ -74,7 +77,7 @@ export function createApp(context: AppContext): Hono {
           await handleMessageRead(context.bridges, event);
           break;
         case "custom_event":
-          await handleCustomEvent(context.bridges, event);
+          await handleCustomEvent(context.bridges, event, context.config);
           break;
         default:
           return c.json({ error: "Unknown event type" }, 400);
@@ -113,7 +116,7 @@ export function createApp(context: AppContext): Hono {
   app.post("/api/custom-events", async (c) => {
     const { event: customEvent, session } = await c.req.json();
     const eventPayload: CustomEventEvent = { type: "custom_event", event: customEvent, session };
-    await handleCustomEvent(context.bridges, eventPayload);
+    await handleCustomEvent(context.bridges, eventPayload, context.config);
     return c.json({ ok: true });
   });
 
@@ -177,6 +180,68 @@ async function handleMessageRead(bridges: Bridge[], event: MessageReadEvent): Pr
   );
 }
 
-async function handleCustomEvent(bridges: Bridge[], event: CustomEventEvent): Promise<void> {
+async function handleCustomEvent(
+  bridges: Bridge[],
+  event: CustomEventEvent,
+  config: BridgeServerConfig
+): Promise<void> {
+  // Forward to bridges
   await Promise.all(bridges.map((bridge) => bridge.onCustomEvent(event.event, event.session)));
+
+  // Forward to events webhook if configured (non-blocking)
+  if (config.eventsWebhookUrl) {
+    forwardToEventsWebhook(event.event, event.session, config).catch((err) => {
+      console.error("[API] Events webhook error:", err);
+    });
+  }
+}
+
+/**
+ * Forward custom event to the configured events webhook URL
+ * Used for integrations with Zapier, Make, n8n, or custom backends
+ */
+async function forwardToEventsWebhook(
+  event: CustomEvent,
+  session: Session,
+  config: BridgeServerConfig
+): Promise<void> {
+  if (!config.eventsWebhookUrl) return;
+
+  const payload = {
+    event: {
+      name: event.name,
+      data: event.data,
+      timestamp: event.timestamp,
+      sessionId: event.sessionId,
+    },
+    session: {
+      id: session.id,
+      visitorId: session.visitorId,
+      metadata: session.metadata,
+    },
+    sentAt: new Date().toISOString(),
+  };
+
+  const body = JSON.stringify(payload);
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  // Add HMAC signature if secret is configured
+  if (config.eventsWebhookSecret) {
+    const signature = createHmac("sha256", config.eventsWebhookSecret)
+      .update(body)
+      .digest("hex");
+    headers["X-PocketPing-Signature"] = `sha256=${signature}`;
+  }
+
+  const response = await fetch(config.eventsWebhookUrl, {
+    method: "POST",
+    headers,
+    body,
+  });
+
+  if (!response.ok) {
+    console.error(`[API] Events webhook returned ${response.status}: ${response.statusText}`);
+  }
 }

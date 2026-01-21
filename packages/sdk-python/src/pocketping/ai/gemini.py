@@ -25,16 +25,12 @@ class GeminiProvider(AIProvider):
             try:
                 import google.generativeai as genai
             except ImportError:
-                raise ImportError(
-                    "google-generativeai package required. Install with: pip install pocketping[ai]"
-                )
+                raise ImportError("google-generativeai package required. Install with: pip install pocketping[ai]")
             genai.configure(api_key=self.api_key)
             self._client = genai.GenerativeModel(self.model)
         return self._client
 
-    async def generate_response(
-        self, messages: list[Message], system_prompt: str | None = None
-    ) -> str:
+    async def generate_response(self, messages: list[Message], system_prompt: str | None = None) -> str:
         model = self._get_client()
 
         # Build conversation history for Gemini

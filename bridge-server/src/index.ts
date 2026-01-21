@@ -9,7 +9,7 @@ import { serve } from "bun";
 import { loadConfig } from "./config";
 import { createApp } from "./api/routes";
 import { Bridge, TelegramBridge, DiscordBridge, SlackBridge } from "./bridges";
-import type { OutgoingEvent, BridgeServerConfig } from "./types";
+import type { OutgoingEvent } from "./types";
 
 async function main() {
   console.log("🚀 PocketPing Bridge Server starting...\n");

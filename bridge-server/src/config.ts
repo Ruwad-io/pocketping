@@ -64,11 +64,15 @@ export function loadConfig(): BridgeServerConfig {
   const port = parseInt(process.env.PORT || "3001", 10);
   const apiKey = process.env.API_KEY;
   const backendWebhookUrl = process.env.BACKEND_WEBHOOK_URL;
+  const eventsWebhookUrl = process.env.EVENTS_WEBHOOK_URL;
+  const eventsWebhookSecret = process.env.EVENTS_WEBHOOK_SECRET;
 
   const config: BridgeServerConfig = {
     port,
     apiKey,
     backendWebhookUrl,
+    eventsWebhookUrl,
+    eventsWebhookSecret,
     telegram: getTelegramConfig(),
     discord: getDiscordConfig(),
     slack: getSlackConfig(),

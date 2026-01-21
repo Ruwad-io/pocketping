@@ -15,9 +15,7 @@ class AIProvider(ABC):
         pass
 
     @abstractmethod
-    async def generate_response(
-        self, messages: list[Message], system_prompt: str | None = None
-    ) -> str:
+    async def generate_response(self, messages: list[Message], system_prompt: str | None = None) -> str:
         """Generate a response to the conversation."""
         pass
 
