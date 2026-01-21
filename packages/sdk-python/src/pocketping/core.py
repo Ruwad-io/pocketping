@@ -29,7 +29,6 @@ from pocketping.models import (
     SendMessageResponse,
     Session,
     TypingRequest,
-    UserIdentity,
     VersionCheckResult,
     VersionStatus,
     VersionWarning,
