@@ -6,6 +6,7 @@ require "json"
 require "openssl"
 require "net/http"
 require "uri"
+require "set"
 
 module PocketPing
   # Main PocketPing client class for handling chat sessions

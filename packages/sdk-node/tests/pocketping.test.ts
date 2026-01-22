@@ -283,7 +283,7 @@ describe('PocketPing', () => {
     it('should notify bridge on visitor message', async () => {
       const mockBridge: Bridge = {
         name: 'test-bridge',
-        onMessage: vi.fn(),
+        onVisitorMessage: vi.fn(),
       };
 
       const ppWithBridge = new PocketPing({ bridges: [mockBridge] });
@@ -297,7 +297,7 @@ describe('PocketPing', () => {
         sender: 'visitor',
       });
 
-      expect(mockBridge.onMessage).toHaveBeenCalledWith(
+      expect(mockBridge.onVisitorMessage).toHaveBeenCalledWith(
         expect.objectContaining({ content: 'Hello from visitor!' }),
         expect.objectContaining({ visitorId: 'visitor-456' })
       );
@@ -306,7 +306,7 @@ describe('PocketPing', () => {
     it('should notify bridge on custom event', async () => {
       const mockBridge: Bridge = {
         name: 'test-bridge',
-        onEvent: vi.fn(),
+        onCustomEvent: vi.fn(),
       };
 
       const ppWithBridge = new PocketPing({ bridges: [mockBridge] });
@@ -324,7 +324,7 @@ describe('PocketPing', () => {
 
       await (ppWithBridge as any).handleCustomEvent(sid, customEvent);
 
-      expect(mockBridge.onEvent).toHaveBeenCalledWith(
+      expect(mockBridge.onCustomEvent).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'clicked_pricing' }),
         expect.objectContaining({ visitorId: 'visitor-456' })
       );
