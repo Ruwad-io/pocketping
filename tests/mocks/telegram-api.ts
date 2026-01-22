@@ -46,8 +46,13 @@ export class MockTelegramServer {
   }
 
   private setupRoutes() {
+    const registerBotPost = (path: string, handler: (c: any) => any) => {
+      this.app.post(`/bot:token/${path}`, handler);
+      this.app.post(`/:token/${path}`, handler);
+    };
+
     // Bot info
-    this.app.post('/bot:token/getMe', (c) => {
+    registerBotPost('getMe', (c) => {
       return c.json({
         ok: true,
         result: {
@@ -63,7 +68,7 @@ export class MockTelegramServer {
     });
 
     // Send message
-    this.app.post('/bot:token/sendMessage', async (c) => {
+    registerBotPost('sendMessage', async (c) => {
       const body = await c.req.json();
       const msg: MockMessage = {
         message_id: this.messageIdCounter++,
@@ -81,7 +86,7 @@ export class MockTelegramServer {
     });
 
     // Create forum topic
-    this.app.post('/bot:token/createForumTopic', async (c) => {
+    registerBotPost('createForumTopic', async (c) => {
       const body = await c.req.json();
       const topic = {
         name: body.name,
@@ -102,21 +107,21 @@ export class MockTelegramServer {
     });
 
     // Set commands
-    this.app.post('/bot:token/setMyCommands', async (c) => {
+    registerBotPost('setMyCommands', async (c) => {
       const body = await c.req.json();
       this.registeredCommands = body.commands || [];
       return c.json({ ok: true, result: true });
     });
 
     // Get updates (for polling mode)
-    this.app.post('/bot:token/getUpdates', async (c) => {
+    registerBotPost('getUpdates', async (c) => {
       const updates = [...this.pendingUpdates];
       this.pendingUpdates = [];
       return c.json({ ok: true, result: updates });
     });
 
     // Delete webhook (required for polling)
-    this.app.post('/bot:token/deleteWebhook', (c) => {
+    registerBotPost('deleteWebhook', (c) => {
       return c.json({ ok: true, result: true });
     });
 
@@ -140,12 +145,12 @@ export class MockTelegramServer {
     });
 
     // Set message reaction
-    this.app.post('/bot:token/setMessageReaction', async (c) => {
+    registerBotPost('setMessageReaction', async (c) => {
       return c.json({ ok: true, result: true });
     });
 
     // Pin message
-    this.app.post('/bot:token/pinChatMessage', async (c) => {
+    registerBotPost('pinChatMessage', async (c) => {
       return c.json({ ok: true, result: true });
     });
 
@@ -155,11 +160,25 @@ export class MockTelegramServer {
 
   // Start the mock server
   async start(port = 9001): Promise<string> {
-    this.server = serve({
-      fetch: this.app.fetch,
-      port,
-    });
-    return `http://localhost:${port}`;
+    let currentPort = port;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      try {
+        this.server = serve({
+          fetch: this.app.fetch,
+          port: currentPort,
+        });
+        // Bun exposes the actual bound port on the server instance.
+        const boundPort = (this.server as any).port ?? currentPort;
+        return `http://localhost:${boundPort}`;
+      } catch (error) {
+        if ((error as { code?: string }).code === "EADDRINUSE") {
+          currentPort += 1;
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error("Failed to find an available port for MockTelegramServer");
   }
 
   // Stop the server

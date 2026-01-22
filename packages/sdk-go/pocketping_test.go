@@ -2,7 +2,13 @@ package pocketping
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -982,6 +988,139 @@ func TestCallbackOnEvent(t *testing.T) {
 
 	if !called {
 		t.Error("expected OnEvent callback to be called")
+	}
+}
+
+func TestForwardToWebhook(t *testing.T) {
+	requestCh := make(chan *http.Request, 1)
+	bodyCh := make(chan []byte, 1)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		bodyCh <- body
+		requestCh <- r
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	pp := New(Config{
+		WebhookURL:    server.URL,
+		WebhookSecret: "test-secret",
+	})
+
+	session := &Session{
+		ID:        "sess-1",
+		VisitorID: "visitor-1",
+		Metadata: &SessionMetadata{
+			URL: "https://example.com",
+		},
+	}
+
+	event := CustomEvent{
+		Name:      "test_event",
+		Data:      map[string]interface{}{"foo": "bar"},
+		Timestamp: time.Now(),
+		SessionID: session.ID,
+	}
+
+	pp.forwardToWebhook(context.Background(), event, session)
+
+	var req *http.Request
+	select {
+	case req = <-requestCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for webhook request")
+	}
+
+	var body []byte
+	select {
+	case body = <-bodyCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for webhook body")
+	}
+
+	if req.Method != http.MethodPost {
+		t.Fatalf("expected POST, got %s", req.Method)
+	}
+
+	var payload WebhookPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("failed to decode webhook payload: %v", err)
+	}
+
+	if payload.Event.Name != "test_event" {
+		t.Fatalf("expected event name test_event, got %s", payload.Event.Name)
+	}
+	if payload.Session.ID != "sess-1" {
+		t.Fatalf("expected session id sess-1, got %s", payload.Session.ID)
+	}
+
+	signature := req.Header.Get("X-PocketPing-Signature")
+	if signature == "" {
+		t.Fatal("expected signature header to be set")
+	}
+
+	h := hmac.New(sha256.New, []byte("test-secret"))
+	h.Write(body)
+	expected := "sha256=" + hex.EncodeToString(h.Sum(nil))
+	if signature != expected {
+		t.Fatalf("expected signature %s, got %s", expected, signature)
+	}
+}
+
+func TestForwardIdentityToWebhook(t *testing.T) {
+	requestCh := make(chan *http.Request, 1)
+	bodyCh := make(chan []byte, 1)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		bodyCh <- body
+		requestCh <- r
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	pp := New(Config{
+		WebhookURL: server.URL,
+	})
+
+	session := &Session{
+		ID:        "sess-2",
+		VisitorID: "visitor-2",
+		Identity: &UserIdentity{
+			ID:    "user-1",
+			Email: "test@example.com",
+		},
+	}
+
+	pp.forwardIdentityToWebhook(context.Background(), session)
+
+	select {
+	case <-requestCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for webhook request")
+	}
+
+	var body []byte
+	select {
+	case body = <-bodyCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for webhook body")
+	}
+
+	var payload WebhookPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("failed to decode webhook payload: %v", err)
+	}
+
+	if payload.Event.Name != "identify" {
+		t.Fatalf("expected identify event, got %s", payload.Event.Name)
+	}
+	if payload.Event.SessionID != "sess-2" {
+		t.Fatalf("expected sessionId sess-2, got %s", payload.Event.SessionID)
+	}
+	if payload.Session.Identity == nil || payload.Session.Identity.ID != "user-1" {
+		t.Fatal("expected identity to be included in webhook payload")
 	}
 }
 

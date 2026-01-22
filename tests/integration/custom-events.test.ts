@@ -13,7 +13,7 @@ describe('Custom Events Integration', () => {
 
   beforeAll(async () => {
     mockServer = new MockTelegramServer();
-    serverUrl = await mockServer.start(9010);
+    serverUrl = await mockServer.start(0);
     console.log(`Mock Telegram server started at ${serverUrl}`);
   });
 
@@ -220,7 +220,7 @@ describe('Custom Events - Full Integration', () => {
 
   beforeAll(async () => {
     mockServer = new MockTelegramServer();
-    serverUrl = await mockServer.start(9011);
+    serverUrl = await mockServer.start(0);
   });
 
   afterAll(() => {

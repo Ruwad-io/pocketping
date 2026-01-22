@@ -14,6 +14,9 @@ importers:
       '@changesets/cli':
         specifier: ^2.29.8
         version: 2.29.8(@types/node@20.19.30)
+      '@pocketping/sdk-node':
+        specifier: workspace:*
+        version: link:packages/sdk-node
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.30
@@ -26,6 +29,9 @@ importers:
       eslint:
         specifier: ^8.56.0
         version: 8.57.1
+      hono:
+        specifier: ^4.11.4
+        version: 4.11.4
       husky:
         specifier: ^9.1.7
         version: 9.1.7

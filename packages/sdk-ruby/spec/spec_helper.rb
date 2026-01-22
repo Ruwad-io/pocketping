@@ -2,6 +2,7 @@
 
 require "bundler/setup"
 require "pocketping"
+require "webmock/rspec"
 
 RSpec.configure do |config|
   config.expect_with :rspec do |expectations|
@@ -23,6 +24,8 @@ RSpec.configure do |config|
   config.order = :random
   Kernel.srand config.seed
 end
+
+WebMock.disable_net_connect!(allow_localhost: true)
 
 # Helper to create a sample session
 def create_sample_session(id: nil, visitor_id: nil)
