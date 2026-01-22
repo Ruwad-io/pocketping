@@ -11,6 +11,8 @@ import type {
   CustomEventHandler,
   VersionWarning,
   UserIdentity,
+  TriggerOptions,
+  TrackedElement,
 } from './types';
 import { VERSION } from './version';
 
@@ -26,6 +28,8 @@ export class PocketPingClient {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  private trackedElementCleanups: Array<() => void> = [];
+  private currentTrackedElements: TrackedElement[] = [];
 
   constructor(config: ResolvedPocketPingConfig) {
     this.config = config;
@@ -73,6 +77,11 @@ export class PocketPingClient {
     // Connect WebSocket for real-time updates
     this.connectWebSocket();
 
+    // Setup tracked elements from backend config (SaaS)
+    if (response.trackedElements?.length) {
+      this.setupTrackedElements(response.trackedElements);
+    }
+
     // Notify
     this.emit('connect', this.session);
     this.config.onConnect?.(response.sessionId);
@@ -87,6 +96,8 @@ export class PocketPingClient {
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
     }
+    // Cleanup tracked elements
+    this.cleanupTrackedElements();
   }
 
   async sendMessage(content: string): Promise<Message> {
@@ -365,10 +376,15 @@ export class PocketPingClient {
    * Trigger a custom event to the backend
    * @param eventName - The name of the event (e.g., 'clicked_pricing', 'viewed_demo')
    * @param data - Optional payload to send with the event
+   * @param options - Optional trigger options (widgetMessage to open chat)
    * @example
-   * PocketPing.trigger('clicked_cta', { button: 'signup', page: '/pricing' })
+   * // Silent event (just notify bridges)
+   * PocketPing.trigger('clicked_cta', { button: 'signup' })
+   *
+   * // Open widget with message
+   * PocketPing.trigger('clicked_pricing', { plan: 'pro' }, { widgetMessage: 'Need help choosing a plan?' })
    */
-  trigger(eventName: string, data?: Record<string, unknown>): void {
+  trigger(eventName: string, data?: Record<string, unknown>, options?: TriggerOptions): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       console.warn('[PocketPing] Cannot trigger event: WebSocket not connected');
       return;
@@ -387,6 +403,13 @@ export class PocketPingClient {
 
     // Also emit locally for any local listeners
     this.emit(`event:${eventName}`, event);
+
+    // If widgetMessage provided, open widget and show the message
+    if (options?.widgetMessage) {
+      this.setOpen(true);
+      // Emit a special event that the UI can listen to for showing the message
+      this.emit('triggerMessage', { message: options.widgetMessage, eventName });
+    }
   }
 
   /**
@@ -428,6 +451,76 @@ export class PocketPingClient {
     // Also emit to generic 'event' listeners
     this.emit('event', event);
     this.emit(`event:${event.name}`, event);
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Tracked Elements (SaaS auto-tracking)
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Setup tracked elements from config (used by SaaS dashboard)
+   * @param elements - Array of tracked element configurations
+   */
+  setupTrackedElements(elements: TrackedElement[]): void {
+    // Cleanup existing tracked elements first
+    this.cleanupTrackedElements();
+
+    this.currentTrackedElements = elements;
+
+    for (const config of elements) {
+      const eventType = config.event || 'click';
+
+      const handler = (domEvent: Event) => {
+        // Merge static data with dynamic element data
+        const elementData: Record<string, unknown> = {
+          ...config.data,
+          selector: config.selector,
+          elementText: (domEvent.target as HTMLElement)?.textContent?.trim().slice(0, 100),
+          url: window.location.href,
+        };
+
+        this.trigger(config.name, elementData, {
+          widgetMessage: config.widgetMessage,
+        });
+      };
+
+      // Use event delegation for better performance and to handle dynamic elements
+      const delegatedHandler = (domEvent: Event) => {
+        const target = domEvent.target as Element;
+        if (target?.closest(config.selector)) {
+          handler(domEvent);
+        }
+      };
+
+      document.addEventListener(eventType, delegatedHandler, true);
+
+      // Store cleanup function
+      this.trackedElementCleanups.push(() => {
+        document.removeEventListener(eventType, delegatedHandler, true);
+      });
+    }
+
+    if (elements.length > 0) {
+      console.info(`[PocketPing] Tracking ${elements.length} element(s)`);
+    }
+  }
+
+  /**
+   * Cleanup all tracked element listeners
+   */
+  private cleanupTrackedElements(): void {
+    for (const cleanup of this.trackedElementCleanups) {
+      cleanup();
+    }
+    this.trackedElementCleanups = [];
+    this.currentTrackedElements = [];
+  }
+
+  /**
+   * Get current tracked elements configuration
+   */
+  getTrackedElements(): TrackedElement[] {
+    return [...this.currentTrackedElements];
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -570,6 +663,15 @@ export class PocketPingClient {
         // Version mismatch warning from backend
         const versionWarning = event.data as VersionWarning;
         this.handleVersionWarning(versionWarning);
+        break;
+
+      case 'config_update':
+        // Hot-reload tracked elements from SaaS dashboard
+        const configData = event.data as { trackedElements?: TrackedElement[] };
+        if (configData.trackedElements) {
+          this.setupTrackedElements(configData.trackedElements);
+          this.emit('configUpdate', configData);
+        }
         break;
     }
   }

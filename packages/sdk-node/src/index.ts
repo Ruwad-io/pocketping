@@ -15,4 +15,6 @@ export type {
   CustomEvent,
   CustomEventHandler,
   WebhookPayload,
+  TrackedElement,
+  TriggerOptions,
 } from './types';

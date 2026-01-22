@@ -521,9 +521,12 @@ Location: Paris, France
 
 | Package | Description | Status |
 |---------|-------------|--------|
-| [@pocketping/widget](packages/widget) | Chat widget (add to your site) | Ready |
-| [pocketping](packages/sdk-python) | Python SDK (FastAPI) | Ready |
+| [@pocketping/widget](packages/widget) | Chat widget (~15KB) | Ready |
+| [pocketping](packages/sdk-python) | Python SDK (FastAPI, Django, Flask) | Ready |
 | [@pocketping/sdk-node](packages/sdk-node) | Node.js SDK (Express) | Ready |
+| [pocketping-go](packages/sdk-go) | Go SDK (net/http, Gin, Echo) | Ready |
+| [pocketping-php](packages/sdk-php) | PHP SDK (Laravel, Symfony) | Ready |
+| [pocketping-ruby](packages/sdk-ruby) | Ruby SDK (Rails, Sinatra) | Ready |
 | [bridge-server](bridge-server) | Standalone bridge server (Bun) | Ready |
 
 ---
@@ -636,11 +639,26 @@ See [Python SDK README](packages/sdk-python/README.md) for all options.
 
 ## Development
 
+### Quick Start (Docker)
+
+The easiest way to get started is with Docker:
+
 ```bash
 # Clone the repo
 git clone https://github.com/Ruwad-io/pocketping
 cd pocketping
 
+# Start dev environment (demo + bridge + watchers)
+make dev
+
+# Services:
+# - Demo:   http://localhost:3000
+# - Bridge: http://localhost:3001
+```
+
+### Manual Setup
+
+```bash
 # Install dependencies
 pnpm install
 
@@ -651,18 +669,34 @@ pnpm test
 pnpm test:e2e
 ```
 
+### Make Commands
+
+```bash
+make dev          # Start dev environment
+make dev-docs     # Start with docs site (localhost:3002)
+make test         # Run all SDK tests
+make test-node    # Run Node.js SDK tests
+make test-python  # Run Python SDK tests
+make test-go      # Run Go SDK tests
+make test-php     # Run PHP SDK tests
+make test-ruby    # Run Ruby SDK tests
+make clean        # Remove Docker containers
+```
+
 ### Project Structure
 
 ```
 pocketping/
 ├── packages/
-│   ├── widget/          # Chat widget (Preact)
-│   └── sdk-python/      # Python SDK
+│   ├── widget/          # Chat widget (Preact, ~15KB)
+│   ├── sdk-node/        # Node.js SDK
+│   ├── sdk-python/      # Python SDK
+│   ├── sdk-go/          # Go SDK
+│   ├── sdk-php/         # PHP SDK
+│   └── sdk-ruby/        # Ruby SDK
 ├── bridge-server/       # Standalone bridge server (Bun)
-├── tests/
-│   ├── mocks/           # Mock servers for testing
-│   ├── integration/     # Bridge integration tests
-│   └── e2e/             # End-to-end tests
+├── docs-site/           # Documentation (Docusaurus)
+├── docker/              # Docker configs for dev
 └── assets/              # Logo and branding
 ```
 

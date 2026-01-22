@@ -1,0 +1,214 @@
+# PocketPing Development Environment
+#
+# Start:  docker compose -f docker-compose.dev.yml up
+# Stop:   docker compose -f docker-compose.dev.yml down
+# Logs:   docker compose -f docker-compose.dev.yml logs -f [service]
+
+services:
+  # ─────────────────────────────────────────────────────────────────
+  # Demo Backend (Express + SDK Node)
+  # Serves the widget demo page and handles chat API
+  # ─────────────────────────────────────────────────────────────────
+  demo:
+    build:
+      context: .
+      dockerfile: docker/demo.Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=development
+      - BRIDGE_SERVER_URL=http://bridge:3001
+      # Optional: Add Telegram credentials
+      # - TELEGRAM_BOT_TOKEN=
+      # - TELEGRAM_CHAT_ID=
+    volumes:
+      # Hot reload: SDK dist (rebuilt by sdk-watcher service)
+      - ./packages/sdk-node/dist:/app/sdk-node/dist:ro
+      # Hot reload: Demo server
+      - ./docker/demo-server.ts:/app/src/server.ts:ro
+      # Hot reload: Widget dist (rebuilt by widget-watcher service)
+      - ./packages/widget/dist:/app/widget/dist:ro
+    depends_on:
+      - bridge
+      - sdk-watcher
+      - widget-watcher
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ─────────────────────────────────────────────────────────────────
+  # Bridge Server (Telegram, Discord, Slack)
+  # Handles notifications to messaging platforms
+  # ─────────────────────────────────────────────────────────────────
+  bridge:
+    build:
+      context: ./bridge-server
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - MOCK_BRIDGES=true  # Enable mock mode for development
+      # Real credentials (optional):
+      # - TELEGRAM_BOT_TOKEN=
+      # - TELEGRAM_CHAT_ID=
+      # - DISCORD_BOT_TOKEN=
+      # - DISCORD_CHANNEL_ID=
+      # - SLACK_BOT_TOKEN=
+      # - SLACK_CHANNEL_ID=
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ─────────────────────────────────────────────────────────────────
+  # SDK Node Watcher (rebuilds on source changes)
+  # ─────────────────────────────────────────────────────────────────
+  sdk-watcher:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./packages/sdk-node:/app
+      - sdk_node_modules:/app/node_modules
+    command: sh -c "npm install && npm run dev"
+    environment:
+      - NODE_ENV=development
+
+  # ─────────────────────────────────────────────────────────────────
+  # SDK Python Watcher (runs tests on source changes)
+  # ─────────────────────────────────────────────────────────────────
+  sdk-python-watcher:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ./packages/sdk-python:/app
+    command: sh -c "apt-get update && apt-get install -y inotify-tools && pip install -e '.[dev]' && while true; do pytest -v --tb=short && echo '=== Waiting for changes ===' && inotifywait -e modify -r src tests; done"
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+    profiles:
+      - sdk-all  # Start with --profile sdk-all
+
+  # ─────────────────────────────────────────────────────────────────
+  # SDK Go Watcher (rebuilds and tests on source changes)
+  # ─────────────────────────────────────────────────────────────────
+  sdk-go-watcher:
+    image: golang:1.22-alpine
+    working_dir: /app
+    volumes:
+      - ./packages/sdk-go:/app
+      - sdk_go_cache:/go/pkg/mod
+    command: sh -c "apk add --no-cache inotify-tools && go mod download && while true; do go build ./... && go test -v ./... && echo '=== Waiting for changes ===' && inotifywait -e modify -r .; done"
+    environment:
+      - CGO_ENABLED=0
+    profiles:
+      - sdk-all  # Start with --profile sdk-all
+
+  # ─────────────────────────────────────────────────────────────────
+  # SDK PHP Watcher (runs tests on source changes)
+  # ─────────────────────────────────────────────────────────────────
+  sdk-php-watcher:
+    image: php:8.3-cli
+    working_dir: /app
+    volumes:
+      - ./packages/sdk-php:/app
+      - sdk_php_vendor:/app/vendor
+    command: sh -c "apt-get update && apt-get install -y unzip git inotify-tools && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer && composer install && while true; do vendor/bin/phpunit --no-coverage && inotifywait -e modify -r src tests 2>/dev/null || sleep 2; done"
+    environment:
+      - COMPOSER_ALLOW_SUPERUSER=1
+    profiles:
+      - sdk-all  # Start with --profile sdk-all
+
+  # ─────────────────────────────────────────────────────────────────
+  # SDK Ruby Watcher (runs tests on source changes)
+  # ─────────────────────────────────────────────────────────────────
+  sdk-ruby-watcher:
+    image: ruby:3.3-slim
+    working_dir: /app
+    volumes:
+      - ./packages/sdk-ruby:/app
+      - sdk_ruby_bundle:/usr/local/bundle
+    command: sh -c "apt-get update && apt-get install -y build-essential inotify-tools && bundle install && while true; do bundle exec rspec && inotifywait -e modify -r lib spec 2>/dev/null || sleep 2; done"
+    environment:
+      - BUNDLE_SILENCE_ROOT_WARNING=1
+    profiles:
+      - sdk-all  # Start with --profile sdk-all
+
+  # ─────────────────────────────────────────────────────────────────
+  # Widget Watcher (rebuilds widget on source changes)
+  # ─────────────────────────────────────────────────────────────────
+  widget-watcher:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./packages/widget:/app
+      - widget_node_modules:/app/node_modules
+    command: sh -c "npm install && npm run dev"
+    environment:
+      - NODE_ENV=development
+
+  # ─────────────────────────────────────────────────────────────────
+  # Docs Site (Docusaurus)
+  # ─────────────────────────────────────────────────────────────────
+  docs:
+    image: node:20-alpine
+    working_dir: /app
+    ports:
+      - "3002:3000"
+    volumes:
+      - ./docs-site:/app
+      - docs_node_modules:/app/node_modules
+    command: sh -c "npm install && npm run start -- --host 0.0.0.0"
+    environment:
+      - NODE_ENV=development
+    profiles:
+      - docs  # Only start with: docker compose --profile docs up
+
+  # ─────────────────────────────────────────────────────────────────
+  # Redis (optional, for production-like storage)
+  # ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    profiles:
+      - redis  # Only start with: docker compose --profile redis up
+
+  # ─────────────────────────────────────────────────────────────────
+  # E2E Tests (Playwright)
+  # ─────────────────────────────────────────────────────────────────
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.40.0-jammy
+    working_dir: /app
+    volumes:
+      - .:/app
+      - e2e_node_modules:/app/node_modules
+    command: sh -c "npm install && npx playwright test"
+    environment:
+      - CI=true
+    depends_on:
+      demo:
+        condition: service_healthy
+      bridge:
+        condition: service_healthy
+    profiles:
+      - e2e  # Only start with: docker compose --profile e2e up
+
+volumes:
+  sdk_node_modules:
+  sdk_go_cache:
+  sdk_php_vendor:
+  sdk_ruby_bundle:
+  widget_node_modules:
+  docs_node_modules:
+  e2e_node_modules:
+  redis_data:
+
+networks:
+  default:
+    name: pocketping-dev

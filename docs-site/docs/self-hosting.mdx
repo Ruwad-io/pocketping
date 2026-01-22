@@ -75,6 +75,66 @@ pp.mount_fastapi(app, prefix="/pocketping")
 ```
 
 </TabItem>
+<TabItem value="go" label="Go">
+
+```bash
+go get github.com/pocketping/pocketping-go
+```
+
+```go title="main.go"
+package main
+
+import (
+    "net/http"
+    pocketping "github.com/pocketping/pocketping-go"
+)
+
+func main() {
+    pp := pocketping.New(pocketping.Config{
+        BridgeURL: "http://localhost:3001",
+    })
+
+    http.Handle("/pocketping/", pp.Handler("/pocketping"))
+    http.ListenAndServe(":8000", nil)
+}
+```
+
+</TabItem>
+<TabItem value="php" label="PHP">
+
+```bash
+composer require pocketping/pocketping-php
+```
+
+```php title="routes/web.php"
+<?php
+use PocketPing\PocketPing;
+
+$pp = new PocketPing([
+    'bridgeUrl' => 'http://localhost:3001',
+]);
+
+Route::any('/pocketping/{path?}', [$pp, 'handleRequest']);
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```bash
+gem install pocketping
+```
+
+```ruby title="config/routes.rb"
+require 'pocketping'
+
+pp = PocketPing.new(bridge_url: 'http://localhost:3001')
+
+Rails.application.routes.draw do
+  mount pp.rack_app => '/pocketping'
+end
+```
+
+</TabItem>
 </Tabs>
 
 ## Option 2: Full Setup with Bridge Server
@@ -120,6 +180,33 @@ const pp = new PocketPing({
 ```python
 pp = PocketPing(
     bridge_url="http://bridge:3001"  # Docker network or public URL
+)
+```
+
+</TabItem>
+<TabItem value="go" label="Go">
+
+```go
+pp := pocketping.New(pocketping.Config{
+    BridgeURL: "http://bridge:3001",  // Docker network or public URL
+})
+```
+
+</TabItem>
+<TabItem value="php" label="PHP">
+
+```php
+$pp = new PocketPing([
+    'bridgeUrl' => 'http://bridge:3001',  // Docker network or public URL
+]);
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```ruby
+pp = PocketPing.new(
+  bridge_url: 'http://bridge:3001'  # Docker network or public URL
 )
 ```
 
@@ -185,6 +272,50 @@ class MyStorage(Storage):
     async def save_message(self, message: Message) -> None: ...
     async def get_messages(self, session_id: str, after: str | None = None, limit: int = 50) -> list[Message]: ...
     async def get_message(self, message_id: str) -> Message | None: ...
+```
+
+</TabItem>
+<TabItem value="go" label="Go">
+
+```go
+type Storage interface {
+    CreateSession(ctx context.Context, session *Session) error
+    GetSession(ctx context.Context, id string) (*Session, error)
+    UpdateSession(ctx context.Context, session *Session) error
+    DeleteSession(ctx context.Context, id string) error
+    SaveMessage(ctx context.Context, sessionID string, msg *Message) error
+    GetMessages(ctx context.Context, sessionID string, after string, limit int) ([]*Message, error)
+    GetMessage(ctx context.Context, id string) (*Message, error)
+}
+```
+
+</TabItem>
+<TabItem value="php" label="PHP">
+
+```php
+interface StorageInterface {
+    public function createSession(array $session): void;
+    public function getSession(string $id): ?array;
+    public function updateSession(array $session): void;
+    public function deleteSession(string $id): void;
+    public function saveMessage(string $sessionId, array $message): void;
+    public function getMessages(string $sessionId, ?string $after = null, int $limit = 50): array;
+    public function getMessage(string $id): ?array;
+}
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```ruby
+# Implement these methods in your storage class
+def create_session(session); end
+def get_session(id); end
+def update_session(session); end
+def delete_session(id); end
+def save_message(session_id, message); end
+def get_messages(session_id, after: nil, limit: 50); end
+def get_message(id); end
 ```
 
 </TabItem>
@@ -284,6 +415,102 @@ await storage.connect()
 pp = PocketPing(
     storage=storage,
     bridge=TelegramBridge(...)
+)
+```
+
+</TabItem>
+<TabItem value="go" label="Go">
+
+```go
+import (
+    "database/sql"
+    _ "github.com/lib/pq"
+)
+
+type PostgresStorage struct {
+    db *sql.DB
+}
+
+func NewPostgresStorage(connStr string) (*PostgresStorage, error) {
+    db, err := sql.Open("postgres", connStr)
+    if err != nil {
+        return nil, err
+    }
+    return &PostgresStorage{db: db}, nil
+}
+
+func (s *PostgresStorage) CreateSession(ctx context.Context, session *pocketping.Session) error {
+    _, err := s.db.ExecContext(ctx,
+        `INSERT INTO sessions (id, visitor_id, created_at) VALUES ($1, $2, $3)`,
+        session.ID, session.VisitorID, session.CreatedAt)
+    return err
+}
+
+// ... implement remaining methods
+
+// Usage
+storage, _ := NewPostgresStorage("postgresql://user:pass@localhost/pocketping")
+pp := pocketping.New(pocketping.Config{
+    Storage:   storage,
+    BridgeURL: "http://localhost:3001",
+})
+```
+
+</TabItem>
+<TabItem value="php" label="PHP">
+
+```php
+class PostgresStorage implements StorageInterface {
+    private PDO $pdo;
+
+    public function __construct(string $dsn) {
+        $this->pdo = new PDO($dsn);
+    }
+
+    public function createSession(array $session): void {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO sessions (id, visitor_id, created_at) VALUES (?, ?, ?)'
+        );
+        $stmt->execute([$session['id'], $session['visitorId'], $session['createdAt']]);
+    }
+
+    // ... implement remaining methods
+}
+
+// Usage
+$storage = new PostgresStorage('pgsql:host=localhost;dbname=pocketping');
+$pp = new PocketPing([
+    'storage' => $storage,
+    'bridgeUrl' => 'http://localhost:3001',
+]);
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```ruby
+require 'pg'
+
+class PostgresStorage
+  def initialize(connection_string)
+    @conn = PG.connect(connection_string)
+  end
+
+  def create_session(session)
+    @conn.exec_params(
+      'INSERT INTO sessions (id, visitor_id, created_at) VALUES ($1, $2, $3)',
+      [session[:id], session[:visitor_id], session[:created_at]]
+    )
+  end
+
+  # ... implement remaining methods
+end
+
+# Usage
+storage = PostgresStorage.new('postgresql://user:pass@localhost/pocketping')
+pp = PocketPing.new(
+  storage: storage,
+  bridge_url: 'http://localhost:3001'
 )
 ```
 

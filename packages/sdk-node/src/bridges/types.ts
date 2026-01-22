@@ -16,7 +16,15 @@ export interface Bridge {
   onNewSession?(session: Session): void | Promise<void>;
 
   /** Called when a visitor sends a message */
-  onMessage?(message: Message, session: Session): void | Promise<void>;
+  onVisitorMessage?(message: Message, session: Session): void | Promise<void>;
+
+  /** Called when an operator sends a message (for cross-bridge sync) */
+  onOperatorMessage?(
+    message: Message,
+    session: Session,
+    sourceBridge?: string,
+    operatorName?: string
+  ): void | Promise<void>;
 
   /** Called when visitor starts/stops typing */
   onTyping?(sessionId: string, isTyping: boolean): void | Promise<void>;
@@ -25,11 +33,12 @@ export interface Bridge {
   onMessageRead?(
     sessionId: string,
     messageIds: string[],
-    status: MessageStatus
+    status: MessageStatus,
+    session: Session
   ): void | Promise<void>;
 
   /** Called when a custom event is triggered from the widget */
-  onEvent?(event: CustomEvent, session: Session): void | Promise<void>;
+  onCustomEvent?(event: CustomEvent, session: Session): void | Promise<void>;
 
   /** Called when a user identifies themselves via PocketPing.identify() */
   onIdentityUpdate?(session: Session): void | Promise<void>;

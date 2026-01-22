@@ -1,7 +1,7 @@
 """Pytest configuration and fixtures for PocketPing SDK tests."""
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -51,8 +51,8 @@ def sample_session():
     return Session(
         id="test-session-123",
         visitor_id="test-visitor-456",
-        created_at=datetime.utcnow(),
-        last_activity=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        last_activity=datetime.now(timezone.utc),
         operator_online=False,
         ai_active=False,
         metadata=SessionMetadata(
@@ -81,7 +81,7 @@ def sample_visitor_message(sample_session):
         session_id=sample_session.id,
         content="Hello, I need help!",
         sender=Sender.VISITOR,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         status=MessageStatus.SENT,
     )
 
@@ -94,7 +94,7 @@ def sample_operator_message(sample_session):
         session_id=sample_session.id,
         content="Hi! How can I help you today?",
         sender=Sender.OPERATOR,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         status=MessageStatus.SENT,
     )
 
@@ -118,5 +118,9 @@ def mock_bridge():
     bridge.on_visitor_message = AsyncMock()
     bridge.on_operator_message = AsyncMock()
     bridge.on_message_read = AsyncMock()
+    bridge.on_custom_event = AsyncMock()
     bridge.on_identity_update = AsyncMock()
+    bridge.on_typing = AsyncMock()
+    bridge.on_ai_takeover = AsyncMock()
+    bridge.destroy = AsyncMock()
     return bridge

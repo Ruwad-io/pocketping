@@ -31,8 +31,8 @@ class TestPocketPingConnect:
     @pytest.mark.asyncio
     async def test_connect_reuses_existing_session(self, pocketping, sample_session):
         """Test that connect reuses an existing session when session_id provided."""
-        # First, save the session
-        await pocketping.storage.save_session(sample_session)
+        # First, create the session
+        await pocketping.storage.create_session(sample_session)
 
         request = ConnectRequest(
             visitor_id=sample_session.visitor_id,
@@ -47,7 +47,7 @@ class TestPocketPingConnect:
     @pytest.mark.asyncio
     async def test_connect_returns_existing_messages(self, pocketping, sample_session, sample_visitor_message):
         """Test that connect returns messages from existing session."""
-        await pocketping.storage.save_session(sample_session)
+        await pocketping.storage.create_session(sample_session)
         await pocketping.storage.save_message(sample_visitor_message)
 
         request = ConnectRequest(
@@ -63,7 +63,7 @@ class TestPocketPingConnect:
     @pytest.mark.asyncio
     async def test_connect_updates_metadata(self, pocketping, sample_session):
         """Test that connect updates session metadata."""
-        await pocketping.storage.save_session(sample_session)
+        await pocketping.storage.create_session(sample_session)
 
         new_url = "https://example.com/new-page"
         request = ConnectRequest(
@@ -84,7 +84,7 @@ class TestPocketPingMessage:
     @pytest.mark.asyncio
     async def test_handle_visitor_message(self, pocketping, sample_session):
         """Test handling a visitor message."""
-        await pocketping.storage.save_session(sample_session)
+        await pocketping.storage.create_session(sample_session)
 
         request = SendMessageRequest(
             session_id=sample_session.id,
@@ -105,7 +105,7 @@ class TestPocketPingMessage:
     @pytest.mark.asyncio
     async def test_handle_message_updates_session_activity(self, pocketping, sample_session):
         """Test that message updates session last_activity."""
-        await pocketping.storage.save_session(sample_session)
+        await pocketping.storage.create_session(sample_session)
         original_activity = sample_session.last_activity
 
         request = SendMessageRequest(
@@ -135,7 +135,7 @@ class TestPocketPingMessage:
     async def test_operator_message_disables_ai(self, pocketping, sample_session):
         """Test that operator message disables AI for session."""
         sample_session.ai_active = True
-        await pocketping.storage.save_session(sample_session)
+        await pocketping.storage.create_session(sample_session)
 
         request = SendMessageRequest(
             session_id=sample_session.id,
@@ -155,7 +155,7 @@ class TestPocketPingReadReceipts:
     @pytest.mark.asyncio
     async def test_handle_read_updates_message_status(self, pocketping, sample_session, sample_visitor_message):
         """Test that read receipt updates message status."""
-        await pocketping.storage.save_session(sample_session)
+        await pocketping.storage.create_session(sample_session)
         await pocketping.storage.save_message(sample_visitor_message)
 
         request = ReadRequest(
@@ -172,7 +172,7 @@ class TestPocketPingReadReceipts:
     @pytest.mark.asyncio
     async def test_handle_read_sets_delivered_at(self, pocketping, sample_session, sample_visitor_message):
         """Test that delivered status sets delivered_at timestamp."""
-        await pocketping.storage.save_session(sample_session)
+        await pocketping.storage.create_session(sample_session)
         await pocketping.storage.save_message(sample_visitor_message)
 
         request = ReadRequest(
@@ -189,7 +189,7 @@ class TestPocketPingReadReceipts:
     @pytest.mark.asyncio
     async def test_handle_read_sets_read_at(self, pocketping, sample_session, sample_visitor_message):
         """Test that read status sets read_at timestamp."""
-        await pocketping.storage.save_session(sample_session)
+        await pocketping.storage.create_session(sample_session)
         await pocketping.storage.save_message(sample_visitor_message)
 
         request = ReadRequest(
@@ -211,7 +211,7 @@ class TestPocketPingWebSocket:
     @pytest.mark.asyncio
     async def test_register_websocket(self, pocketping, sample_session, mock_websocket):
         """Test registering a WebSocket connection."""
-        await pocketping.storage.save_session(sample_session)
+        await pocketping.storage.create_session(sample_session)
 
         pocketping.register_websocket(sample_session.id, mock_websocket)
 
@@ -222,7 +222,7 @@ class TestPocketPingWebSocket:
     @pytest.mark.asyncio
     async def test_unregister_websocket(self, pocketping, sample_session, mock_websocket):
         """Test unregistering a WebSocket connection."""
-        await pocketping.storage.save_session(sample_session)
+        await pocketping.storage.create_session(sample_session)
         pocketping.register_websocket(sample_session.id, mock_websocket)
 
         pocketping.unregister_websocket(sample_session.id, mock_websocket)
@@ -233,7 +233,7 @@ class TestPocketPingWebSocket:
     @pytest.mark.asyncio
     async def test_broadcast_to_session(self, pocketping, sample_session, mock_websocket):
         """Test broadcasting a message to session WebSockets."""
-        await pocketping.storage.save_session(sample_session)
+        await pocketping.storage.create_session(sample_session)
         pocketping.register_websocket(sample_session.id, mock_websocket)
 
         # Send a message to trigger broadcast
@@ -257,7 +257,7 @@ class TestPocketPingOperator:
     @pytest.mark.asyncio
     async def test_send_operator_message(self, pocketping, sample_session):
         """Test sending an operator message."""
-        await pocketping.storage.save_session(sample_session)
+        await pocketping.storage.create_session(sample_session)
 
         message = await pocketping.send_operator_message(
             session_id=sample_session.id,
@@ -284,7 +284,7 @@ class TestPocketPingOperator:
     @pytest.mark.asyncio
     async def test_operator_online_broadcasts_presence(self, pocketping, sample_session, mock_websocket):
         """Test that operator status change broadcasts presence."""
-        await pocketping.storage.save_session(sample_session)
+        await pocketping.storage.create_session(sample_session)
         pocketping.register_websocket(sample_session.id, mock_websocket)
 
         pocketping.set_operator_online(True)
@@ -304,16 +304,16 @@ class TestPocketPingBridges:
     """Tests for bridge integration."""
 
     @pytest.mark.asyncio
-    async def test_register_bridge(self, pocketping, mock_bridge):
-        """Test registering a bridge."""
-        pocketping.register_bridge(mock_bridge)
+    async def test_add_bridge(self, pocketping, mock_bridge):
+        """Test adding a bridge."""
+        pocketping.add_bridge(mock_bridge)
 
-        assert mock_bridge in pocketping._bridges
+        assert mock_bridge in pocketping.bridges
 
     @pytest.mark.asyncio
     async def test_bridge_notified_on_new_session(self, pocketping, mock_bridge):
         """Test that bridge is notified on new session."""
-        pocketping.register_bridge(mock_bridge)
+        pocketping.add_bridge(mock_bridge)
 
         request = ConnectRequest(
             visitor_id="new-visitor",
@@ -327,8 +327,8 @@ class TestPocketPingBridges:
     @pytest.mark.asyncio
     async def test_bridge_notified_on_visitor_message(self, pocketping, sample_session, mock_bridge):
         """Test that bridge is notified on visitor message."""
-        await pocketping.storage.save_session(sample_session)
-        pocketping.register_bridge(mock_bridge)
+        await pocketping.storage.create_session(sample_session)
+        pocketping.add_bridge(mock_bridge)
 
         request = SendMessageRequest(
             session_id=sample_session.id,

@@ -1,10 +1,16 @@
 """Data models for PocketPing protocol."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
+from functools import partial
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+def _utc_now() -> datetime:
+    """Return current UTC datetime (timezone-aware)."""
+    return datetime.now(timezone.utc)
 
 
 class Sender(str, Enum):
@@ -27,17 +33,17 @@ class UserIdentity(BaseModel):
     Extra fields are allowed for custom data (plan, company, etc.).
     """
 
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
     id: str
     email: Optional[str] = None
     name: Optional[str] = None
 
-    class Config:
-        extra = "allow"  # Allow custom fields
-        populate_by_name = True
-
 
 class SessionMetadata(BaseModel):
     """Metadata about the visitor's session."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     # Page info
     url: Optional[str] = None
@@ -60,34 +66,32 @@ class SessionMetadata(BaseModel):
     browser: Optional[str] = None
     os: Optional[str] = None
 
-    class Config:
-        populate_by_name = True
-
 
 class Session(BaseModel):
     """A chat session with a visitor."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     visitor_id: str = Field(alias="visitorId")
-    created_at: datetime = Field(default_factory=datetime.utcnow, alias="createdAt")
-    last_activity: datetime = Field(default_factory=datetime.utcnow, alias="lastActivity")
+    created_at: datetime = Field(default_factory=_utc_now, alias="createdAt")
+    last_activity: datetime = Field(default_factory=_utc_now, alias="lastActivity")
     operator_online: bool = Field(False, alias="operatorOnline")
     ai_active: bool = Field(False, alias="aiActive")
     metadata: Optional[SessionMetadata] = None
     identity: Optional[UserIdentity] = None
 
-    class Config:
-        populate_by_name = True
-
 
 class Message(BaseModel):
     """A chat message."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     id: str
     session_id: str = Field(alias="sessionId")
     content: str
     sender: Sender
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utc_now)
     reply_to: Optional[str] = Field(None, alias="replyTo")
     metadata: Optional[dict[str, Any]] = None
 
@@ -96,9 +100,6 @@ class Message(BaseModel):
     delivered_at: Optional[datetime] = Field(None, alias="deliveredAt")
     read_at: Optional[datetime] = Field(None, alias="readAt")
 
-    class Config:
-        populate_by_name = True
-
 
 # Request/Response models
 
@@ -106,110 +107,137 @@ class Message(BaseModel):
 class ConnectRequest(BaseModel):
     """Request to connect/create a session."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     visitor_id: str = Field(alias="visitorId")
     session_id: Optional[str] = Field(None, alias="sessionId")
     metadata: Optional[SessionMetadata] = None
     identity: Optional[UserIdentity] = None
 
-    class Config:
-        populate_by_name = True
+
+# ─────────────────────────────────────────────────────────────────
+# Tracked Elements (SaaS auto-tracking)
+# ─────────────────────────────────────────────────────────────────
+
+
+class TrackedElement(BaseModel):
+    """Tracked element configuration (for SaaS auto-tracking)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    selector: str
+    """CSS selector for the element(s) to track."""
+
+    event: Optional[str] = "click"
+    """DOM event to listen for (default: 'click')."""
+
+    name: str
+    """Event name sent to backend."""
+
+    widget_message: Optional[str] = Field(None, alias="widgetMessage")
+    """If provided, opens widget with this message when triggered."""
+
+    data: Optional[dict[str, Any]] = None
+    """Additional data to send with the event."""
+
+
+class TriggerOptions(BaseModel):
+    """Options for trigger() method."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    widget_message: Optional[str] = Field(None, alias="widgetMessage")
+    """If provided, opens the widget and shows this message."""
 
 
 class ConnectResponse(BaseModel):
     """Response after connecting."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     session_id: str = Field(alias="sessionId")
     visitor_id: str = Field(alias="visitorId")
     operator_online: bool = Field(False, alias="operatorOnline")
     welcome_message: Optional[str] = Field(None, alias="welcomeMessage")
     messages: list[Message] = Field(default_factory=list)
-
-    class Config:
-        populate_by_name = True
+    tracked_elements: Optional[list[TrackedElement]] = Field(None, alias="trackedElements")
+    """Tracked elements configuration (for SaaS auto-tracking)."""
 
 
 class SendMessageRequest(BaseModel):
     """Request to send a message."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     session_id: str = Field(alias="sessionId")
     content: str = Field(max_length=4000)
     sender: Sender
     reply_to: Optional[str] = Field(None, alias="replyTo")
 
-    class Config:
-        populate_by_name = True
-
 
 class SendMessageResponse(BaseModel):
     """Response after sending a message."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     message_id: str = Field(alias="messageId")
     timestamp: datetime
-
-    class Config:
-        populate_by_name = True
 
 
 class TypingRequest(BaseModel):
     """Request to send typing indicator."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     session_id: str = Field(alias="sessionId")
     sender: Sender
     is_typing: bool = Field(True, alias="isTyping")
-
-    class Config:
-        populate_by_name = True
 
 
 class ReadRequest(BaseModel):
     """Request to mark messages as read/delivered."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     session_id: str = Field(alias="sessionId")
     message_ids: list[str] = Field(alias="messageIds")
     status: MessageStatus = Field(MessageStatus.READ)
-
-    class Config:
-        populate_by_name = True
 
 
 class ReadResponse(BaseModel):
     """Response after marking messages as read."""
 
-    updated: int  # Number of messages updated
+    model_config = ConfigDict(populate_by_name=True)
 
-    class Config:
-        populate_by_name = True
+    updated: int  # Number of messages updated
 
 
 class IdentifyRequest(BaseModel):
     """Request to identify a user."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     session_id: str = Field(alias="sessionId")
     identity: UserIdentity
-
-    class Config:
-        populate_by_name = True
 
 
 class IdentifyResponse(BaseModel):
     """Response after identifying a user."""
 
-    ok: bool = True
+    model_config = ConfigDict(populate_by_name=True)
 
-    class Config:
-        populate_by_name = True
+    ok: bool = True
 
 
 class PresenceResponse(BaseModel):
     """Response for presence check."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     online: bool
     operators: Optional[list[dict[str, str]]] = None
     ai_enabled: bool = Field(False, alias="aiEnabled")
     ai_active_after: Optional[int] = Field(None, alias="aiActiveAfter")
-
-    class Config:
-        populate_by_name = True
 
 
 class WebSocketEvent(BaseModel):
@@ -222,13 +250,12 @@ class WebSocketEvent(BaseModel):
 class CustomEvent(BaseModel):
     """Custom event for bidirectional communication."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str
     data: Optional[dict[str, Any]] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utc_now)
     session_id: Optional[str] = Field(None, alias="sessionId")
-
-    class Config:
-        populate_by_name = True
 
 
 # Type alias for custom event handler
@@ -250,18 +277,19 @@ class VersionStatus(str, Enum):
 class VersionCheckResult(BaseModel):
     """Result of checking widget version against backend requirements."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     status: VersionStatus
     message: Optional[str] = None
     min_version: Optional[str] = Field(None, alias="minVersion")
     latest_version: Optional[str] = Field(None, alias="latestVersion")
     can_continue: bool = Field(True, alias="canContinue")
 
-    class Config:
-        populate_by_name = True
-
 
 class VersionWarning(BaseModel):
     """Version warning sent to widget."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     severity: str  # "info", "warning", "error"
     message: str
@@ -270,6 +298,3 @@ class VersionWarning(BaseModel):
     latest_version: Optional[str] = Field(None, alias="latestVersion")
     can_continue: bool = Field(True, alias="canContinue")
     upgrade_url: Optional[str] = Field(None, alias="upgradeUrl")
-
-    class Config:
-        populate_by_name = True

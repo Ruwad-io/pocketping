@@ -38,6 +38,9 @@ flowchart LR
 |-----|----------|---------|
 | [**Node.js**](./nodejs) | JavaScript/TypeScript | `@pocketping/sdk-node` |
 | [**Python**](./python) | Python 3.10+ | `pocketping` |
+| [**Go**](./go) | Go 1.21+ | `github.com/pocketping/pocketping-go` |
+| [**PHP**](./php) | PHP 8.1+ | `pocketping/pocketping-php` |
+| [**Ruby**](./ruby) | Ruby 3.1+ | `pocketping` |
 
 ## When to Use an SDK
 
@@ -205,6 +208,68 @@ pp.mount_fastapi(app, prefix="/pocketping")
 ```
 
 </TabItem>
+<TabItem value="go" label="Go">
+
+```bash
+go get github.com/pocketping/pocketping-go
+```
+
+```go
+package main
+
+import (
+    "net/http"
+    pocketping "github.com/pocketping/pocketping-go"
+)
+
+func main() {
+    pp := pocketping.New(pocketping.Config{
+        BridgeURL: "http://localhost:3001",
+    })
+
+    http.Handle("/pocketping/", pp.Handler("/pocketping"))
+    http.ListenAndServe(":3000", nil)
+}
+```
+
+</TabItem>
+<TabItem value="php" label="PHP">
+
+```bash
+composer require pocketping/pocketping-php
+```
+
+```php
+<?php
+use PocketPing\PocketPing;
+
+$pp = new PocketPing([
+    'bridgeUrl' => 'http://localhost:3001',
+]);
+
+// Laravel
+Route::any('/pocketping/{path?}', [$pp, 'handleRequest']);
+```
+
+</TabItem>
+<TabItem value="ruby" label="Ruby">
+
+```bash
+gem install pocketping
+```
+
+```ruby
+require 'pocketping'
+
+pp = PocketPing.new(bridge_url: 'http://localhost:3001')
+
+# Rails
+Rails.application.routes.draw do
+  mount pp.rack_app => '/pocketping'
+end
+```
+
+</TabItem>
 </Tabs>
 
 ## SDK vs Bridge Server
@@ -227,5 +292,8 @@ pp.mount_fastapi(app, prefix="/pocketping")
 
 - [Node.js SDK](./nodejs) - Full documentation
 - [Python SDK](./python) - Full documentation
+- [Go SDK](./go) - Full documentation
+- [PHP SDK](./php) - Full documentation
+- [Ruby SDK](./ruby) - Full documentation
 - [Webhook Forwarding](/sdk/nodejs#webhook-forwarding) - Zapier, Make, n8n integration
 - [Self-Hosting](/self-hosting) - Deploy your own backend

@@ -150,6 +150,8 @@ export interface ConnectResponse {
   messages?: Message[];
   /** User identity if provided on connect */
   identity?: UserIdentity;
+  /** Tracked elements config from SaaS dashboard */
+  trackedElements?: TrackedElement[];
 }
 
 export interface SendMessageResponse {
@@ -168,7 +170,7 @@ export interface PresenceResponse {
   aiActiveAfter?: number;
 }
 
-export type WebSocketEventType = 'message' | 'typing' | 'presence' | 'ai_takeover' | 'read' | 'event' | 'version_warning';
+export type WebSocketEventType = 'message' | 'typing' | 'presence' | 'ai_takeover' | 'read' | 'event' | 'version_warning' | 'config_update';
 
 export interface WebSocketEvent {
   type: WebSocketEventType;
@@ -214,6 +216,26 @@ export interface CustomEvent {
 
 /** Handler for custom events */
 export type CustomEventHandler = (data: Record<string, unknown> | undefined, event: CustomEvent) => void;
+
+/** Options for trigger() method */
+export interface TriggerOptions {
+  /** If provided, opens the widget and shows this message */
+  widgetMessage?: string;
+}
+
+/** Tracked element configuration (for SaaS auto-tracking) */
+export interface TrackedElement {
+  /** CSS selector for the element(s) to track */
+  selector: string;
+  /** DOM event to listen for (default: 'click') */
+  event?: 'click' | 'submit' | 'focus' | 'change' | 'mouseenter';
+  /** Event name sent to backend */
+  name: string;
+  /** If provided, opens widget with this message when triggered */
+  widgetMessage?: string;
+  /** Additional data to send with the event */
+  data?: Record<string, unknown>;
+}
 
 // ─────────────────────────────────────────────────────────────────
 // User Identity

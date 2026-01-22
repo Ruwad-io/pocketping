@@ -149,12 +149,38 @@ export interface ConnectRequest {
   identity?: UserIdentity;
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Tracked Elements (SaaS auto-tracking)
+// ─────────────────────────────────────────────────────────────────
+
+/** Tracked element configuration (for SaaS auto-tracking) */
+export interface TrackedElement {
+  /** CSS selector for the element(s) to track */
+  selector: string;
+  /** DOM event to listen for (default: 'click') */
+  event?: 'click' | 'submit' | 'focus' | 'change' | 'mouseenter';
+  /** Event name sent to backend */
+  name: string;
+  /** If provided, opens widget with this message when triggered */
+  widgetMessage?: string;
+  /** Additional data to send with the event */
+  data?: Record<string, unknown>;
+}
+
+/** Options for trigger() method */
+export interface TriggerOptions {
+  /** If provided, opens the widget and shows this message */
+  widgetMessage?: string;
+}
+
 export interface ConnectResponse {
   sessionId: string;
   visitorId: string;
   operatorOnline: boolean;
   welcomeMessage?: string;
   messages: Message[];
+  /** Tracked elements configuration (for SaaS auto-tracking) */
+  trackedElements?: TrackedElement[];
 }
 
 export interface SendMessageRequest {

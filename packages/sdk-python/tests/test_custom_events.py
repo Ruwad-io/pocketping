@@ -1,6 +1,6 @@
 """Tests for custom events functionality."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -15,7 +15,7 @@ def sample_event():
     return CustomEvent(
         name="clicked_pricing",
         data={"plan": "pro", "source": "homepage"},
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
     )
 
 
@@ -268,7 +268,7 @@ class TestBridgeEventNotification:
         """Create a mock bridge."""
         bridge = MagicMock()
         bridge.name = "test-bridge"
-        bridge.on_event = AsyncMock()
+        bridge.on_custom_event = AsyncMock()
         return bridge
 
     @pytest.fixture
@@ -288,9 +288,9 @@ class TestBridgeEventNotification:
 
         await pocketping_with_bridge.handle_custom_event(response.session_id, sample_event)
 
-        mock_bridge.on_event.assert_awaited_once()
-        event_arg = mock_bridge.on_event.call_args[0][0]
-        session_arg = mock_bridge.on_event.call_args[0][1]
+        mock_bridge.on_custom_event.assert_awaited_once()
+        event_arg = mock_bridge.on_custom_event.call_args[0][0]
+        session_arg = mock_bridge.on_custom_event.call_args[0][1]
 
         assert event_arg.name == "clicked_pricing"
         assert session_arg.id == response.session_id

@@ -12,6 +12,8 @@ from pocketping.models import (
     SendMessageResponse,
     Session,
     SessionMetadata,
+    TrackedElement,
+    TriggerOptions,
 )
 from pocketping.storage import MemoryStorage, Storage
 
@@ -28,6 +30,8 @@ __all__ = [
     "SendMessageResponse",
     "PresenceResponse",
     "CustomEvent",
+    "TrackedElement",
+    "TriggerOptions",
     "Storage",
     "MemoryStorage",
     "Bridge",

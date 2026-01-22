@@ -6,7 +6,7 @@ import hmac
 import json
 import secrets
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
 import httpx
@@ -148,8 +148,8 @@ class PocketPing:
             session = Session(
                 id=self._generate_id(),
                 visitor_id=request.visitor_id,
-                created_at=datetime.utcnow(),
-                last_activity=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                last_activity=datetime.now(timezone.utc),
                 operator_online=self._operator_online,
                 ai_active=False,
                 metadata=request.metadata,
@@ -185,7 +185,7 @@ class PocketPing:
                 needs_update = True
 
             if needs_update:
-                session.last_activity = datetime.utcnow()
+                session.last_activity = datetime.now(timezone.utc)
                 await self.storage.update_session(session)
 
         # Get existing messages
@@ -210,14 +210,14 @@ class PocketPing:
             session_id=request.session_id,
             content=request.content,
             sender=request.sender,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             reply_to=request.reply_to,
         )
 
         await self.storage.save_message(message)
 
         # Update session activity
-        session.last_activity = datetime.utcnow()
+        session.last_activity = datetime.now(timezone.utc)
         await self.storage.update_session(session)
 
         # Track operator activity for presence detection
@@ -286,7 +286,7 @@ class PocketPing:
         """Handle message read/delivered status update."""
 
         updated = 0
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         for message_id in request.message_ids:
             message = await self.storage.get_message(message_id)
@@ -374,7 +374,7 @@ class PocketPing:
 
         # Update session with identity
         session.identity = request.identity
-        session.last_activity = datetime.utcnow()
+        session.last_activity = datetime.now(timezone.utc)
         await self.storage.update_session(session)
 
         # Notify bridges about identity update
@@ -503,7 +503,7 @@ class PocketPing:
 
         # If no response or response is older than visitor message
         if not last_response_time or last_response_time < last_visitor_msg_time:
-            elapsed = (datetime.utcnow() - last_visitor_msg_time).total_seconds()
+            elapsed = (datetime.now(timezone.utc) - last_visitor_msg_time).total_seconds()
             if elapsed >= self.ai_takeover_delay:
                 return True
 
@@ -547,7 +547,7 @@ class PocketPing:
                 session_id=session.id,
                 content=response_content,
                 sender=Sender.AI,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
             )
 
             await self.storage.save_message(ai_message)
@@ -633,7 +633,7 @@ class PocketPing:
         """Notify all bridges about a new visitor message."""
         for bridge in self.bridges:
             try:
-                await bridge.on_message(message, session)
+                await bridge.on_visitor_message(message, session)
             except Exception as e:
                 print(f"[PocketPing] Bridge {bridge.name} error: {e}")
 
@@ -695,7 +695,7 @@ class PocketPing:
         event = CustomEvent(
             name=event_name,
             data=data,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             session_id=session_id,
         )
 
@@ -768,11 +768,10 @@ class PocketPing:
     async def _notify_bridges_event(self, event: CustomEvent, session: Session) -> None:
         """Notify all bridges about a custom event."""
         for bridge in self.bridges:
-            if hasattr(bridge, "on_event"):
-                try:
-                    await bridge.on_event(event, session)
-                except Exception as e:
-                    print(f"[PocketPing] Bridge {bridge.name} error on custom event: {e}")
+            try:
+                await bridge.on_custom_event(event, session)
+            except Exception as e:
+                print(f"[PocketPing] Bridge {bridge.name} error on custom event: {e}")
 
     # ─────────────────────────────────────────────────────────────────
     # Webhook Forwarding
@@ -799,7 +798,7 @@ class PocketPing:
                 "metadata": session.metadata.model_dump(by_alias=True) if session.metadata else None,
                 "identity": session.identity.model_dump(by_alias=True) if session.identity else None,
             },
-            "sentAt": datetime.utcnow().isoformat(),
+            "sentAt": datetime.now(timezone.utc).isoformat(),
         }
 
         body = json.dumps(payload)
@@ -835,7 +834,7 @@ class PocketPing:
         event = CustomEvent(
             name="identify",
             data=session.identity.model_dump(by_alias=True),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             session_id=session.id,
         )
 

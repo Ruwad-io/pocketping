@@ -657,6 +657,280 @@ describe('PocketPingClient', () => {
     });
   });
 
+  describe('Tracked Elements', () => {
+    beforeEach(async () => {
+      const mockResponse = {
+        sessionId: 'session-123',
+        visitorId: 'visitor-456',
+        operatorOnline: false,
+        messages: [],
+      };
+
+      (globalThis.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+        headers: new Headers(),
+      });
+
+      await client.connect();
+
+      // Wait for WebSocket to be fully connected
+      await new Promise<void>((resolve) => {
+        const ws = MockWebSocket.instances[0];
+        if (ws?.readyState === 1) {
+          resolve();
+        } else {
+          setTimeout(resolve, 20);
+        }
+      });
+    });
+
+    describe('setupTrackedElements()', () => {
+      it('should setup event listeners for tracked elements', () => {
+        const addEventListenerSpy = vi.spyOn(document, 'addEventListener');
+
+        client.setupTrackedElements([
+          { selector: '#cta-btn', name: 'clicked_cta', event: 'click' },
+          { selector: '.pricing-card', name: 'viewed_pricing', event: 'mouseenter' },
+        ]);
+
+        expect(addEventListenerSpy).toHaveBeenCalledTimes(2);
+        expect(addEventListenerSpy).toHaveBeenCalledWith('click', expect.any(Function), true);
+        expect(addEventListenerSpy).toHaveBeenCalledWith('mouseenter', expect.any(Function), true);
+
+        addEventListenerSpy.mockRestore();
+      });
+
+      it('should default to click event', () => {
+        const addEventListenerSpy = vi.spyOn(document, 'addEventListener');
+
+        client.setupTrackedElements([
+          { selector: '#btn', name: 'clicked_btn' },
+        ]);
+
+        expect(addEventListenerSpy).toHaveBeenCalledWith('click', expect.any(Function), true);
+
+        addEventListenerSpy.mockRestore();
+      });
+
+      it('should cleanup previous tracked elements before setting new ones', () => {
+        const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener');
+
+        client.setupTrackedElements([
+          { selector: '#first', name: 'first_click' },
+        ]);
+
+        // Setup new tracked elements (should cleanup old ones first)
+        client.setupTrackedElements([
+          { selector: '#second', name: 'second_click' },
+        ]);
+
+        expect(removeEventListenerSpy).toHaveBeenCalled();
+
+        removeEventListenerSpy.mockRestore();
+      });
+
+      it('should include widgetMessage in trigger options', () => {
+        // Setup tracked elements with widgetMessage
+        client.setupTrackedElements([
+          {
+            selector: '#help-btn',
+            name: 'clicked_help',
+            widgetMessage: 'Need assistance?',
+          },
+        ]);
+
+        // Verify the tracked elements include the widgetMessage
+        const elements = client.getTrackedElements();
+        expect(elements[0].widgetMessage).toBe('Need assistance?');
+      });
+    });
+
+    describe('getTrackedElements()', () => {
+      it('should return current tracked elements', () => {
+        const elements = [
+          { selector: '#btn', name: 'clicked_btn' },
+          { selector: '.card', name: 'clicked_card' },
+        ];
+
+        client.setupTrackedElements(elements);
+
+        const result = client.getTrackedElements();
+        expect(result).toEqual(elements);
+      });
+
+      it('should return empty array when no tracked elements', () => {
+        expect(client.getTrackedElements()).toEqual([]);
+      });
+
+      it('should return a copy of tracked elements', () => {
+        const elements = [{ selector: '#btn', name: 'clicked_btn' }];
+        client.setupTrackedElements(elements);
+
+        const result = client.getTrackedElements();
+        result.push({ selector: '#new', name: 'new_click' });
+
+        expect(client.getTrackedElements().length).toBe(1);
+      });
+    });
+
+    describe('config_update WebSocket event', () => {
+      it('should hot-reload tracked elements from WebSocket', () => {
+        const setupSpy = vi.spyOn(client, 'setupTrackedElements');
+
+        const ws = MockWebSocket.instances[0];
+        ws.simulateMessage({
+          type: 'config_update',
+          data: {
+            trackedElements: [
+              { selector: '#new-btn', name: 'new_click' },
+            ],
+          },
+        });
+
+        expect(setupSpy).toHaveBeenCalledWith([
+          { selector: '#new-btn', name: 'new_click' },
+        ]);
+
+        setupSpy.mockRestore();
+      });
+
+      it('should emit configUpdate event', () => {
+        const configUpdateSpy = vi.fn();
+        client.on('configUpdate', configUpdateSpy);
+
+        const ws = MockWebSocket.instances[0];
+        ws.simulateMessage({
+          type: 'config_update',
+          data: {
+            trackedElements: [{ selector: '#btn', name: 'click' }],
+          },
+        });
+
+        expect(configUpdateSpy).toHaveBeenCalledWith({
+          trackedElements: [{ selector: '#btn', name: 'click' }],
+        });
+      });
+    });
+
+    describe('connect() with trackedElements', () => {
+      it('should setup tracked elements from connect response', async () => {
+        // Create a new client for this test
+        const newClient = new PocketPingClient(mockConfig);
+        const setupSpy = vi.spyOn(newClient, 'setupTrackedElements');
+
+        const mockResponse = {
+          sessionId: 'session-999',
+          visitorId: 'visitor-999',
+          operatorOnline: false,
+          messages: [],
+          trackedElements: [
+            { selector: '#from-backend', name: 'backend_click' },
+          ],
+        };
+
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockResponse),
+          headers: new Headers(),
+        });
+
+        await newClient.connect();
+
+        expect(setupSpy).toHaveBeenCalledWith([
+          { selector: '#from-backend', name: 'backend_click' },
+        ]);
+
+        newClient.disconnect();
+        setupSpy.mockRestore();
+      });
+    });
+
+    describe('disconnect() cleanup', () => {
+      it('should cleanup tracked elements on disconnect', () => {
+        const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener');
+
+        client.setupTrackedElements([
+          { selector: '#btn', name: 'click' },
+        ]);
+
+        client.disconnect();
+
+        expect(removeEventListenerSpy).toHaveBeenCalled();
+
+        removeEventListenerSpy.mockRestore();
+      });
+    });
+  });
+
+  describe('trigger() with options', () => {
+    beforeEach(async () => {
+      const mockResponse = {
+        sessionId: 'session-123',
+        visitorId: 'visitor-456',
+        operatorOnline: false,
+        messages: [],
+      };
+
+      (globalThis.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+        headers: new Headers(),
+      });
+
+      await client.connect();
+
+      // Wait for WebSocket to be fully connected
+      await new Promise<void>((resolve) => {
+        const ws = MockWebSocket.instances[0];
+        if (ws?.readyState === 1) {
+          resolve();
+        } else {
+          setTimeout(resolve, 20);
+        }
+      });
+    });
+
+    it('should open widget when widgetMessage is provided', () => {
+      const openChangeSpy = vi.fn();
+      client.on('openChange', openChangeSpy);
+
+      client.trigger('clicked_pricing', { plan: 'pro' }, { widgetMessage: 'Need help?' });
+
+      expect(openChangeSpy).toHaveBeenCalledWith(true);
+    });
+
+    it('should emit triggerMessage event with widgetMessage', () => {
+      const triggerMessageSpy = vi.fn();
+      client.on('triggerMessage', triggerMessageSpy);
+
+      client.trigger('clicked_pricing', { plan: 'pro' }, { widgetMessage: 'Need help choosing a plan?' });
+
+      expect(triggerMessageSpy).toHaveBeenCalledWith({
+        message: 'Need help choosing a plan?',
+        eventName: 'clicked_pricing',
+      });
+    });
+
+    it('should not open widget when widgetMessage is not provided', () => {
+      const openChangeSpy = vi.fn();
+      client.on('openChange', openChangeSpy);
+
+      client.trigger('silent_event', { data: 'test' });
+
+      expect(openChangeSpy).not.toHaveBeenCalled();
+    });
+
+    it('should not open widget when options is undefined', () => {
+      const openChangeSpy = vi.fn();
+      client.on('openChange', openChangeSpy);
+
+      client.trigger('silent_event', { data: 'test' }, undefined);
+
+      expect(openChangeSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('User Identity', () => {
     beforeEach(async () => {
       const mockResponse = {

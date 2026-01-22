@@ -54,6 +54,14 @@ jobs:
     name: SDK Node Tests
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        # Why test multiple Node.js versions:
+        # - 18: Previous LTS, baseline
+        # - 20: Current LTS, recommended
+        # - 22: Latest, preview
+        node-version: ['18', '20', '22']
+
     steps:
       - uses: actions/checkout@v4
 
@@ -62,10 +70,10 @@ jobs:
         with:
           version: 9
 
-      - name: Setup Node.js
+      - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
           cache-dependency-path: packages/sdk-node/pnpm-lock.yaml
 
@@ -126,6 +134,10 @@ jobs:
 
     strategy:
       matrix:
+        # Why test multiple Python versions:
+        # - 3.10: Minimum supported, pattern matching, union types
+        # - 3.11: Exception groups, tomllib, faster
+        # - 3.12: Type parameter syntax, f-string improvements
         python-version: ['3.10', '3.11', '3.12']
 
     steps:
@@ -144,8 +156,7 @@ jobs:
       - name: Run tests
         run: |
           cd packages/sdk-python
-          pytest --cov=src/pocketping --cov-report=xml || echo "Tests completed"
-        continue-on-error: true
+          pytest --cov=src/pocketping --cov-report=xml
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -153,6 +164,132 @@ jobs:
         with:
           flags: sdk-python
           files: packages/sdk-python/coverage.xml
+        continue-on-error: true
+
+  # ─────────────────────────────────────────────────────────────────
+  # SDK Go Unit Tests
+  # ─────────────────────────────────────────────────────────────────
+  test-sdk-go:
+    name: SDK Go Tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        # Why test multiple Go versions:
+        # - 1.21: Current LTS, module improvements
+        # - 1.22: Latest stable, loop variable changes
+        go-version: ['1.21', '1.22']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Install dependencies
+        run: |
+          cd packages/sdk-go
+          go mod download
+
+      - name: Run tests
+        run: |
+          cd packages/sdk-go
+          go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          flags: sdk-go
+          files: packages/sdk-go/coverage.out
+        continue-on-error: true
+
+  # ─────────────────────────────────────────────────────────────────
+  # SDK PHP Unit Tests
+  # ─────────────────────────────────────────────────────────────────
+  test-sdk-php:
+    name: SDK PHP Tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        # Why test multiple PHP versions:
+        # - 8.1: Minimum supported, enums introduced
+        # - 8.2: readonly classes, DNF types
+        # - 8.3: Latest, typed class constants
+        php-version: ['8.1', '8.2', '8.3']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ matrix.php-version }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          coverage: xdebug
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: |
+          cd packages/sdk-php
+          composer install --prefer-dist --no-progress
+
+      - name: Run tests
+        run: |
+          cd packages/sdk-php
+          vendor/bin/phpunit --coverage-clover coverage.xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          flags: sdk-php
+          files: packages/sdk-php/coverage.xml
+        continue-on-error: true
+
+  # ─────────────────────────────────────────────────────────────────
+  # SDK Ruby Unit Tests
+  # ─────────────────────────────────────────────────────────────────
+  test-sdk-ruby:
+    name: SDK Ruby Tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        # Why test multiple Ruby versions:
+        # - 3.1: Minimum supported, hash shorthand
+        # - 3.2: WASI support, improved YJIT
+        # - 3.3: Latest, YJIT by default
+        ruby-version: ['3.1', '3.2', '3.3']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Ruby ${{ matrix.ruby-version }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby-version }}
+          bundler-cache: true
+          working-directory: packages/sdk-ruby
+
+      - name: Install dependencies
+        run: |
+          cd packages/sdk-ruby
+          bundle install
+
+      - name: Run tests
+        run: |
+          cd packages/sdk-ruby
+          bundle exec rspec --format documentation
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          flags: sdk-ruby
+          files: packages/sdk-ruby/coverage/coverage.xml
         continue-on-error: true
 
   # ─────────────────────────────────────────────────────────────────

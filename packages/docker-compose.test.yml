@@ -1,0 +1,81 @@
+# Run all SDK tests with: docker compose -f packages/docker-compose.test.yml up --build
+# Run specific SDK: docker compose -f packages/docker-compose.test.yml up sdk-python
+
+services:
+  # ─────────────────────────────────────────────────────────────────
+  # Node.js SDK Tests
+  # ─────────────────────────────────────────────────────────────────
+  sdk-node:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./sdk-node:/app
+    command: sh -c "npm install && npm test"
+    environment:
+      - CI=true
+
+  # ─────────────────────────────────────────────────────────────────
+  # Python SDK Tests
+  # ─────────────────────────────────────────────────────────────────
+  sdk-python:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ./sdk-python:/app
+    command: sh -c "pip install -e '.[dev]' && pytest -v"
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+
+  # ─────────────────────────────────────────────────────────────────
+  # Go SDK Tests
+  # ─────────────────────────────────────────────────────────────────
+  sdk-go:
+    image: golang:1.22-alpine
+    working_dir: /app
+    volumes:
+      - ./sdk-go:/app
+    command: sh -c "apk add --no-cache gcc musl-dev && go mod download && go test -v -race ./..."
+    environment:
+      - CGO_ENABLED=1
+
+  # ─────────────────────────────────────────────────────────────────
+  # PHP SDK Tests
+  # ─────────────────────────────────────────────────────────────────
+  sdk-php:
+    image: php:8.3-cli
+    working_dir: /app
+    volumes:
+      - ./sdk-php:/app
+    command: sh -c "apt-get update && apt-get install -y unzip git && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer && composer install && vendor/bin/phpunit --no-coverage"
+    environment:
+      - COMPOSER_ALLOW_SUPERUSER=1
+
+  # ─────────────────────────────────────────────────────────────────
+  # Ruby SDK Tests
+  # ─────────────────────────────────────────────────────────────────
+  sdk-ruby:
+    image: ruby:3.3-slim
+    working_dir: /app
+    volumes:
+      - ./sdk-ruby:/app
+    command: sh -c "apt-get update && apt-get install -y build-essential && bundle install && bundle exec rspec"
+    environment:
+      - BUNDLE_SILENCE_ROOT_WARNING=1
+
+  # ─────────────────────────────────────────────────────────────────
+  # Run all tests in parallel
+  # ─────────────────────────────────────────────────────────────────
+  all:
+    image: alpine
+    depends_on:
+      sdk-node:
+        condition: service_completed_successfully
+      sdk-python:
+        condition: service_completed_successfully
+      sdk-go:
+        condition: service_completed_successfully
+      sdk-php:
+        condition: service_completed_successfully
+      sdk-ruby:
+        condition: service_completed_successfully
+    command: echo "All SDK tests passed!"

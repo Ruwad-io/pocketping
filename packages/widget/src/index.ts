@@ -1,9 +1,9 @@
 import { render, h } from 'preact';
 import { ChatWidget } from './components/ChatWidget';
 import { PocketPingClient } from './client';
-import type { PocketPingConfig, ResolvedPocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning, UserIdentity } from './types';
+import type { PocketPingConfig, ResolvedPocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning, UserIdentity, TriggerOptions, TrackedElement } from './types';
 
-export type { PocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning, UserIdentity };
+export type { PocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning, UserIdentity, TriggerOptions, TrackedElement };
 
 let client: PocketPingClient | null = null;
 let container: HTMLElement | null = null;
@@ -83,15 +83,44 @@ export function sendMessage(content: string): Promise<Message> {
  * Trigger a custom event to the backend
  * @param eventName - The name of the event (e.g., 'clicked_pricing', 'viewed_demo')
  * @param data - Optional payload to send with the event
+ * @param options - Optional trigger options (widgetMessage to open chat)
  * @example
- * PocketPing.trigger('clicked_cta', { button: 'signup', page: '/pricing' })
+ * // Silent event (just notify bridges)
+ * PocketPing.trigger('clicked_cta', { button: 'signup' })
+ *
+ * // Open widget with message
+ * PocketPing.trigger('clicked_pricing', { plan: 'pro' }, { widgetMessage: 'Need help choosing?' })
  */
-export function trigger(eventName: string, data?: Record<string, unknown>): void {
+export function trigger(eventName: string, data?: Record<string, unknown>, options?: TriggerOptions): void {
   if (!client) {
     console.warn('[PocketPing] Not initialized, cannot trigger event');
     return;
   }
-  client.trigger(eventName, data);
+  client.trigger(eventName, data, options);
+}
+
+/**
+ * Setup tracked elements for auto-tracking (typically called by SaaS backend)
+ * @param elements - Array of tracked element configurations
+ * @example
+ * PocketPing.setupTrackedElements([
+ *   { selector: '#search-btn', event: 'click', name: 'clicked_search' },
+ *   { selector: '.pricing-card', event: 'click', name: 'viewed_pricing', widgetMessage: 'Need help?' }
+ * ])
+ */
+export function setupTrackedElements(elements: TrackedElement[]): void {
+  if (!client) {
+    console.warn('[PocketPing] Not initialized, cannot setup tracked elements');
+    return;
+  }
+  client.setupTrackedElements(elements);
+}
+
+/**
+ * Get current tracked elements configuration
+ */
+export function getTrackedElements(): TrackedElement[] {
+  return client?.getTrackedElements() || [];
 }
 
 /**
@@ -207,4 +236,4 @@ if (typeof document !== 'undefined') {
 }
 
 // Global export for IIFE build
-export default { init, destroy, open, close, toggle, sendMessage, trigger, onEvent, offEvent, on, identify, reset, getIdentity };
+export default { init, destroy, open, close, toggle, sendMessage, trigger, onEvent, offEvent, on, identify, reset, getIdentity, setupTrackedElements, getTrackedElements };

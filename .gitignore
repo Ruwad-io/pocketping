@@ -53,6 +53,7 @@ coverage/
 
 # Package manager
 .pnpm-store/
+package-lock.json
 
 # Python
 __pycache__/
@@ -68,3 +69,20 @@ venv/
 # Playwright
 playwright-report/
 test-results/
+
+# Docusaurus build
+/docs-site/build/
+/docs-site/.docusaurus/
+
+# Go
+/packages/sdk-go/pocketping
+
+# PHP
+/packages/sdk-php/vendor/
+/packages/sdk-php/.phpunit.cache/
+composer.lock
+
+# Ruby
+/packages/sdk-ruby/vendor/
+/packages/sdk-ruby/.bundle/
+Gemfile.lock

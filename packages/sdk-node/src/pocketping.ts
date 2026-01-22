@@ -581,7 +581,7 @@ export class PocketPing {
     });
 
     // Notify bridges
-    await this.notifyBridgesRead(request.sessionId, request.messageIds, status);
+    await this.notifyBridgesRead(request.sessionId, request.messageIds, status, session);
 
     return { updated };
   }
@@ -794,7 +794,7 @@ export class PocketPing {
             await bridge.onNewSession?.(args[0] as Session);
             break;
           case 'message':
-            await bridge.onMessage?.(args[0] as Message, args[1] as Session);
+            await bridge.onVisitorMessage?.(args[0] as Message, args[1] as Session);
             break;
         }
       } catch (err) {
@@ -806,11 +806,12 @@ export class PocketPing {
   private async notifyBridgesRead(
     sessionId: string,
     messageIds: string[],
-    status: MessageStatus
+    status: MessageStatus,
+    session: Session
   ): Promise<void> {
     for (const bridge of this.bridges) {
       try {
-        await bridge.onMessageRead?.(sessionId, messageIds, status);
+        await bridge.onMessageRead?.(sessionId, messageIds, status, session);
       } catch (err) {
         console.error(`[PocketPing] Bridge ${bridge.name} read notification error:`, err);
       }
@@ -820,7 +821,7 @@ export class PocketPing {
   private async notifyBridgesEvent(event: CustomEvent, session: Session): Promise<void> {
     for (const bridge of this.bridges) {
       try {
-        await bridge.onEvent?.(event, session);
+        await bridge.onCustomEvent?.(event, session);
       } catch (err) {
         console.error(`[PocketPing] Bridge ${bridge.name} event notification error:`, err);
       }
