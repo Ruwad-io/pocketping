@@ -10,11 +10,12 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/pocketping-bridge
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: ruwad-io/pocketping-bridge
     permissions:
       contents: read
       packages: write
