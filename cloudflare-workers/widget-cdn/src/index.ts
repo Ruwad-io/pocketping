@@ -48,7 +48,7 @@ export default {
       }
     }
 
-    const jsdelivrUrl = `${JSDELIVR_BASE}@${version}/dist/index.global.js`;
+    const jsdelivrUrl = `${JSDELIVR_BASE}@${version}/dist/pocketping.min.global.js`;
 
     try {
       const response = await fetch(jsdelivrUrl, {
