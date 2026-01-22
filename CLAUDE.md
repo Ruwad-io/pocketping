@@ -69,6 +69,22 @@ Generated with [Claude Code](https://claude.com/claude-code)
 - GitHub Copilot will auto-review PRs via code-review.yml workflow
 - Wait for CI to pass and review approval before merging
 
+### Addressing Automated Review Comments
+After creating a PR, Claude Code MUST:
+1. Wait for GitHub Copilot automated review to complete
+2. Check review comments using `gh pr view --comments` or `gh api repos/{owner}/{repo}/pulls/{pr}/comments`
+3. Evaluate each comment for pertinence
+4. Fix legitimate issues raised by the automated review
+5. Push fixes and verify the review is satisfied
+
+```bash
+# Example: Check PR comments
+gh pr view 123 --comments
+
+# Or via API for detailed review comments
+gh api repos/OWNER/REPO/pulls/123/comments --jq '.[].body'
+```
+
 ## Coding Standards
 
 ### TypeScript/JavaScript
