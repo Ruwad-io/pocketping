@@ -192,7 +192,7 @@ export function on<T>(eventName: string, handler: (data: T) => void): () => void
 if (typeof document !== 'undefined') {
   const script = document.currentScript as HTMLScriptElement | null;
   if (script) {
-    const projectId = script.dataset.key; // data-key for SaaS
+    const projectId = script.dataset.projectId; // data-project-id for SaaS
     const endpoint = script.dataset.endpoint; // data-endpoint for self-hosted
 
     if (projectId || endpoint) {

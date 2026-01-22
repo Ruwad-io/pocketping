@@ -23,7 +23,7 @@ Add the PocketPing chat widget to your website. Choose the method that fits your
 The simplest way - just add your project key:
 
 ```html title="index.html"
-<script src="https://cdn.pocketping.io/widget.js" data-key="proj_xxxxxxxxxxxxx"></script>
+<script src="https://cdn.pocketping.io/widget.js" data-project-id="proj_xxxxxxxxxxxxx"></script>
 ```
 
 That's it! The widget auto-initializes with your project ID from the dashboard.
