@@ -30,14 +30,18 @@ services:
       # Hot reload: Widget dist (rebuilt by widget-watcher service)
       - ./packages/widget/dist:/app/widget/dist:ro
     depends_on:
-      - bridge
-      - sdk-watcher
-      - widget-watcher
+      bridge:
+        condition: service_healthy
+      sdk-watcher:
+        condition: service_healthy
+      widget-watcher:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 30s
 
   # ─────────────────────────────────────────────────────────────────
   # Bridge Server (Telegram, Discord, Slack)
@@ -77,6 +81,12 @@ services:
     command: sh -c "npm install && npm run dev"
     environment:
       - NODE_ENV=development
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/dist/index.js"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
 
   # ─────────────────────────────────────────────────────────────────
   # SDK Python Watcher (runs tests on source changes)
@@ -149,6 +159,12 @@ services:
     command: sh -c "npm install && npm run dev"
     environment:
       - NODE_ENV=development
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/dist/index.js"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
 
   # ─────────────────────────────────────────────────────────────────
   # Docs Site (Docusaurus)
