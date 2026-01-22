@@ -2,10 +2,10 @@ name = "pocketping-widget-cdn"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
-# Production route (configure after first deploy)
-# routes = [
-#   { pattern = "cdn.pocketping.io/*", zone_name = "pocketping.io" }
-# ]
+# Production route
+routes = [
+  { pattern = "cdn.pocketping.io/*", zone_name = "pocketping.io" }
+]
 
 # Development
 [env.dev]
