@@ -657,7 +657,7 @@ export class PocketPingClient {
       }
 
       // Try data attributes
-      for (const attr of element.attributes) {
+      for (const attr of Array.from(element.attributes)) {
         if (attr.name.startsWith('data-') && attr.value) {
           const dataSelector = `[${attr.name}="${CSS.escape(attr.value)}"]`;
           if (document.querySelectorAll(dataSelector).length === 1) {
@@ -679,10 +679,11 @@ export class PocketPingClient {
           break;
         }
 
-        const parent = current.parentElement;
+        const parent: Element | null = current.parentElement;
         if (parent) {
+          const currentTagName = current.tagName;
           const siblings = Array.from(parent.children).filter(
-            (c) => c.tagName === current!.tagName
+            (c: Element) => c.tagName === currentTagName
           );
           if (siblings.length > 1) {
             const index = siblings.indexOf(current) + 1;
