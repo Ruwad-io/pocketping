@@ -1,7 +1,7 @@
 # PocketPing Bridge Server Dockerfile
 # Pin to specific Bun version for reproducible builds
 # Use Debian-based image to match runtime libc (avoids musl/glibc incompatibility)
-FROM oven/bun:1.1.42-debian as builder
+FROM oven/bun:1.3.6-debian as builder
 
 WORKDIR /app
 
