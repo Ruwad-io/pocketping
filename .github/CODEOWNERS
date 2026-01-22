@@ -1,0 +1,30 @@
+# CODEOWNERS file - automatically request reviews from code owners
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @abonur
+
+# Widget
+/packages/widget/ @abonur
+
+# SDKs
+/packages/sdk-node/ @abonur
+/packages/sdk-python/ @abonur
+/packages/sdk-go/ @abonur
+/packages/sdk-php/ @abonur
+/packages/sdk-ruby/ @abonur
+
+# Bridge Server
+/bridge-server/ @abonur
+
+# Demo
+/demo/ @abonur
+
+# Infrastructure
+/.github/ @abonur
+/docker-compose*.yml @abonur
+Dockerfile @abonur
+
+# E2E Tests
+/tests/e2e/ @abonur
+/playwright.config.ts @abonur
