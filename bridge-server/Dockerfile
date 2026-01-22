@@ -21,8 +21,8 @@ RUN bun build src/index.ts --compile --outfile bridge-server
 # Production image - pin to specific version
 FROM debian:bookworm-20250113-slim
 
-# Install CA certificates for HTTPS requests
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+# Install CA certificates and curl for healthcheck
+RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
