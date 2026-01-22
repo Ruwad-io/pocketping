@@ -152,6 +152,8 @@ export interface ConnectResponse {
   identity?: UserIdentity;
   /** Tracked elements config from SaaS dashboard */
   trackedElements?: TrackedElement[];
+  /** Inspector mode active (for SaaS visual element selector) */
+  inspectorMode?: boolean;
 }
 
 export interface SendMessageResponse {

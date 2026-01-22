@@ -30,6 +30,8 @@ export class PocketPingClient {
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private trackedElementCleanups: Array<() => void> = [];
   private currentTrackedElements: TrackedElement[] = [];
+  private inspectorMode = false;
+  private inspectorCleanup: (() => void) | null = null;
 
   constructor(config: ResolvedPocketPingConfig) {
     this.config = config;
@@ -44,11 +46,16 @@ export class PocketPingClient {
     const storedSessionId = this.getStoredSessionId();
     const storedIdentity = this.getStoredIdentity();
 
+    // Check for inspector mode from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const inspectorToken = urlParams.get('pp_inspector');
+
     const response = await this.fetch<ConnectResponse>('/connect', {
       method: 'POST',
       body: JSON.stringify({
         visitorId,
         sessionId: storedSessionId,
+        inspectorToken: inspectorToken || undefined,
         metadata: {
           url: window.location.href,
           referrer: document.referrer || undefined,
@@ -77,8 +84,11 @@ export class PocketPingClient {
     // Connect WebSocket for real-time updates
     this.connectWebSocket();
 
-    // Setup tracked elements from backend config (SaaS)
-    if (response.trackedElements?.length) {
+    // Check if inspector mode is active
+    if (response.inspectorMode) {
+      this.enableInspectorMode();
+    } else if (response.trackedElements?.length) {
+      // Setup tracked elements from backend config (SaaS)
       this.setupTrackedElements(response.trackedElements);
     }
 
@@ -521,6 +531,326 @@ export class PocketPingClient {
    */
   getTrackedElements(): TrackedElement[] {
     return [...this.currentTrackedElements];
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Inspector Mode (SaaS visual element selector)
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Enable inspector mode for visual element selection
+   * This shows an overlay that allows clicking on elements to get their CSS selector
+   */
+  private enableInspectorMode(): void {
+    if (this.inspectorMode) return;
+    this.inspectorMode = true;
+
+    console.info('[PocketPing] 🔍 Inspector mode active - click on any element to select it');
+
+    // Create overlay UI
+    const overlay = document.createElement('div');
+    overlay.id = 'pp-inspector-overlay';
+    overlay.innerHTML = `
+      <style>
+        #pp-inspector-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 999999;
+          pointer-events: none;
+        }
+        #pp-inspector-overlay * {
+          pointer-events: auto;
+        }
+        #pp-inspector-banner {
+          position: fixed;
+          top: 16px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: linear-gradient(135deg, #6366f1, #8b5cf6);
+          color: white;
+          padding: 12px 24px;
+          border-radius: 12px;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-size: 14px;
+          font-weight: 500;
+          box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          z-index: 1000000;
+        }
+        #pp-inspector-banner svg {
+          animation: pp-pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pp-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        #pp-inspector-exit {
+          background: rgba(255,255,255,0.2);
+          border: none;
+          color: white;
+          padding: 6px 12px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 12px;
+          margin-left: 8px;
+        }
+        #pp-inspector-exit:hover {
+          background: rgba(255,255,255,0.3);
+        }
+        .pp-inspector-highlight {
+          outline: 3px dashed #6366f1 !important;
+          outline-offset: 2px !important;
+          background: rgba(99, 102, 241, 0.1) !important;
+        }
+        #pp-inspector-tooltip {
+          position: fixed;
+          background: #1f2937;
+          color: white;
+          padding: 8px 12px;
+          border-radius: 8px;
+          font-family: ui-monospace, SFMono-Regular, monospace;
+          font-size: 12px;
+          pointer-events: none;
+          z-index: 1000001;
+          max-width: 400px;
+          word-break: break-all;
+          display: none;
+        }
+      </style>
+      <div id="pp-inspector-banner">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="22" y1="22" x2="16.65" y2="16.65"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12" y2="16"/>
+        </svg>
+        <span>Inspector Mode - Click an element to capture its selector</span>
+        <button id="pp-inspector-exit">Exit</button>
+      </div>
+      <div id="pp-inspector-tooltip"></div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const tooltip = document.getElementById('pp-inspector-tooltip')!;
+    let currentHighlight: Element | null = null;
+
+    // Generate optimal CSS selector for an element
+    const getSelector = (element: Element): string => {
+      // Try ID first
+      if (element.id && !element.id.startsWith('pp-')) {
+        return `#${CSS.escape(element.id)}`;
+      }
+
+      // Try unique class
+      const classes = Array.from(element.classList).filter(c => !c.startsWith('pp-'));
+      if (classes.length > 0) {
+        const classSelector = '.' + classes.map(c => CSS.escape(c)).join('.');
+        if (document.querySelectorAll(classSelector).length === 1) {
+          return classSelector;
+        }
+      }
+
+      // Try data attributes
+      for (const attr of element.attributes) {
+        if (attr.name.startsWith('data-') && attr.value) {
+          const dataSelector = `[${attr.name}="${CSS.escape(attr.value)}"]`;
+          if (document.querySelectorAll(dataSelector).length === 1) {
+            return dataSelector;
+          }
+        }
+      }
+
+      // Build path from ancestors
+      const path: string[] = [];
+      let current: Element | null = element;
+
+      while (current && current !== document.body) {
+        let selector = current.tagName.toLowerCase();
+
+        if (current.id && !current.id.startsWith('pp-')) {
+          selector = `#${CSS.escape(current.id)}`;
+          path.unshift(selector);
+          break;
+        }
+
+        const parent = current.parentElement;
+        if (parent) {
+          const siblings = Array.from(parent.children).filter(
+            (c) => c.tagName === current!.tagName
+          );
+          if (siblings.length > 1) {
+            const index = siblings.indexOf(current) + 1;
+            selector += `:nth-of-type(${index})`;
+          }
+        }
+
+        path.unshift(selector);
+        current = parent;
+      }
+
+      return path.join(' > ');
+    };
+
+    // Mouseover handler
+    const handleMouseOver = (e: MouseEvent) => {
+      const target = e.target as Element;
+
+      // Ignore our own elements
+      if (target.closest('#pp-inspector-overlay') || target.closest('#pocketping-widget')) {
+        return;
+      }
+
+      // Remove previous highlight
+      if (currentHighlight) {
+        currentHighlight.classList.remove('pp-inspector-highlight');
+      }
+
+      // Add highlight to new element
+      target.classList.add('pp-inspector-highlight');
+      currentHighlight = target;
+
+      // Update tooltip
+      const selector = getSelector(target);
+      tooltip.textContent = selector;
+      tooltip.style.display = 'block';
+      tooltip.style.left = `${e.clientX + 15}px`;
+      tooltip.style.top = `${e.clientY + 15}px`;
+
+      // Keep tooltip in viewport
+      const rect = tooltip.getBoundingClientRect();
+      if (rect.right > window.innerWidth) {
+        tooltip.style.left = `${e.clientX - rect.width - 15}px`;
+      }
+      if (rect.bottom > window.innerHeight) {
+        tooltip.style.top = `${e.clientY - rect.height - 15}px`;
+      }
+    };
+
+    // Mouseout handler
+    const handleMouseOut = (e: MouseEvent) => {
+      const target = e.target as Element;
+      if (target.closest('#pp-inspector-overlay')) return;
+
+      target.classList.remove('pp-inspector-highlight');
+      tooltip.style.display = 'none';
+    };
+
+    // Click handler
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Element;
+
+      // Handle exit button
+      if ((target as HTMLElement).id === 'pp-inspector-exit') {
+        this.disableInspectorMode();
+        return;
+      }
+
+      // Ignore our own elements
+      if (target.closest('#pp-inspector-overlay') || target.closest('#pocketping-widget')) {
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const selector = getSelector(target);
+
+      // Send selector to dashboard via WebSocket
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({
+          type: 'inspector_select',
+          data: {
+            selector,
+            tagName: target.tagName.toLowerCase(),
+            text: target.textContent?.trim().slice(0, 50) || '',
+            url: window.location.href,
+          },
+        }));
+      }
+
+      // Also emit locally
+      this.emit('inspectorSelect', { selector, element: target });
+
+      // Visual feedback
+      target.classList.remove('pp-inspector-highlight');
+      target.classList.add('pp-inspector-highlight');
+      setTimeout(() => {
+        target.classList.remove('pp-inspector-highlight');
+      }, 500);
+
+      // Show confirmation
+      const banner = document.getElementById('pp-inspector-banner');
+      if (banner) {
+        const originalHTML = banner.innerHTML;
+        banner.innerHTML = `
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          <span>Selector captured: <code style="background:rgba(255,255,255,0.2);padding:2px 6px;border-radius:4px;font-family:monospace;">${selector}</code></span>
+        `;
+        setTimeout(() => {
+          if (banner && this.inspectorMode) {
+            banner.innerHTML = originalHTML;
+            // Reattach exit button handler
+            document.getElementById('pp-inspector-exit')?.addEventListener('click', () => {
+              this.disableInspectorMode();
+            });
+          }
+        }, 2000);
+      }
+
+      console.info(`[PocketPing] 📌 Selector captured: ${selector}`);
+    };
+
+    // Attach handlers
+    document.addEventListener('mouseover', handleMouseOver, true);
+    document.addEventListener('mouseout', handleMouseOut, true);
+    document.addEventListener('click', handleClick, true);
+
+    // Store cleanup
+    this.inspectorCleanup = () => {
+      document.removeEventListener('mouseover', handleMouseOver, true);
+      document.removeEventListener('mouseout', handleMouseOut, true);
+      document.removeEventListener('click', handleClick, true);
+      overlay.remove();
+      if (currentHighlight) {
+        currentHighlight.classList.remove('pp-inspector-highlight');
+      }
+    };
+
+    // Attach exit button handler
+    document.getElementById('pp-inspector-exit')?.addEventListener('click', () => {
+      this.disableInspectorMode();
+    });
+  }
+
+  /**
+   * Disable inspector mode
+   */
+  private disableInspectorMode(): void {
+    if (!this.inspectorMode) return;
+    this.inspectorMode = false;
+
+    if (this.inspectorCleanup) {
+      this.inspectorCleanup();
+      this.inspectorCleanup = null;
+    }
+
+    console.info('[PocketPing] Inspector mode disabled');
+    this.emit('inspectorDisabled', null);
+  }
+
+  /**
+   * Check if inspector mode is active
+   */
+  isInspectorModeActive(): boolean {
+    return this.inspectorMode;
   }
 
   // ─────────────────────────────────────────────────────────────────

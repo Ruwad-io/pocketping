@@ -22,8 +22,8 @@ describe('Multi-Bridge Sync', () => {
     telegramServer = new MockTelegramServer();
     slackServer = new MockSlackServer();
 
-    telegramUrl = await telegramServer.start(9010);
-    slackUrl = await slackServer.start(9011);
+    telegramUrl = await telegramServer.start(0);
+    slackUrl = await slackServer.start(0);
   });
 
   afterAll(() => {
@@ -234,7 +234,7 @@ describe('Bridge Failover', () => {
   it('should continue working if one bridge is down', async () => {
     // Only start Slack server
     const slackServer = new MockSlackServer();
-    const slackUrl = await slackServer.start(9012);
+    const slackUrl = await slackServer.start(0);
 
     try {
       // Telegram would fail, but Slack should work

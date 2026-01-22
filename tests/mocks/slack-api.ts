@@ -149,11 +149,24 @@ export class MockSlackServer {
 
   // Start the mock server
   async start(port = 9002): Promise<string> {
-    this.server = serve({
-      fetch: this.app.fetch,
-      port,
-    });
-    return `http://localhost:${port}`;
+    let currentPort = port;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      try {
+        this.server = serve({
+          fetch: this.app.fetch,
+          port: currentPort,
+        });
+        const boundPort = (this.server as any).port ?? currentPort;
+        return `http://localhost:${boundPort}`;
+      } catch (error) {
+        if ((error as { code?: string }).code === "EADDRINUSE") {
+          currentPort += 1;
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error("Failed to find an available port for MockSlackServer");
   }
 
   // Stop the server

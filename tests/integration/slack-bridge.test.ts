@@ -13,7 +13,7 @@ describe('Slack Bridge Integration', () => {
 
   beforeAll(async () => {
     mockServer = new MockSlackServer();
-    serverUrl = await mockServer.start(9002);
+    serverUrl = await mockServer.start(0);
     console.log(`Mock Slack server started at ${serverUrl}`);
   });
 
@@ -209,7 +209,7 @@ describe('Slack Bridge - Full Message Flow', () => {
 
   beforeAll(async () => {
     mockServer = new MockSlackServer();
-    serverUrl = await mockServer.start(9004);
+    serverUrl = await mockServer.start(0);
   });
 
   afterAll(() => {

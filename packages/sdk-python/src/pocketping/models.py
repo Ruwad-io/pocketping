@@ -2,7 +2,6 @@
 
 from datetime import datetime, timezone
 from enum import Enum
-from functools import partial
 from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field

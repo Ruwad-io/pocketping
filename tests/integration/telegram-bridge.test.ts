@@ -13,7 +13,7 @@ describe('Telegram Bridge Integration', () => {
 
   beforeAll(async () => {
     mockServer = new MockTelegramServer();
-    serverUrl = await mockServer.start(9001);
+    serverUrl = await mockServer.start(0);
     console.log(`Mock Telegram server started at ${serverUrl}`);
   });
 
@@ -182,7 +182,7 @@ describe('Telegram Bridge - Message Delivery Flow', () => {
 
   beforeAll(async () => {
     mockServer = new MockTelegramServer();
-    serverUrl = await mockServer.start(9003);
+    serverUrl = await mockServer.start(0);
   });
 
   afterAll(() => {
