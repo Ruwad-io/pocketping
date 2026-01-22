@@ -1,6 +1,7 @@
 {
   "name": "@pocketping/sdk-node",
   "version": "0.2.0",
+  "type": "module",
   "description": "Node.js SDK for implementing PocketPing protocol",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
