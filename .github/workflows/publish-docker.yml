@@ -1,13 +1,6 @@
-name: Publish Docker image
+name: Publish Docker image (Manual)
 
 on:
-  release:
-    types: [published]
-  push:
-    branches: [main]
-    paths:
-      - 'bridge-server/**'
-      - '.github/workflows/publish-docker.yml'
   workflow_dispatch:
     inputs:
       tag:
