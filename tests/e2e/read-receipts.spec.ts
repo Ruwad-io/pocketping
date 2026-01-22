@@ -14,12 +14,15 @@ test.describe('Read Receipts', () => {
     // Wait for message to appear
     await page.waitForSelector('.pp-message-visitor');
 
-    // Should show single check (sent status)
-    const checkIcon = page.locator('.pp-message-visitor .pp-check');
+    // Should show single check (sent status) - SVG has .pp-check class
+    const checkIcon = page.locator('.pp-message-visitor svg.pp-check');
     await expect(checkIcon).toBeVisible();
   });
 
+  // Skip in CI - requires real bridge integration (not mock mode)
   test('should show double check for delivered message', async ({ page }) => {
+    test.skip(!!process.env.CI, 'Requires real bridge server (not mock mode)');
+
     // Send a message
     await page.locator('.pp-input').fill('Test delivered');
     await page.locator('.pp-send-btn').click();
@@ -78,8 +81,8 @@ test.describe('Status Icons', () => {
     // Wait for message
     await page.waitForSelector('.pp-message-visitor');
 
-    // Check SVG structure
-    const svg = page.locator('.pp-message-visitor .pp-check svg');
+    // Check SVG structure - the SVG element itself has the .pp-check class
+    const svg = page.locator('.pp-message-visitor svg.pp-check');
     await expect(svg).toBeVisible();
   });
 });
