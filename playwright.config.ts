@@ -5,8 +5,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? 2 : undefined, // Parallelism for faster CI
   reporter: [['html'], ['list']],
+  timeout: 30000,
 
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:3000',
@@ -14,20 +15,14 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
 
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-    {
-      name: 'mobile-chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-  ],
+  // In CI, only run chromium for faster feedback. Full browser matrix on nightly.
+  projects: process.env.CI
+    ? [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }]
+    : [
+        { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+        { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+        { name: 'mobile-chrome', use: { ...devices['Pixel 5'] } },
+      ],
 
   // In CI, services are started via Docker Compose
   // Locally, start them manually or use: make dev
