@@ -6,11 +6,22 @@ Embeddable chat widget for PocketPing. Drop-in customer support chat that connec
 
 ### Via CDN (Recommended)
 
+**One-line install (SaaS users):**
+
+```html
+<script src="https://cdn.pocketping.io/widget.js" data-project-id="proj_xxxxxxxxxxxxx"></script>
+```
+
+**With custom options:**
+
 ```html
 <script src="https://cdn.pocketping.io/widget.js"></script>
 <script>
   PocketPing.init({
-    endpoint: 'https://yoursite.com/pocketping'
+    projectId: 'proj_xxxxxxxxxxxxx',  // SaaS users
+    // OR
+    endpoint: 'https://yoursite.com/pocketping',  // Self-hosted
+    operatorName: 'Support Team',
   });
 </script>
 ```
@@ -22,10 +33,12 @@ npm install @pocketping/widget
 ```
 
 ```javascript
-import { init } from '@pocketping/widget';
+import PocketPing from '@pocketping/widget';
 
-init({
-  endpoint: 'https://yoursite.com/pocketping'
+PocketPing.init({
+  projectId: 'proj_xxxxxxxxxxxxx',  // SaaS users
+  // OR
+  endpoint: 'https://yoursite.com/pocketping',  // Self-hosted
 });
 ```
 
@@ -33,11 +46,12 @@ init({
 
 ## Configuration Options
 
-### Required
+### Required (one of)
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `endpoint` | `string` | Your backend endpoint (e.g., `"https://yoursite.com/pocketping"`) |
+| `projectId` | `string` | Your project ID from [app.pocketping.io](https://app.pocketping.io) (SaaS) |
+| `endpoint` | `string` | Your backend endpoint (self-hosted, e.g., `"https://yoursite.com/pocketping"`) |
 
 ---
 
