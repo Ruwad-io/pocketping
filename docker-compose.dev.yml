@@ -204,7 +204,7 @@ services:
     volumes:
       - .:/app
       - e2e_node_modules:/app/node_modules
-    command: sh -c "npm install && npx playwright test --project=chromium"
+    command: sh -c "corepack enable && corepack prepare pnpm@9 --activate && pnpm install && pnpm exec playwright test --project=chromium"
     environment:
       - CI=true
       - BASE_URL=http://demo:3000
