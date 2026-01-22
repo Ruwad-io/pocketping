@@ -1,5 +1,13 @@
 # @pocketping/widget
 
+## 0.3.1
+
+### Patch Changes
+
+- [`e0118eb`](https://github.com/Ruwad-io/pocketping/commit/e0118ebe4e895e9eb61427db7b847068f000fc3e) Thanks [@abonur](https://github.com/abonur)! - Rename auto-init attribute from `data-key` to `data-project-id`
+  - More explicit and self-documenting
+  - Matches the `projectId` config option
+
 ## 0.3.0
 
 ### Minor Changes
