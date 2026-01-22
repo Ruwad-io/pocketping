@@ -1,5 +1,11 @@
 # @pocketping/widget
 
+## 0.3.3
+
+### Patch Changes
+
+- [`4eecf63`](https://github.com/Ruwad-io/pocketping/commit/4eecf636fce71bc2ea3a50f050904a41148d42cb) Thanks [@abonur](https://github.com/abonur)! - Update "Powered by PocketPing" link to pocketping.io
+
 ## 0.3.2
 
 ### Patch Changes
