@@ -10,5 +10,10 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": []
+  "ignore": [
+    "@pocketping/bridge-discord",
+    "@pocketping/bridge-slack",
+    "@pocketping/bridge-telegram",
+    "pocketping-example-*"
+  ]
 }
