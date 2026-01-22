@@ -256,7 +256,7 @@ export function ChatWidget({ client, config }: Props) {
 
           {/* Powered by */}
           <div class="pp-footer">
-            Powered by <a href="https://github.com/pocketping/pocketping" target="_blank" rel="noopener">PocketPing</a>
+            Powered by <a href="https://pocketping.io" target="_blank" rel="noopener">PocketPing</a>
           </div>
         </div>
       )}
