@@ -113,7 +113,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
-          bun-version: latest
+          bun-version: '1.1.42'
 
       - name: Install dependencies
         run: |
@@ -350,7 +350,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
-          bun-version: latest
+          bun-version: '1.1.42'
 
       - name: Build widget
         run: |
@@ -376,3 +376,10 @@ jobs:
           name: widget-dist
           path: packages/widget/dist/
           retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────────
+  # E2E Tests (Playwright)
+  # TODO: E2E tests require pocketping-test-fastapi backend (port 8000)
+  # which is not yet implemented. See playwright.config.ts for setup.
+  # For now, run E2E locally with: make test-e2e
+  # ─────────────────────────────────────────────────────────────────
