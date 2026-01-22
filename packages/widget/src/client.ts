@@ -1,5 +1,5 @@
 import type {
-  PocketPingConfig,
+  ResolvedPocketPingConfig,
   Message,
   MessageStatus,
   Session,
@@ -17,7 +17,7 @@ import { VERSION } from './version';
 type Listener<T> = (data: T) => void;
 
 export class PocketPingClient {
-  private config: PocketPingConfig;
+  private config: ResolvedPocketPingConfig;
   private session: Session | null = null;
   private ws: WebSocket | null = null;
   private isOpen = false;
@@ -27,7 +27,7 @@ export class PocketPingClient {
   private maxReconnectAttempts = 5;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(config: PocketPingConfig) {
+  constructor(config: ResolvedPocketPingConfig) {
     this.config = config;
   }
 

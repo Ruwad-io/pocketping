@@ -1,10 +1,13 @@
 export interface PocketPingConfig {
   // ─────────────────────────────────────────────────────────────────
-  // Required
+  // Required (one of endpoint or projectId)
   // ─────────────────────────────────────────────────────────────────
 
-  /** Your backend endpoint (e.g., "https://yoursite.com/pocketping") */
-  endpoint: string;
+  /** Your backend endpoint for self-hosted (e.g., "https://yoursite.com/pocketping") */
+  endpoint?: string;
+
+  /** Project ID for SaaS users (e.g., "proj_xxxxxxxxxxxxx") - from dashboard */
+  projectId?: string;
 
   // ─────────────────────────────────────────────────────────────────
   // Branding
@@ -237,3 +240,6 @@ export interface UserIdentity {
   /** Any custom fields (plan, company, etc.) */
   [key: string]: unknown;
 }
+
+// Internal type for resolved config (endpoint is guaranteed after init)
+export type ResolvedPocketPingConfig = Omit<PocketPingConfig, 'endpoint'> & { endpoint: string };

@@ -23,9 +23,14 @@
     "format:ts": "prettier --write '**/*.{ts,tsx,json,md,yaml,yml}' --ignore-path .gitignore",
     "format:py": "cd packages/sdk-python && ruff format .",
     "typecheck": "cd packages/widget && pnpm exec tsc --noEmit && cd ../sdk-node && pnpm exec tsc --noEmit",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm build && changeset publish",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.5.2",
+    "@changesets/cli": "^2.29.8",
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^8.53.1",
     "@typescript-eslint/parser": "^8.53.1",

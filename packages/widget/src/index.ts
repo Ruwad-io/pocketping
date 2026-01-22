@@ -1,12 +1,15 @@
 import { render, h } from 'preact';
 import { ChatWidget } from './components/ChatWidget';
 import { PocketPingClient } from './client';
-import type { PocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning, UserIdentity } from './types';
+import type { PocketPingConfig, ResolvedPocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning, UserIdentity } from './types';
 
 export type { PocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning, UserIdentity };
 
 let client: PocketPingClient | null = null;
 let container: HTMLElement | null = null;
+
+// SaaS API base URL
+const SAAS_API_BASE = 'https://app.pocketping.io/api/widget';
 
 export function init(config: PocketPingConfig): PocketPingClient {
   if (client) {
@@ -14,13 +17,20 @@ export function init(config: PocketPingConfig): PocketPingClient {
     return client;
   }
 
-  // Validate config
-  if (!config.endpoint) {
-    throw new Error('[PocketPing] endpoint is required');
+  // Resolve endpoint from projectId if not provided
+  let resolvedEndpoint = config.endpoint;
+  if (!resolvedEndpoint && config.projectId) {
+    resolvedEndpoint = `${SAAS_API_BASE}/${config.projectId}`;
   }
 
-  // Create client
-  client = new PocketPingClient(config);
+  // Validate config
+  if (!resolvedEndpoint) {
+    throw new Error('[PocketPing] endpoint or projectId is required');
+  }
+
+  // Create client with resolved endpoint
+  const resolvedConfig: ResolvedPocketPingConfig = { ...config, endpoint: resolvedEndpoint };
+  client = new PocketPingClient(resolvedConfig);
 
   // Create container
   container = document.createElement('div');
@@ -181,12 +191,18 @@ export function on<T>(eventName: string, handler: (data: T) => void): () => void
 // Auto-init from script tag data attributes
 if (typeof document !== 'undefined') {
   const script = document.currentScript as HTMLScriptElement | null;
-  if (script?.dataset.endpoint) {
-    init({
-      endpoint: script.dataset.endpoint,
-      theme: (script.dataset.theme as 'light' | 'dark' | 'auto') || 'auto',
-      position: (script.dataset.position as 'bottom-right' | 'bottom-left') || 'bottom-right',
-    });
+  if (script) {
+    const projectId = script.dataset.key; // data-key for SaaS
+    const endpoint = script.dataset.endpoint; // data-endpoint for self-hosted
+
+    if (projectId || endpoint) {
+      init({
+        projectId,
+        endpoint,
+        theme: (script.dataset.theme as 'light' | 'dark' | 'auto') || 'auto',
+        position: (script.dataset.position as 'bottom-right' | 'bottom-left') || 'bottom-right',
+      });
+    }
   }
 }
 
