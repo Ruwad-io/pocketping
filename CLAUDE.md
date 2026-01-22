@@ -72,17 +72,39 @@ Generated with [Claude Code](https://claude.com/claude-code)
 ### Addressing Automated Review Comments
 After creating a PR, Claude Code MUST:
 1. Wait for GitHub Copilot automated review to complete
-2. Check review comments using `gh pr view --comments` or `gh api repos/{owner}/{repo}/pulls/{pr}/comments`
+2. Check review comments using `gh api repos/{owner}/{repo}/pulls/{pr}/comments`
 3. Evaluate each comment for pertinence
 4. Fix legitimate issues raised by the automated review
-5. Push fixes and verify the review is satisfied
+5. Push fixes
+6. Reply to each addressed comment explaining the fix
+7. **Resolve the review threads** using GraphQL API (required for merge)
 
 ```bash
-# Example: Check PR comments
-gh pr view 123 --comments
+# Check PR review comments
+gh api repos/OWNER/REPO/pulls/123/comments --jq '.[] | {id: .id, body: .body, path: .path}'
 
-# Or via API for detailed review comments
-gh api repos/OWNER/REPO/pulls/123/comments --jq '.[].body'
+# Reply to a comment
+gh api repos/OWNER/REPO/pulls/123/comments/COMMENT_ID/replies -f body="✅ Fixed in commit abc123"
+
+# Get review thread IDs to resolve
+gh api graphql -f query='
+query {
+  repository(owner: "OWNER", name: "REPO") {
+    pullRequest(number: 123) {
+      reviewThreads(first: 10) {
+        nodes { id isResolved path }
+      }
+    }
+  }
+}'
+
+# Resolve a review thread (REQUIRED for merge when "All comments must be resolved")
+gh api graphql -f query='
+mutation {
+  resolveReviewThread(input: {threadId: "THREAD_ID"}) {
+    thread { isResolved }
+  }
+}'
 ```
 
 ## Coding Standards
