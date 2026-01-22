@@ -455,3 +455,37 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker compose -f docker-compose.dev.yml --profile e2e down -v
+
+  # ─────────────────────────────────────────────────────────────────
+  # CI Summary (aggregates all matrix jobs for branch protection)
+  # ─────────────────────────────────────────────────────────────────
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs:
+      - test-widget
+      - test-sdk-node
+      - test-bridge-server
+      - test-sdk-python
+      - test-sdk-go
+      - test-sdk-php
+      - test-sdk-ruby
+      - lint
+      - build
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ needs.test-widget.result }}" != "success" ]] || \
+             [[ "${{ needs.test-sdk-node.result }}" != "success" ]] || \
+             [[ "${{ needs.test-bridge-server.result }}" != "success" ]] || \
+             [[ "${{ needs.test-sdk-python.result }}" != "success" ]] || \
+             [[ "${{ needs.test-sdk-go.result }}" != "success" ]] || \
+             [[ "${{ needs.test-sdk-php.result }}" != "success" ]] || \
+             [[ "${{ needs.test-sdk-ruby.result }}" != "success" ]] || \
+             [[ "${{ needs.lint.result }}" != "success" ]] || \
+             [[ "${{ needs.build.result }}" != "success" ]]; then
+            echo "One or more jobs failed"
+            exit 1
+          fi
+          echo "All jobs passed!"
