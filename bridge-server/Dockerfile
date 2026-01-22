@@ -1,5 +1,6 @@
 # PocketPing Bridge Server Dockerfile
-FROM oven/bun:1 as builder
+# Pin to specific Bun version for reproducible builds
+FROM oven/bun:1.1.42-alpine as builder
 
 WORKDIR /app
 
@@ -16,8 +17,8 @@ COPY tsconfig.json ./
 # Build (compile to single file)
 RUN bun build src/index.ts --compile --outfile bridge-server
 
-# Production image
-FROM debian:bookworm-slim
+# Production image - pin to specific version
+FROM debian:bookworm-20250113-slim
 
 # Install CA certificates for HTTPS requests
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*

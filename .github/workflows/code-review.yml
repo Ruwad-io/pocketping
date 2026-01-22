@@ -1,0 +1,59 @@
+name: Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # Copilot Code Review - automatically reviews PRs
+  # Note: Requires GitHub Copilot to be enabled for the repository
+  # https://docs.github.com/en/copilot/using-github-copilot/code-review/using-copilot-code-review
+  copilot-review:
+    name: Copilot Review
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - name: Request Copilot Review
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Request Copilot code review
+            // This requires GitHub Copilot to be enabled for the repository
+            try {
+              await github.rest.pulls.requestReviewers({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                reviewers: ['github-actions[bot]']
+              });
+              console.log('Review requested');
+            } catch (error) {
+              // Copilot may not be available or already requested
+              console.log('Could not request review:', error.message);
+            }
+        continue-on-error: true
+
+  # Size labeler - adds labels based on PR size
+  size-labeler:
+    name: PR Size Labeler
+    runs-on: ubuntu-latest
+    steps:
+      - uses: codelytv/pr-size-labeler@v1
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          xs_label: 'size/xs'
+          xs_max_size: 10
+          s_label: 'size/s'
+          s_max_size: 100
+          m_label: 'size/m'
+          m_max_size: 500
+          l_label: 'size/l'
+          l_max_size: 1000
+          xl_label: 'size/xl'
+          fail_if_xl: false
+          message_if_xl: >
+            This PR is very large. Consider breaking it into smaller PRs for easier review.

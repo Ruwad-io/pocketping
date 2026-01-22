@@ -1,4 +1,4 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -9,7 +9,7 @@ export default defineConfig({
   reporter: [['html'], ['list']],
 
   use: {
-    baseURL: 'http://localhost:8000',
+    baseURL: process.env.BASE_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -29,18 +29,22 @@ export default defineConfig({
     },
   ],
 
-  webServer: [
-    {
-      command: 'cd pocketping-test-fastapi && uvicorn main:app --port 8000',
-      url: 'http://localhost:8000',
-      reuseExistingServer: !process.env.CI,
-      timeout: 30000,
-    },
-    {
-      command: 'cd bridge-server && MOCK_BRIDGES=true bun run src/index.ts',
-      url: 'http://localhost:3001/health',
-      reuseExistingServer: !process.env.CI,
-      timeout: 30000,
-    },
-  ],
-});
+  // In CI, services are started via Docker Compose
+  // Locally, start them manually or use: make dev
+  webServer: process.env.CI
+    ? undefined
+    : [
+        {
+          command: 'docker compose -f docker-compose.dev.yml up demo',
+          url: 'http://localhost:3000',
+          reuseExistingServer: true,
+          timeout: 60000,
+        },
+        {
+          command: 'docker compose -f docker-compose.dev.yml up bridge',
+          url: 'http://localhost:3001/health',
+          reuseExistingServer: true,
+          timeout: 60000,
+        },
+      ],
+})

@@ -1,0 +1,113 @@
+version: 2
+updates:
+  # Widget (pnpm)
+  - package-ecosystem: "npm"
+    directory: "/packages/widget"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+      - "npm"
+      - "widget"
+
+  # SDK Node (pnpm)
+  - package-ecosystem: "npm"
+    directory: "/packages/sdk-node"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+      - "npm"
+      - "sdk-node"
+
+  # Bridge Server (Bun)
+  - package-ecosystem: "npm"
+    directory: "/bridge-server"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "npm"
+      - "bridge-server"
+
+  # SDK Python
+  - package-ecosystem: "pip"
+    directory: "/packages/sdk-python"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+      - "sdk-python"
+
+  # SDK Go
+  - package-ecosystem: "gomod"
+    directory: "/packages/sdk-go"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "go"
+      - "sdk-go"
+
+  # SDK PHP (Composer)
+  - package-ecosystem: "composer"
+    directory: "/packages/sdk-php"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "php"
+      - "sdk-php"
+
+  # SDK Ruby (Bundler)
+  - package-ecosystem: "bundler"
+    directory: "/packages/sdk-ruby"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ruby"
+      - "sdk-ruby"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "github-actions"
+
+  # Docker dependencies
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "docker"
