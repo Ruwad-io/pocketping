@@ -1,5 +1,14 @@
 # @pocketping/widget
 
+## 0.3.2
+
+### Patch Changes
+
+- [`9dc2004`](https://github.com/Ruwad-io/pocketping/commit/9dc20041522744ac09001a87582cf490ab2ac2e4) Thanks [@abonur](https://github.com/abonur)! - Fix module resolution for bundlers (Next.js, webpack, etc.)
+  - Remove `browser` field that caused bundlers to use IIFE instead of ESM
+  - Add proper `exports` field for modern module resolution
+  - IIFE build still available at `@pocketping/widget/cdn` for direct script tag usage
+
 ## 0.3.1
 
 ### Patch Changes
