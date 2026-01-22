@@ -108,6 +108,8 @@ export class PocketPingClient {
     }
     // Cleanup tracked elements
     this.cleanupTrackedElements();
+    // Cleanup inspector mode if active
+    this.disableInspectorMode();
   }
 
   async sendMessage(content: string): Promise<Message> {
