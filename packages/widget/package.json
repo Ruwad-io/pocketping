@@ -4,8 +4,15 @@
   "description": "Embeddable chat widget for PocketPing",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
-  "browser": "dist/pocketping.min.global.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./cdn": "./dist/pocketping.min.global.js"
+  },
   "files": [
     "dist"
   ],
