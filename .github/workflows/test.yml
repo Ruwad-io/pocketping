@@ -417,6 +417,20 @@ jobs:
           docker compose -f docker-compose.dev.yml logs
           exit 1
 
+      - name: Wait for widget bundle
+        run: |
+          echo "Waiting for widget bundle to be available..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:3000/widget.js > /dev/null 2>&1; then
+              echo "Widget bundle is ready!"
+              exit 0
+            fi
+            echo "Attempt $i: widget not ready yet..."
+            sleep 2
+          done
+          echo "Timeout waiting for widget bundle"
+          exit 1
+
       - name: Run E2E tests
         run: docker compose -f docker-compose.dev.yml --profile e2e up e2e --exit-code-from e2e
         env:
