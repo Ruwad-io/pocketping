@@ -103,7 +103,7 @@ services:
       - sdk_go_cache:/go/pkg/mod
     command: sh -c "apk add --no-cache inotify-tools && go mod download && while true; do go build ./... && go test -v ./... && echo '=== Waiting for changes ===' && inotifywait -e modify -r .; done"
     environment:
-      - CGO_ENABLED=0
+      - CGO_ENABLED=1
     profiles:
       - sdk-all  # Start with --profile sdk-all
 
@@ -183,7 +183,7 @@ services:
   # E2E Tests (Playwright)
   # ─────────────────────────────────────────────────────────────────
   e2e:
-    image: mcr.microsoft.com/playwright:v1.40.0-jammy
+    image: mcr.microsoft.com/playwright:v1.57.0-jammy
     working_dir: /app
     volumes:
       - .:/app
