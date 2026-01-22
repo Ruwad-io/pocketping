@@ -19,7 +19,7 @@ jobs:
       run:
         working-directory: docs-site
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -64,7 +64,7 @@ jobs:
   #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v6
   #     - name: Deploy to Vercel
   #       uses: amondnet/vercel-action@v25
   #       with:
