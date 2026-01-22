@@ -18,7 +18,19 @@ Add the PocketPing chat widget to your website. Choose the method that fits your
 
 ## Option 1: CDN (Quickest)
 
-Add these lines before the closing `</body>` tag:
+### One-line install (SaaS)
+
+The simplest way - just add your project key:
+
+```html title="index.html"
+<script src="https://cdn.pocketping.io/widget.js" data-key="proj_xxxxxxxxxxxxx"></script>
+```
+
+That's it! The widget auto-initializes with your project ID from the dashboard.
+
+### With custom options
+
+For more control, initialize manually:
 
 ```html title="index.html"
 <!-- Step 1: Load the widget -->
@@ -33,20 +45,19 @@ Add these lines before the closing `</body>` tag:
 </script>
 ```
 
-That's it. Refresh your page and you'll see the chat bubble.
-
 :::tip Auto-updates
-Using `@latest` means you automatically get new features and bug fixes without changing anything.
+The CDN always serves the latest version. You automatically get new features and bug fixes.
 :::
 
 ### Alternative CDN options
 
 ```html
 <!-- Pin to specific version (no auto-updates) -->
-<script src="https://cdn.pocketping.io/widget@0.1.0.js"></script>
+<script src="https://cdn.pocketping.io/widget@0.3.0.js"></script>
 
 <!-- Alternative: jsdelivr or unpkg -->
-<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget@latest/dist/pocketping.iife.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@pocketping/widget/dist/pocketping.min.global.js"></script>
+<script src="https://unpkg.com/@pocketping/widget/dist/pocketping.min.global.js"></script>
 ```
 
 ### SaaS vs Self-Hosted
@@ -85,7 +96,7 @@ pnpm add @pocketping/widget
 Initialize in your JavaScript/TypeScript:
 
 ```typescript
-import { PocketPing } from '@pocketping/widget';
+import PocketPing from '@pocketping/widget';
 
 PocketPing.init({
   projectId: 'proj_xxxxxxxxxxxxx',
@@ -101,7 +112,7 @@ PocketPing.init({
 Full TypeScript definitions included:
 
 ```typescript
-import { PocketPing, PocketPingConfig } from '@pocketping/widget';
+import PocketPing, { type PocketPingConfig } from '@pocketping/widget';
 
 const config: PocketPingConfig = {
   projectId: 'proj_xxxxxxxxxxxxx',
@@ -125,7 +136,7 @@ PocketPing.init(config);
 'use client';
 
 import { useEffect } from 'react';
-import { PocketPing } from '@pocketping/widget';
+import PocketPing from '@pocketping/widget';
 
 export default function RootLayout({
   children
@@ -156,7 +167,7 @@ export default function RootLayout({
 
 ```tsx title="pages/_app.tsx (Pages Router)"
 import { useEffect } from 'react';
-import { PocketPing } from '@pocketping/widget';
+import PocketPing from '@pocketping/widget';
 import type { AppProps } from 'next/app';
 
 export default function App({ Component, pageProps }: AppProps) {
@@ -178,7 +189,7 @@ export default function App({ Component, pageProps }: AppProps) {
 ```vue title="App.vue (Vue 3)"
 <script setup>
 import { onMounted, onUnmounted } from 'vue';
-import { PocketPing } from '@pocketping/widget';
+import PocketPing from '@pocketping/widget';
 
 onMounted(() => {
   PocketPing.init({
@@ -196,7 +207,7 @@ onUnmounted(() => {
 
 ```typescript title="plugins/pocketping.client.ts (Nuxt 3)"
 // Note: .client.ts ensures this only runs in browser
-import { PocketPing } from '@pocketping/widget';
+import PocketPing from '@pocketping/widget';
 
 export default defineNuxtPlugin(() => {
   PocketPing.init({
@@ -210,7 +221,7 @@ export default defineNuxtPlugin(() => {
 
 ```typescript title="app.component.ts"
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { PocketPing } from '@pocketping/widget';
+import PocketPing from '@pocketping/widget';
 
 @Component({
   selector: 'app-root',
@@ -236,7 +247,7 @@ export class AppComponent implements OnInit, OnDestroy {
 ```svelte title="+layout.svelte"
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { PocketPing } from '@pocketping/widget';
+  import PocketPing from '@pocketping/widget';
   import { browser } from '$app/environment';
 
   onMount(() => {
