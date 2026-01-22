@@ -18,18 +18,21 @@ Thank you for wanting to contribute to PocketPing! This guide will help you get 
 
 ### Prerequisites
 
-- **Node.js** 18+ (for widget and bridge-server)
+- **Node.js** 20+ (for widget, sdk-node, and bridge-server)
 - **pnpm** (package manager) - Install with `npm install -g pnpm`
 - **Bun** (for bridge-server) - Install from [bun.sh](https://bun.sh)
-- **Python 3.9+** (for SDK development)
+- **Python 3.10+** (for SDK development)
 - **Git**
 
 ### Quick Setup
 
 ```bash
 # 1. Fork the repo on GitHub, then clone your fork
-git clone https://github.com/Ruwad-io/pocketping.git
+git clone https://github.com/YOUR_USERNAME/pocketping.git
 cd pocketping
+
+# Add upstream remote (to sync with main repo later)
+git remote add upstream https://github.com/Ruwad-io/pocketping.git
 
 # 2. Install dependencies
 pnpm install
@@ -76,6 +79,21 @@ cp .env.example .env
 bun run dev
 ```
 
+### Node.js SDK Development
+
+```bash
+cd packages/sdk-node
+
+# Install dependencies
+pnpm install
+
+# Run tests
+pnpm test
+
+# Build
+pnpm build
+```
+
 ### Python SDK Development
 
 ```bash
@@ -119,9 +137,17 @@ pocketping/
 │   ├── widget/              # Chat widget (Preact + TypeScript)
 │   │   ├── src/
 │   │   │   ├── client.ts    # Core client logic
-│   │   │   ├── Widget.tsx   # Preact component
-│   │   │   └── types.ts     # TypeScript definitions
+│   │   │   ├── components/  # Preact components
+│   │   │   │   └── ChatWidget.tsx
+│   │   │   ├── types.ts     # TypeScript definitions
+│   │   │   └── index.ts     # Main entry point
 │   │   └── tests/           # Unit tests (vitest)
+│   │
+│   ├── sdk-node/            # Node.js SDK (Express, Fastify, etc.)
+│   │   ├── src/
+│   │   │   ├── index.ts     # Main entry point
+│   │   │   └── types.ts     # TypeScript definitions
+│   │   └── tests/           # Unit tests
 │   │
 │   └── sdk-python/          # Python SDK
 │       ├── src/pocketping/
@@ -147,8 +173,9 @@ pocketping/
 │   ├── integration/         # Integration tests
 │   └── e2e/                 # End-to-end tests (Playwright)
 │
+├── docs-site/               # Documentation site (Docusaurus)
 ├── assets/                  # Logo and branding assets
-└── docs/                    # Additional documentation
+└── cloudflare-workers/      # CDN worker for widget distribution
 ```
 
 ---
