@@ -93,6 +93,10 @@ jobs:
     needs: release
     if: needs.release.outputs.sdk-node-released == 'true'
     runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -107,18 +111,16 @@ jobs:
           python-version: '3.11'
 
       - name: Install build tools
-        run: pip install build twine
+        run: pip install build
 
       - name: Build package
         working-directory: packages/sdk-python
         run: python -m build
 
       - name: Publish to PyPI
-        working-directory: packages/sdk-python
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: twine upload dist/*
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/sdk-python/dist/
 
       - name: Commit version sync
         env:
@@ -135,6 +137,9 @@ jobs:
     needs: release
     if: needs.release.outputs.widget-released == 'true' || needs.release.outputs.sdk-node-released == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
