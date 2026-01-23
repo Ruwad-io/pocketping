@@ -17,9 +17,6 @@ importers:
       '@playwright/test':
         specifier: ^1.57.0
         version: 1.57.0
-      '@pocketping/sdk-node':
-        specifier: workspace:*
-        version: link:packages/sdk-node
       '@semantic-release/changelog':
         specifier: ^6.0.3
         version: 6.0.3(semantic-release@24.2.9(typescript@5.9.3))
