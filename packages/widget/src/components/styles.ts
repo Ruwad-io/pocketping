@@ -71,6 +71,7 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       width: 380px;
       height: 520px;
       max-height: calc(100vh - 100px);
+      max-height: calc(100dvh - 100px);
       background: ${colors.bg};
       border-radius: 16px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
@@ -93,7 +94,9 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     @media (max-width: 480px) {
       .pp-window {
         width: calc(100vw - 20px);
-        height: calc(100vh - 100px);
+        height: auto;
+        max-height: calc(100vh - 100px);
+        max-height: calc(100dvh - 100px);
         bottom: 80px;
         right: 10px;
         left: 10px;
