@@ -61,7 +61,11 @@ jobs:
             semantic-release-monorepo
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true  # OIDC trusted publishing
+
+      - name: Publish Widget to npm (OIDC)
+        if: steps.release-widget.outputs.new_release_published == 'true'
+        working-directory: packages/widget
+        run: npm publish --provenance --access public
 
       - name: Release SDK Node
         id: release-sdk-node
@@ -75,7 +79,12 @@ jobs:
             semantic-release-monorepo
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true  # OIDC trusted publishing
+
+      - name: Publish SDK Node to npm (OIDC)
+        if: steps.release-sdk-node.outputs.new_release_published == 'true'
+        continue-on-error: true  # Skip if trusted publisher not configured
+        working-directory: packages/sdk-node
+        run: npm publish --provenance --access public
 
   publish-python:
     name: Publish Python SDK
