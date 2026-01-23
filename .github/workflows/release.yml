@@ -16,12 +16,18 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      issues: write
     outputs:
-      published: ${{ steps.changesets.outputs.published }}
-      publishedPackages: ${{ steps.changesets.outputs.publishedPackages }}
+      widget-released: ${{ steps.release-widget.outputs.new_release_published }}
+      widget-version: ${{ steps.release-widget.outputs.new_release_version }}
+      sdk-node-released: ${{ steps.release-sdk-node.outputs.new_release_published }}
+      sdk-node-version: ${{ steps.release-sdk-node.outputs.new_release_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
@@ -37,42 +43,51 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build publishable packages only
+      - name: Build packages
         run: |
           pnpm --filter @pocketping/widget build
           pnpm --filter @pocketping/sdk-node build
 
-      - name: Create Release Pull Request or Publish
-        id: changesets
-        uses: changesets/action@v1
+      - name: Release Widget
+        id: release-widget
+        uses: cycjimmy/semantic-release-action@v4
         with:
-          publish: pnpm changeset publish
-          version: pnpm changeset version
-          title: 'chore: release packages'
-          commit: 'chore: release packages'
+          working_directory: packages/widget
+          semantic_version: 24
+          extra_plugins: |
+            @semantic-release/changelog
+            @semantic-release/git
+            semantic-release-monorepo
         env:
-          HUSKY: 0
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Release SDK Node
+        id: release-sdk-node
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          working_directory: packages/sdk-node
+          semantic_version: 24
+          extra_plugins: |
+            @semantic-release/changelog
+            @semantic-release/git
+            semantic-release-monorepo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-python:
     name: Publish Python SDK
     needs: release
-    if: needs.release.outputs.published == 'true' && contains(needs.release.outputs.publishedPackages, '@pocketping/sdk-node')
+    if: needs.release.outputs.sdk-node-released == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Get sdk-node version
-        id: version
-        run: |
-          VERSION=$(echo '${{ needs.release.outputs.publishedPackages }}' | jq -r '.[] | select(.name == "@pocketping/sdk-node") | .version')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Update Python SDK version
         run: |
-          sed -i 's/^version = .*/version = "${{ steps.version.outputs.version }}"/' packages/sdk-python/pyproject.toml
+          sed -i 's/^version = .*/version = "${{ needs.release.outputs.sdk-node-version }}"/' packages/sdk-python/pyproject.toml
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -100,13 +115,13 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add packages/sdk-python/pyproject.toml
-          git commit -m "chore(sdk-python): bump version to ${{ steps.version.outputs.version }}" || true
+          git commit -m "chore(sdk-python): bump version to ${{ needs.release.outputs.sdk-node-version }}" || true
           git push || true
 
   publish-docker:
     name: Publish Docker Image
     needs: release
-    if: needs.release.outputs.published == 'true'
+    if: needs.release.outputs.widget-released == 'true' || needs.release.outputs.sdk-node-released == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -115,7 +130,7 @@ jobs:
       - name: Get version for tag
         id: version
         run: |
-          VERSION=$(echo '${{ needs.release.outputs.publishedPackages }}' | jq -r '.[0].version')
+          VERSION="${{ needs.release.outputs.widget-version || needs.release.outputs.sdk-node-version }}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "repo_owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
@@ -143,7 +158,7 @@ jobs:
   create-release:
     name: Create GitHub Release
     needs: [release, publish-python, publish-docker]
-    if: always() && needs.release.outputs.published == 'true'
+    if: always() && (needs.release.outputs.widget-released == 'true' || needs.release.outputs.sdk-node-released == 'true')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -152,8 +167,7 @@ jobs:
       - name: Get release info
         id: info
         run: |
-          PACKAGES='${{ needs.release.outputs.publishedPackages }}'
-          VERSION=$(echo "$PACKAGES" | jq -r '.[0].version')
+          VERSION="${{ needs.release.outputs.widget-version || needs.release.outputs.sdk-node-version }}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create Release

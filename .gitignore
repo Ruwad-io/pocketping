@@ -23,6 +23,7 @@ dist/
 *.config.d.ts.map
 !vite.config.js
 !vitest.config.js
+!commitlint.config.js
 
 # Python
 uv.lock

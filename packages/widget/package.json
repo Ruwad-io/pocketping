@@ -51,5 +51,22 @@
     "type": "git",
     "url": "https://github.com/Ruwad-io/pocketping.git",
     "directory": "packages/widget"
+  },
+  "release": {
+    "extends": "semantic-release-monorepo",
+    "branches": ["main"],
+    "plugins": [
+      "@semantic-release/commit-analyzer",
+      "@semantic-release/release-notes-generator",
+      ["@semantic-release/changelog", {
+        "changelogFile": "CHANGELOG.md"
+      }],
+      "@semantic-release/npm",
+      ["@semantic-release/git", {
+        "assets": ["package.json", "CHANGELOG.md"],
+        "message": "chore(release): ${nextRelease.gitTag} [skip ci]\n\n${nextRelease.notes}"
+      }],
+      "@semantic-release/github"
+    ]
   }
 }

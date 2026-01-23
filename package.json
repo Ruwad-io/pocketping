@@ -23,16 +23,15 @@
     "format:ts": "prettier --write '**/*.{ts,tsx,json,md,yaml,yml}' --ignore-path .gitignore",
     "format:py": "cd packages/sdk-python && ruff format .",
     "typecheck": "cd packages/widget && pnpm exec tsc --noEmit && cd ../sdk-node && pnpm exec tsc --noEmit",
-    "changeset": "changeset",
-    "version": "changeset version",
-    "release": "pnpm build && changeset publish",
     "prepare": "husky"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "^0.5.2",
-    "@changesets/cli": "^2.29.8",
+    "@commitlint/cli": "^19.8.0",
+    "@commitlint/config-conventional": "^19.8.0",
     "@playwright/test": "^1.57.0",
     "@pocketping/sdk-node": "workspace:*",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^8.53.1",
     "@typescript-eslint/parser": "^8.53.1",
@@ -40,6 +39,8 @@
     "hono": "^4.11.4",
     "husky": "^9.1.7",
     "prettier": "^3.2.0",
+    "semantic-release": "^24.2.3",
+    "semantic-release-monorepo": "^8.0.2",
     "typescript": "^5.3.0"
   }
 }
