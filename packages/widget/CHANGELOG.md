@@ -1,5 +1,14 @@
 # @pocketping/widget
 
+## 0.3.4
+
+### Patch Changes
+
+- [`bbc804b`](https://github.com/Ruwad-io/pocketping/commit/bbc804bc45070401807f820572df91b300da15be) Thanks [@abonur](https://github.com/abonur)! - fix: align API endpoints with SaaS backend
+
+  The widget now works with the PocketPing SaaS API endpoints:
+  - /connect, /message, /typing, /read, /presence, /identify
+
 ## 0.3.3
 
 ### Patch Changes
