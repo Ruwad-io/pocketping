@@ -30,12 +30,12 @@ enum IpFilterReason: string
 /**
  * Result of an IP filter check.
  */
-readonly class IpFilterResult
+class IpFilterResult
 {
     public function __construct(
-        public bool $allowed,
-        public IpFilterReason $reason,
-        public ?string $matchedRule = null,
+        public readonly bool $allowed,
+        public readonly IpFilterReason $reason,
+        public readonly ?string $matchedRule = null,
     ) {
     }
 
@@ -55,19 +55,19 @@ readonly class IpFilterResult
 /**
  * Log event for IP filter decisions.
  */
-readonly class IpFilterLogEvent
+class IpFilterLogEvent
 {
-    public \DateTimeImmutable $timestamp;
+    public readonly \DateTimeImmutable $timestamp;
 
     /**
      * @param array<string, mixed>|null $requestInfo
      */
     public function __construct(
-        public string $ip,
-        public bool $allowed,
-        public IpFilterReason $reason,
-        public ?string $matchedRule = null,
-        public ?array $requestInfo = null,
+        public readonly string $ip,
+        public readonly bool $allowed,
+        public readonly IpFilterReason $reason,
+        public readonly ?string $matchedRule = null,
+        public readonly ?array $requestInfo = null,
     ) {
         $this->timestamp = new \DateTimeImmutable();
     }
