@@ -13,6 +13,7 @@ from pocketping.models import (
     SessionMetadata,
     TypingRequest,
 )
+from pocketping.utils.ip_filter import check_ip_filter, create_log_event
 
 # Headers exposed to the widget for version management
 VERSION_EXPOSE_HEADERS = [
@@ -117,6 +118,44 @@ def _check_version_and_set_headers(pp: PocketPing, request: Request, response: R
         )
 
 
+async def _check_ip_filter(pp: PocketPing, request: Request, path: str) -> None:
+    """Check IP filter and block if not allowed.
+
+    Args:
+        pp: PocketPing instance
+        request: FastAPI request
+        path: Request path for logging
+
+    Raises:
+        HTTPException: If IP is blocked (403 Forbidden by default)
+    """
+    if not pp.ip_filter or not pp.ip_filter.enabled:
+        return
+
+    client_ip = _get_client_ip(request)
+    filter_result = await check_ip_filter(client_ip, pp.ip_filter, {"path": path})
+
+    if not filter_result.allowed:
+        # Log blocked request
+        if pp.ip_filter.log_blocked:
+            log_event = create_log_event(
+                event_type="blocked",
+                ip=client_ip,
+                reason=filter_result.reason,
+                path=path,
+            )
+
+            if pp.ip_filter.logger:
+                pp.ip_filter.logger(log_event)
+            else:
+                print(f"[PocketPing] IP blocked: {client_ip} - reason: {filter_result.reason}")
+
+        raise HTTPException(
+            status_code=pp.ip_filter.blocked_status_code,
+            detail=pp.ip_filter.blocked_message,
+        )
+
+
 def create_router(pp: PocketPing, prefix: str = "") -> APIRouter:
     """Create a FastAPI router for PocketPing endpoints.
 
@@ -135,6 +174,9 @@ def create_router(pp: PocketPing, prefix: str = "") -> APIRouter:
     @router.post("/connect")
     async def connect(body: ConnectRequest, request: Request, response: Response):
         """Initialize or resume a chat session."""
+        # Check IP filter first
+        await _check_ip_filter(pp, request, "/connect")
+
         # Check widget version
         _check_version_and_set_headers(pp, request, response)
 
@@ -198,6 +240,42 @@ def create_router(pp: PocketPing, prefix: str = "") -> APIRouter:
         session_id: str = Query(..., alias="sessionId"),
     ):
         """WebSocket endpoint for real-time updates."""
+        # Check IP filter before accepting connection
+        if pp.ip_filter and pp.ip_filter.enabled:
+            # Get client IP from WebSocket scope
+            client_ip = "unknown"
+            if websocket.client:
+                client_ip = websocket.client.host
+
+            # Check headers for proxy
+            forwarded = websocket.headers.get("x-forwarded-for")
+            if forwarded:
+                client_ip = forwarded.split(",")[0].strip()
+            else:
+                real_ip = websocket.headers.get("x-real-ip")
+                if real_ip:
+                    client_ip = real_ip
+
+            filter_result = await check_ip_filter(client_ip, pp.ip_filter, {"path": "/stream"})
+
+            if not filter_result.allowed:
+                if pp.ip_filter.log_blocked:
+                    log_event = create_log_event(
+                        event_type="blocked",
+                        ip=client_ip,
+                        reason=filter_result.reason,
+                        path="/stream",
+                        session_id=session_id,
+                    )
+
+                    if pp.ip_filter.logger:
+                        pp.ip_filter.logger(log_event)
+                    else:
+                        print(f"[PocketPing] WS IP blocked: {client_ip} - reason: {filter_result.reason}")
+
+                await websocket.close(code=4003, reason=pp.ip_filter.blocked_message)
+                return
+
         await websocket.accept()
 
         pp.register_websocket(session_id, websocket)

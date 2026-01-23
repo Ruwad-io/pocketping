@@ -283,6 +283,56 @@ Bridge Interface {
 }
 ```
 
+### 11. IP Filtering
+
+```
+// Configuration
+IpFilterConfig {
+  enabled?: boolean           // Default: false
+  mode?: 'blocklist' | 'allowlist' | 'both'  // Default: 'blocklist'
+  allowlist?: string[]        // IPs/CIDRs to allow
+  blocklist?: string[]        // IPs/CIDRs to block
+  customFilter?: (ip, request) -> boolean | null  // Custom filter function
+  logBlocked?: boolean        // Default: true
+  blockedStatusCode?: number  // Default: 403
+  blockedMessage?: string     // Default: 'Forbidden'
+}
+
+// Filter result
+IpFilterResult {
+  allowed: boolean
+  reason: 'blocklist' | 'allowlist' | 'not_in_allowlist' | 'custom' | 'default' | 'disabled'
+  matchedRule?: string
+}
+
+// Functions
+check_ip_filter(ip: string, config: IpFilterConfig) -> IpFilterResult
+get_client_ip(request) -> string  // Extract IP from proxy headers
+```
+
+#### IP Filter Modes
+
+| Mode | Behavior |
+|------|----------|
+| `blocklist` | Block matching IPs, allow all others |
+| `allowlist` | Only allow matching IPs, block all others |
+| `both` | Allowlist takes precedence, then blocklist is applied |
+
+#### CIDR Support
+
+All SDKs must support CIDR notation:
+- Single IP: `192.168.1.1` (treated as `/32`)
+- Range: `192.168.1.0/24` (256 addresses)
+- Large range: `10.0.0.0/8` (16M addresses)
+- All IPs: `0.0.0.0/0`
+
+#### Custom Filter
+
+The `customFilter` function allows dynamic IP filtering:
+- Return `true` to allow
+- Return `false` to block
+- Return `null/undefined` to defer to list-based filtering
+
 ---
 
 ## Storage Interface (REQUIRED)

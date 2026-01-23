@@ -69,7 +69,78 @@ const pp = new PocketPing({
   // Protocol version settings
   protocolVersion: '1.0',
   minSupportedVersion: '0.1',
+
+  // IP filtering (see IP Filtering section below)
+  ipFilter: {
+    enabled: true,
+    mode: 'blocklist',
+    blocklist: ['203.0.113.0/24'],
+  },
 });
+```
+
+## IP Filtering
+
+Block or allow specific IP addresses or CIDR ranges:
+
+```typescript
+const pp = new PocketPing({
+  ipFilter: {
+    enabled: true,
+    mode: 'blocklist',  // 'allowlist' | 'blocklist' | 'both'
+    blocklist: [
+      '203.0.113.0/24',   // CIDR range
+      '198.51.100.50',    // Single IP
+    ],
+    allowlist: [
+      '10.0.0.0/8',       // Internal network
+    ],
+    logBlocked: true,     // Log blocked requests (default: true)
+    blockedStatusCode: 403,
+    blockedMessage: 'Forbidden',
+  },
+});
+
+// Or with a custom filter function
+const pp = new PocketPing({
+  ipFilter: {
+    enabled: true,
+    mode: 'blocklist',
+    customFilter: (ip, request) => {
+      // Return true to allow, false to block, null to defer to list-based filtering
+      if (ip.startsWith('192.168.')) return true;  // Always allow local
+      return null;  // Use blocklist/allowlist
+    },
+  },
+});
+```
+
+### Modes
+
+| Mode | Behavior |
+|------|----------|
+| `blocklist` | Block IPs in blocklist, allow all others (default) |
+| `allowlist` | Only allow IPs in allowlist, block all others |
+| `both` | Allowlist takes precedence, then blocklist is applied |
+
+### CIDR Support
+
+The SDK supports CIDR notation for IP ranges:
+- Single IP: `192.168.1.1` (treated as `/32`)
+- Class C: `192.168.1.0/24` (256 addresses)
+- Class B: `172.16.0.0/16` (65,536 addresses)
+- Class A: `10.0.0.0/8` (16M addresses)
+
+### Manual IP Check
+
+```typescript
+// Check IP manually
+const result = pp.checkIpFilter('192.168.1.50');
+// result: { allowed: boolean, reason: string, matchedRule?: string }
+
+// Get client IP from request headers
+const clientIp = pp.getClientIp(request.headers);
+// Checks: CF-Connecting-IP, X-Real-IP, X-Forwarded-For
 ```
 
 ## Architecture Options

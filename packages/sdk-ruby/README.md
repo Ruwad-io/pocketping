@@ -130,8 +130,96 @@ PocketPing::Client.new(
   min_widget_version: '0.2.0',
   latest_widget_version: '0.3.0',
   version_warning_message: 'Please upgrade your widget',
-  version_upgrade_url: 'https://docs.example.com/upgrade'
+  version_upgrade_url: 'https://docs.example.com/upgrade',
+
+  # IP filtering (see IP Filtering section below)
+  ip_filter: PocketPing::IpFilterConfig.new(
+    enabled: true,
+    mode: :blocklist,
+    blocklist: ['203.0.113.0/24']
+  )
 )
+```
+
+## IP Filtering
+
+Block or allow specific IP addresses or CIDR ranges:
+
+```ruby
+pp = PocketPing::Client.new(
+  ip_filter: PocketPing::IpFilterConfig.new(
+    enabled: true,
+    mode: :blocklist,  # :allowlist | :blocklist | :both
+    blocklist: [
+      '203.0.113.0/24',   # CIDR range
+      '198.51.100.50',    # Single IP
+    ],
+    allowlist: [
+      '10.0.0.0/8',       # Internal network
+    ],
+    log_blocked: true,    # Log blocked requests (default: true)
+    blocked_status_code: 403,
+    blocked_message: 'Forbidden'
+  )
+)
+
+# Or with a custom filter proc
+pp = PocketPing::Client.new(
+  ip_filter: PocketPing::IpFilterConfig.new(
+    enabled: true,
+    mode: :blocklist,
+    custom_filter: ->(ip, request) {
+      # Return true to allow, false to block, nil to defer to list-based filtering
+      return true if ip.start_with?('192.168.')  # Always allow local
+      nil  # Use blocklist/allowlist
+    }
+  )
+)
+```
+
+### Modes
+
+| Mode | Behavior |
+|------|----------|
+| `:blocklist` | Block IPs in blocklist, allow all others (default) |
+| `:allowlist` | Only allow IPs in allowlist, block all others |
+| `:both` | Allowlist takes precedence, then blocklist is applied |
+
+### CIDR Support
+
+The SDK uses Ruby's built-in `IPAddr` class for CIDR matching:
+- Single IP: `192.168.1.1` (treated as `/32`)
+- Class C: `192.168.1.0/24` (256 addresses)
+- Class B: `172.16.0.0/16` (65,536 addresses)
+- Class A: `10.0.0.0/8` (16M addresses)
+
+### Manual IP Check
+
+```ruby
+# Check IP manually
+result = pp.check_ip_filter('192.168.1.50')
+# result: IpFilterResult with #allowed?, #reason, #matched_rule
+
+# Get client IP from request (Rack env)
+client_ip = pp.get_client_ip(request.env)
+# Checks: CF-Connecting-IP, X-Real-IP, X-Forwarded-For
+```
+
+### Rack Middleware
+
+For Rails, Sinatra, or any Rack-compatible framework:
+
+```ruby
+# config.ru or application.rb
+require 'pocketping'
+
+use PocketPing::Middleware::IpFilterMiddleware, PocketPing::IpFilterConfig.new(
+  enabled: true,
+  mode: :blocklist,
+  blocklist: ['203.0.113.0/24']
+)
+
+run MyApp
 ```
 
 ## Custom Events

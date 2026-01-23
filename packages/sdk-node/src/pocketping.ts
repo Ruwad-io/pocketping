@@ -29,6 +29,7 @@ import type {
 import type { Storage } from './storage/types';
 import { MemoryStorage } from './storage/memory';
 import type { Bridge } from './bridges/types';
+import { checkIpFilter, type IpFilterLogEvent } from './utils/ip-filter';
 
 // ─────────────────────────────────────────────────────────────────
 // IP & User Agent Helpers
@@ -167,6 +168,40 @@ export class PocketPing {
         return;
       }
 
+      // IP Filtering - block before processing
+      if (this.config.ipFilter?.enabled) {
+        const clientIp = getClientIp(req);
+        const filterResult = await checkIpFilter(clientIp, this.config.ipFilter, {
+          path: path,
+        });
+
+        if (!filterResult.allowed) {
+          // Log blocked request
+          if (this.config.ipFilter.logBlocked !== false) {
+            const logEvent: IpFilterLogEvent = {
+              type: 'blocked',
+              ip: clientIp,
+              reason: filterResult.reason,
+              path: path,
+              timestamp: new Date(),
+            };
+
+            if (this.config.ipFilter.logger) {
+              this.config.ipFilter.logger(logEvent);
+            } else {
+              console.log(`[PocketPing] IP blocked: ${clientIp} - reason: ${filterResult.reason}`);
+            }
+          }
+
+          res.statusCode = this.config.ipFilter.blockedStatusCode ?? 403;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({
+            error: this.config.ipFilter.blockedMessage ?? 'Forbidden',
+          }));
+          return;
+        }
+      }
+
       // Check widget version
       const widgetVersion = req.headers['x-pocketping-version'] as string | undefined;
       const versionCheck = this.checkWidgetVersion(widgetVersion);
@@ -295,7 +330,36 @@ export class PocketPing {
       path: '/pocketping/stream'
     });
 
-    this.wss.on('connection', (ws, req) => {
+    this.wss.on('connection', async (ws, req) => {
+      // IP Filtering for WebSocket connections
+      if (this.config.ipFilter?.enabled) {
+        const clientIp = getClientIp(req);
+        const filterResult = await checkIpFilter(clientIp, this.config.ipFilter, {
+          path: '/pocketping/stream',
+        });
+
+        if (!filterResult.allowed) {
+          if (this.config.ipFilter.logBlocked !== false) {
+            const logEvent: IpFilterLogEvent = {
+              type: 'blocked',
+              ip: clientIp,
+              reason: filterResult.reason,
+              path: '/pocketping/stream',
+              timestamp: new Date(),
+            };
+
+            if (this.config.ipFilter.logger) {
+              this.config.ipFilter.logger(logEvent);
+            } else {
+              console.log(`[PocketPing] WS IP blocked: ${clientIp} - reason: ${filterResult.reason}`);
+            }
+          }
+
+          ws.close(4003, this.config.ipFilter.blockedMessage ?? 'Forbidden');
+          return;
+        }
+      }
+
       const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
       const sessionId = url.searchParams.get('sessionId');
 

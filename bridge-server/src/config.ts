@@ -2,7 +2,14 @@
  * Configuration loader from environment variables
  */
 
-import type { BridgeServerConfig, TelegramConfig, DiscordConfig, SlackConfig } from "./types";
+import type {
+  BridgeServerConfig,
+  TelegramConfig,
+  DiscordConfig,
+  SlackConfig,
+  IpFilterConfigOptions,
+  IpFilterMode,
+} from "./types";
 
 function getTelegramConfig(): TelegramConfig | undefined {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -60,6 +67,38 @@ function getSlackConfig(): SlackConfig | undefined {
   };
 }
 
+function getIpFilterConfig(): IpFilterConfigOptions | undefined {
+  const enabled = process.env.IP_FILTER_ENABLED === "true";
+  if (!enabled) return undefined;
+
+  const mode = (process.env.IP_FILTER_MODE as IpFilterMode) || "blocklist";
+
+  // Parse comma-separated lists
+  const blocklist = process.env.IP_FILTER_BLOCKLIST
+    ? process.env.IP_FILTER_BLOCKLIST.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
+
+  const allowlist = process.env.IP_FILTER_ALLOWLIST
+    ? process.env.IP_FILTER_ALLOWLIST.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
+
+  const logBlocked = process.env.IP_FILTER_LOG_BLOCKED !== "false";
+  const blockedStatusCode = process.env.IP_FILTER_BLOCKED_STATUS_CODE
+    ? parseInt(process.env.IP_FILTER_BLOCKED_STATUS_CODE, 10)
+    : 403;
+  const blockedMessage = process.env.IP_FILTER_BLOCKED_MESSAGE || "Forbidden";
+
+  return {
+    enabled,
+    mode,
+    allowlist,
+    blocklist,
+    logBlocked,
+    blockedStatusCode,
+    blockedMessage,
+  };
+}
+
 export function loadConfig(): BridgeServerConfig {
   const port = parseInt(process.env.PORT || "3001", 10);
   const apiKey = process.env.API_KEY;
@@ -72,6 +111,8 @@ export function loadConfig(): BridgeServerConfig {
   const latestWidgetVersion = process.env.LATEST_WIDGET_VERSION;
   const versionWarningMessage = process.env.VERSION_WARNING_MESSAGE;
   const versionUpgradeUrl = process.env.VERSION_UPGRADE_URL;
+
+  const ipFilter = getIpFilterConfig();
 
   const config: BridgeServerConfig = {
     port,
@@ -86,6 +127,7 @@ export function loadConfig(): BridgeServerConfig {
     telegram: getTelegramConfig(),
     discord: getDiscordConfig(),
     slack: getSlackConfig(),
+    ipFilter,
   };
 
   // Log enabled bridges
@@ -104,6 +146,16 @@ export function loadConfig(): BridgeServerConfig {
     console.warn("[Config] No bridges configured! Set environment variables to enable bridges.");
   } else {
     console.log(`[Config] Enabled bridges: ${enabledBridges.join(", ")}`);
+  }
+
+  // Log IP filter status
+  if (config.ipFilter?.enabled) {
+    const filterInfo = [
+      `mode: ${config.ipFilter.mode}`,
+      config.ipFilter.blocklist?.length ? `blocklist: ${config.ipFilter.blocklist.length} entries` : null,
+      config.ipFilter.allowlist?.length ? `allowlist: ${config.ipFilter.allowlist.length} entries` : null,
+    ].filter(Boolean).join(", ");
+    console.log(`[Config] IP filtering enabled (${filterInfo})`);
   }
 
   return config;

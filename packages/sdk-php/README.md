@@ -48,6 +48,8 @@ echo json_encode($response);
 ```php
 use PocketPing\PocketPing;
 use PocketPing\Storage\MemoryStorage;
+use PocketPing\Utils\IpFilterConfig;
+use PocketPing\Utils\IpFilterMode;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 
@@ -81,7 +83,91 @@ $pocketPing = new PocketPing(
         error_log("User identified: {$session->identity->id}");
     },
     logger: $logger,
+    // IP filtering (see IP Filtering section below)
+    ipFilter: new IpFilterConfig(
+        enabled: true,
+        mode: IpFilterMode::BLOCKLIST,
+        blocklist: ['203.0.113.0/24'],
+    ),
 );
+```
+
+## IP Filtering
+
+Block or allow specific IP addresses or CIDR ranges:
+
+```php
+use PocketPing\PocketPing;
+use PocketPing\Utils\IpFilterConfig;
+use PocketPing\Utils\IpFilterMode;
+
+$pocketPing = new PocketPing(
+    ipFilter: new IpFilterConfig(
+        enabled: true,
+        mode: IpFilterMode::BLOCKLIST,  // BLOCKLIST | ALLOWLIST | BOTH
+        blocklist: [
+            '203.0.113.0/24',   // CIDR range
+            '198.51.100.50',    // Single IP
+        ],
+        allowlist: [
+            '10.0.0.0/8',       // Internal network
+        ],
+        logBlocked: true,       // Log blocked requests (default: true)
+        blockedStatusCode: 403,
+        blockedMessage: 'Forbidden',
+    ),
+);
+
+// Or with a custom filter callback
+$pocketPing = new PocketPing(
+    ipFilter: new IpFilterConfig(
+        enabled: true,
+        mode: IpFilterMode::BLOCKLIST,
+        customFilter: function (string $ip, ?array $requestInfo): ?bool {
+            // Return true to allow, false to block, null to defer to list-based filtering
+            if (str_starts_with($ip, '192.168.')) {
+                return true;  // Always allow local
+            }
+            return null;  // Use blocklist/allowlist
+        },
+    ),
+);
+```
+
+### Modes
+
+| Mode | Behavior |
+|------|----------|
+| `IpFilterMode::BLOCKLIST` | Block IPs in blocklist, allow all others (default) |
+| `IpFilterMode::ALLOWLIST` | Only allow IPs in allowlist, block all others |
+| `IpFilterMode::BOTH` | Allowlist takes precedence, then blocklist is applied |
+
+### CIDR Support
+
+The SDK supports CIDR notation using `ip2long()` and bitmask operations:
+- Single IP: `192.168.1.1` (treated as `/32`)
+- Class C: `192.168.1.0/24` (256 addresses)
+- Class B: `172.16.0.0/16` (65,536 addresses)
+- Class A: `10.0.0.0/8` (16M addresses)
+
+### Manual IP Check
+
+```php
+use PocketPing\Utils\IpFilter;
+
+// Check IP manually
+$result = $pocketPing->checkIpFilter('192.168.1.50');
+// IpFilterResult with: allowed, reason, matchedRule
+
+// Get client IP from headers
+$clientIp = $pocketPing->getClientIp($_SERVER);
+// Checks: CF-Connecting-IP, X-Real-IP, X-Forwarded-For
+
+// Create a blocked response
+if (!$result->allowed) {
+    $response = $pocketPing->createBlockedResponse();
+    // Returns: ['status' => 403, 'body' => ['error' => 'Forbidden']]
+}
 ```
 
 ## API Reference

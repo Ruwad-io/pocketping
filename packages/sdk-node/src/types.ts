@@ -1,6 +1,9 @@
 import type { Storage } from './storage/types';
 import type { Bridge } from './bridges/types';
 import type { AIProvider } from './ai/types';
+import type { IpFilterConfig } from './utils/ip-filter';
+
+export type { IpFilterConfig, IpFilterMode, IpFilterLogEvent } from './utils/ip-filter';
 
 export interface PocketPingConfig {
   /** Storage adapter for sessions and messages */
@@ -58,6 +61,13 @@ export interface PocketPingConfig {
 
   /** URL to upgrade instructions */
   versionUpgradeUrl?: string;
+
+  // ─────────────────────────────────────────────────────────────────
+  // IP Filtering
+  // ─────────────────────────────────────────────────────────────────
+
+  /** IP filtering configuration (allowlist/blocklist) */
+  ipFilter?: IpFilterConfig;
 }
 
 export interface AIConfig {

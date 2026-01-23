@@ -17,9 +17,9 @@ import (
 
 // Common errors
 var (
-	ErrSessionNotFound = errors.New("session not found")
+	ErrSessionNotFound    = errors.New("session not found")
 	ErrIdentityIDRequired = errors.New("identity.id is required")
-	ErrContentTooLong = errors.New("message content exceeds maximum length")
+	ErrContentTooLong     = errors.New("message content exceeds maximum length")
 )
 
 // Config holds the configuration for PocketPing.
@@ -68,6 +68,9 @@ type Config struct {
 
 	// TrackedElements to return in connect response
 	TrackedElements []TrackedElement
+
+	// IpFilter configuration for IP filtering
+	IpFilter *IpFilterConfig
 }
 
 // PocketPing is the main struct for handling chat sessions.
@@ -903,25 +906,8 @@ func ParseUserAgent(userAgent string) (deviceType, browser, os string) {
 	return deviceType, browser, os
 }
 
-// GetClientIP extracts client IP from HTTP request headers.
-func GetClientIP(r *http.Request) string {
-	// Check X-Forwarded-For
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		ips := strings.Split(xff, ",")
-		if len(ips) > 0 {
-			return strings.TrimSpace(ips[0])
-		}
-	}
-
-	// Check X-Real-IP
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return xri
-	}
-
-	// Fall back to RemoteAddr
-	addr := r.RemoteAddr
-	if idx := strings.LastIndex(addr, ":"); idx != -1 {
-		return addr[:idx]
-	}
-	return addr
+// GetClientIPSimple extracts client IP from HTTP request headers.
+// For more options (custom headers, trust proxy), use GetClientIP with IpFilterConfig.
+func GetClientIPSimple(r *http.Request) string {
+	return GetClientIP(r, nil)
 }

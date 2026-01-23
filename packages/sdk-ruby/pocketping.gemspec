@@ -44,6 +44,7 @@ Gem::Specification.new do |spec|
 
   # Development dependencies
   spec.add_development_dependency "bundler", "~> 2.0"
+  spec.add_development_dependency "rack", "~> 3.0"   # For IP filter middleware testing
   spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "rspec", "~> 3.12"
   spec.add_development_dependency "rubocop", "~> 1.50"

@@ -229,6 +229,74 @@ pp = PocketPing(
 )
 ```
 
+## IP Filtering
+
+Block or allow specific IP addresses or CIDR ranges:
+
+```python
+from pocketping import PocketPing, IpFilterConfig
+
+pp = PocketPing(
+    ip_filter=IpFilterConfig(
+        enabled=True,
+        mode='blocklist',  # 'allowlist' | 'blocklist' | 'both'
+        blocklist=[
+            '203.0.113.0/24',   # CIDR range
+            '198.51.100.50',    # Single IP
+        ],
+        allowlist=[
+            '10.0.0.0/8',       # Internal network
+        ],
+        log_blocked=True,      # Log blocked requests (default: True)
+        blocked_status_code=403,
+        blocked_message='Forbidden',
+    ),
+)
+
+# Or with a custom filter function
+def my_filter(ip: str, request) -> bool | None:
+    # Return True to allow, False to block, None to defer to list-based filtering
+    if ip.startswith('192.168.'):
+        return True  # Always allow local
+    return None  # Use blocklist/allowlist
+
+pp = PocketPing(
+    ip_filter=IpFilterConfig(
+        enabled=True,
+        mode='blocklist',
+        custom_filter=my_filter,
+    ),
+)
+```
+
+### Modes
+
+| Mode | Behavior |
+|------|----------|
+| `blocklist` | Block IPs in blocklist, allow all others (default) |
+| `allowlist` | Only allow IPs in allowlist, block all others |
+| `both` | Allowlist takes precedence, then blocklist is applied |
+
+### CIDR Support
+
+The SDK supports CIDR notation for IP ranges:
+- Single IP: `192.168.1.1` (treated as `/32`)
+- Class C: `192.168.1.0/24` (256 addresses)
+- Class B: `172.16.0.0/16` (65,536 addresses)
+- Class A: `10.0.0.0/8` (16M addresses)
+
+### Manual IP Check
+
+```python
+# Check IP manually
+result = pp.check_ip_filter('192.168.1.50')
+# result: IpFilterResult(allowed=bool, reason=str, matched_rule=str|None)
+
+# Get client IP from request headers
+client_ip = pp.get_client_ip(request.headers)
+# Checks: CF-Connecting-IP, X-Real-IP, X-Forwarded-For
+```
+
 ## Presence Detection
 
 The `ai_takeover_delay` setting controls how long to wait before AI takes over:

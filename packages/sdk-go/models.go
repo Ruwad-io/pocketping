@@ -49,7 +49,6 @@ type UserIdentity struct {
 
 // MarshalJSON implements custom JSON marshaling for UserIdentity.
 func (u UserIdentity) MarshalJSON() ([]byte, error) {
-	type Alias UserIdentity
 	base := map[string]interface{}{}
 
 	// Add base fields
@@ -183,12 +182,12 @@ type ConnectRequest struct {
 
 // ConnectResponse is the response after connecting.
 type ConnectResponse struct {
-	SessionID       string            `json:"sessionId"`
-	VisitorID       string            `json:"visitorId"`
-	OperatorOnline  bool              `json:"operatorOnline"`
-	WelcomeMessage  string            `json:"welcomeMessage,omitempty"`
-	Messages        []Message         `json:"messages"`
-	TrackedElements []TrackedElement  `json:"trackedElements,omitempty"`
+	SessionID       string           `json:"sessionId"`
+	VisitorID       string           `json:"visitorId"`
+	OperatorOnline  bool             `json:"operatorOnline"`
+	WelcomeMessage  string           `json:"welcomeMessage,omitempty"`
+	Messages        []Message        `json:"messages"`
+	TrackedElements []TrackedElement `json:"trackedElements,omitempty"`
 }
 
 // SendMessageRequest is the request to send a message.
@@ -250,9 +249,9 @@ type IdentifyResponse struct {
 
 // PresenceResponse is the response for presence check.
 type PresenceResponse struct {
-	Online        bool   `json:"online"`
-	AIEnabled     bool   `json:"aiEnabled"`
-	AIActiveAfter int    `json:"aiActiveAfter,omitempty"`
+	Online        bool `json:"online"`
+	AIEnabled     bool `json:"aiEnabled"`
+	AIActiveAfter int  `json:"aiActiveAfter,omitempty"`
 }
 
 // CustomEvent represents a custom event for bidirectional communication.

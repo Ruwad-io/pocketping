@@ -35,6 +35,7 @@ from pocketping.models import (
     WebSocketEvent,
 )
 from pocketping.storage import MemoryStorage, Storage
+from pocketping.utils.ip_filter import IpFilterConfig
 
 
 class PocketPing:
@@ -61,6 +62,8 @@ class PocketPing:
         latest_widget_version: Optional[str] = None,
         version_warning_message: Optional[str] = None,
         version_upgrade_url: Optional[str] = None,
+        # IP filtering
+        ip_filter: Optional[IpFilterConfig] = None,
     ):
         self.storage = storage or MemoryStorage()
         self.bridges = bridges or []
@@ -88,6 +91,9 @@ class PocketPing:
         self.latest_widget_version = latest_widget_version
         self.version_warning_message = version_warning_message
         self.version_upgrade_url = version_upgrade_url or "https://docs.pocketping.io/widget/installation"
+
+        # IP filtering config
+        self.ip_filter = ip_filter
 
         self._operator_online = False
         self._last_operator_activity: dict[str, float] = {}  # session_id -> timestamp

@@ -48,6 +48,9 @@ module PocketPing
     # @return [String, nil] Version upgrade URL
     attr_reader :version_upgrade_url
 
+    # @return [IpFilterConfig, nil] IP filter configuration
+    attr_reader :ip_filter
+
     # Initialize a new PocketPing client
     #
     # @param storage [Storage::Base, nil] Storage adapter (default: MemoryStorage)
@@ -67,6 +70,7 @@ module PocketPing
     # @param latest_widget_version [String, nil] Latest available widget version
     # @param version_warning_message [String, nil] Custom version warning message
     # @param version_upgrade_url [String, nil] URL to upgrade instructions
+    # @param ip_filter [IpFilterConfig, Hash, nil] IP filtering configuration
     def initialize(
       storage: nil,
       bridges: nil,
@@ -84,7 +88,8 @@ module PocketPing
       min_widget_version: nil,
       latest_widget_version: nil,
       version_warning_message: nil,
-      version_upgrade_url: nil
+      version_upgrade_url: nil,
+      ip_filter: nil
     )
       @storage = storage || Storage::MemoryStorage.new
       @bridges = bridges || []
@@ -106,6 +111,13 @@ module PocketPing
       @latest_widget_version = latest_widget_version
       @version_warning_message = version_warning_message
       @version_upgrade_url = version_upgrade_url || "https://docs.pocketping.io/widget/installation"
+
+      # IP filtering - accept Hash or IpFilterConfig
+      @ip_filter = if ip_filter.is_a?(Hash)
+                     IpFilterConfig.from_hash(ip_filter)
+                   else
+                     ip_filter
+                   end
 
       @operator_online = false
       @last_operator_activity = {}
@@ -130,6 +142,38 @@ module PocketPing
     # @return [void]
     def stop
       @bridges.each(&:destroy)
+    end
+
+    # ─────────────────────────────────────────────────────────────────
+    # IP Filtering
+    # ─────────────────────────────────────────────────────────────────
+
+    # Check if an IP address is allowed by the filter
+    #
+    # @param ip [String] The IP address to check
+    # @param request_info [Hash, nil] Additional request information
+    # @return [IpFilterResult]
+    def check_ip_filter(ip, request_info = nil)
+      IpFilter.check_ip_filter(ip, @ip_filter, request_info)
+    end
+
+    # Check IP filter and return a blocked response if not allowed
+    #
+    # @param ip [String] The IP address to check
+    # @param request_info [Hash, nil] Additional request information
+    # @return [IpFilterResult]
+    def check_ip_filter_with_logging(ip, request_info = nil)
+      result = check_ip_filter(ip, request_info)
+      IpFilter.log_filter_event(@ip_filter, result, ip, request_info) unless result.allowed
+      result
+    end
+
+    # Get client IP from a Rack request
+    #
+    # @param request [Rack::Request] The Rack request
+    # @return [String] The client IP address
+    def get_client_ip(request)
+      IpFilter.get_client_ip(request)
     end
 
     # ─────────────────────────────────────────────────────────────────

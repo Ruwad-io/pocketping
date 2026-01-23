@@ -215,6 +215,19 @@ export interface SlackConfig {
   channelId: string;
 }
 
+// IP filter types (inline to avoid circular deps)
+export type IpFilterMode = "blocklist" | "allowlist" | "both";
+
+export interface IpFilterConfigOptions {
+  enabled?: boolean;
+  mode?: IpFilterMode;
+  allowlist?: string[];
+  blocklist?: string[];
+  logBlocked?: boolean;
+  blockedStatusCode?: number;
+  blockedMessage?: string;
+}
+
 export interface BridgeServerConfig {
   port: number;
   apiKey?: string;
@@ -230,6 +243,9 @@ export interface BridgeServerConfig {
   latestWidgetVersion?: string; // Latest available widget version (e.g., "0.3.0")
   versionWarningMessage?: string; // Custom message for version warnings
   versionUpgradeUrl?: string; // URL to upgrade instructions
+
+  // IP filtering
+  ipFilter?: IpFilterConfigOptions;
 }
 
 // Version management types

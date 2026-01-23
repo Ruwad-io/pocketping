@@ -26,6 +26,9 @@ use PocketPing\Models\VersionWarning;
 use PocketPing\Models\WebSocketEvent;
 use PocketPing\Storage\MemoryStorage;
 use PocketPing\Storage\StorageInterface;
+use PocketPing\Utils\IpFilter;
+use PocketPing\Utils\IpFilterConfig;
+use PocketPing\Utils\IpFilterResult;
 use PocketPing\Version\VersionChecker;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -38,6 +41,7 @@ class PocketPing
     private StorageInterface $storage;
     private VersionChecker $versionChecker;
     private LoggerInterface $logger;
+    private ?IpFilterConfig $ipFilter = null;
 
     /** @var BridgeInterface[] */
     private array $bridges = [];
@@ -67,6 +71,7 @@ class PocketPing
      * @param callable(Session): void|null $onIdentify Callback for identity updates
      * @param LoggerInterface|null $logger PSR-3 logger
      * @param TrackedElement[]|null $trackedElements Elements to track
+     * @param IpFilterConfig|array<string, mixed>|null $ipFilter IP filter configuration
      */
     public function __construct(
         ?StorageInterface $storage = null,
@@ -87,6 +92,7 @@ class PocketPing
         ?LoggerInterface $logger = null,
         /** @var TrackedElement[]|null */
         private ?array $trackedElements = null,
+        IpFilterConfig|array|null $ipFilter = null,
     ) {
         $this->storage = $storage ?? new MemoryStorage();
         $this->bridges = $bridges;
@@ -99,10 +105,71 @@ class PocketPing
             upgradeUrl: $versionUpgradeUrl,
         );
 
+        // IP filtering - accept array or IpFilterConfig
+        if ($ipFilter !== null) {
+            $this->ipFilter = is_array($ipFilter)
+                ? IpFilterConfig::fromArray($ipFilter)
+                : $ipFilter;
+        }
+
         // Initialize bridges
         foreach ($this->bridges as $bridge) {
             $bridge->init($this);
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // IP Filtering
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Check if an IP address is allowed by the filter.
+     *
+     * @param array<string, mixed>|null $requestInfo Additional request information
+     */
+    public function checkIpFilter(string $ip, ?array $requestInfo = null): IpFilterResult
+    {
+        return IpFilter::checkIpFilter($ip, $this->ipFilter, $requestInfo);
+    }
+
+    /**
+     * Check IP filter with logging for blocked IPs.
+     *
+     * @param array<string, mixed>|null $requestInfo Additional request information
+     */
+    public function checkIpFilterWithLogging(string $ip, ?array $requestInfo = null): IpFilterResult
+    {
+        $result = $this->checkIpFilter($ip, $requestInfo);
+        IpFilter::logFilterEvent($this->ipFilter, $result, $ip, $requestInfo);
+        return $result;
+    }
+
+    /**
+     * Get client IP from headers or $_SERVER.
+     *
+     * @param array<string, string>|null $headers Optional headers array
+     */
+    public function getClientIp(?array $headers = null): string
+    {
+        return IpFilter::getClientIp($headers);
+    }
+
+    /**
+     * Get the IP filter configuration.
+     */
+    public function getIpFilter(): ?IpFilterConfig
+    {
+        return $this->ipFilter;
+    }
+
+    /**
+     * Create a blocked response for use with HTTP responses.
+     *
+     * @return array{status: int, headers: array<string, string>, body: string}
+     */
+    public function createBlockedResponse(): array
+    {
+        return IpFilter::createBlockedResponse($this->ipFilter);
     }
 
     // ─────────────────────────────────────────────────────────────────

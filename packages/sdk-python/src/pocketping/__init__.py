@@ -16,6 +16,7 @@ from pocketping.models import (
     TriggerOptions,
 )
 from pocketping.storage import MemoryStorage, Storage
+from pocketping.utils.ip_filter import IpFilterConfig
 
 __version__ = "0.1.0"
 
@@ -35,4 +36,5 @@ __all__ = [
     "Storage",
     "MemoryStorage",
     "Bridge",
+    "IpFilterConfig",
 ]

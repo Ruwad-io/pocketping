@@ -23,6 +23,7 @@ import type {
   VersionCheckResult,
   VersionStatus,
 } from "../types";
+import { createIpFilterMiddleware } from "../middleware/ip-filter";
 
 interface AppContext {
   bridges: Bridge[];
@@ -36,6 +37,9 @@ export function createApp(context: AppContext): Hono {
   // Middleware
   app.use("*", cors());
   app.use("*", logger());
+
+  // IP filter middleware (applies to all routes)
+  app.use("*", createIpFilterMiddleware(context.config.ipFilter));
 
   // API Key middleware
   app.use("/api/*", async (c, next) => {

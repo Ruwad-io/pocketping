@@ -44,13 +44,13 @@ func (m *MockWebSocketConn) GetMessages() []interface{} {
 // MockBridge implements Bridge for testing
 type MockBridge struct {
 	BaseBridge
-	NewSessionCalls    []*Session
-	VisitorMsgCalls    []*Message
-	OperatorMsgCalls   []*Message
-	IdentityCalls      []*Session
-	EventCalls         []CustomEvent
-	ReadCalls          []string
-	mu                 sync.Mutex
+	NewSessionCalls  []*Session
+	VisitorMsgCalls  []*Message
+	OperatorMsgCalls []*Message
+	IdentityCalls    []*Session
+	EventCalls       []CustomEvent
+	ReadCalls        []string
+	mu               sync.Mutex
 }
 
 func NewMockBridge(name string) *MockBridge {

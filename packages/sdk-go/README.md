@@ -84,6 +84,85 @@ pp := pocketping.New(pocketping.Config{
     TrackedElements: []pocketping.TrackedElement{
         {Selector: ".pricing-btn", Name: "clicked_pricing"},
     },
+
+    // IP filtering (see IP Filtering section below)
+    IpFilter: &pocketping.IpFilterConfig{
+        Enabled:   true,
+        Mode:      pocketping.IpFilterModeBlocklist,
+        Blocklist: []string{"203.0.113.0/24"},
+    },
+})
+```
+
+## IP Filtering
+
+Block or allow specific IP addresses or CIDR ranges:
+
+```go
+pp := pocketping.New(pocketping.Config{
+    IpFilter: &pocketping.IpFilterConfig{
+        Enabled: true,
+        Mode:    pocketping.IpFilterModeBlocklist, // Blocklist | Allowlist | Both
+        Blocklist: []string{
+            "203.0.113.0/24",  // CIDR range
+            "198.51.100.50",   // Single IP
+        },
+        Allowlist: []string{
+            "10.0.0.0/8",      // Internal network
+        },
+        LogBlocked:       true, // Log blocked requests (default: true)
+        BlockedStatusCode: 403,
+        BlockedMessage:   "Forbidden",
+    },
+})
+
+// Or with a custom filter function
+pp := pocketping.New(pocketping.Config{
+    IpFilter: &pocketping.IpFilterConfig{
+        Enabled: true,
+        Mode:    pocketping.IpFilterModeBlocklist,
+        CustomFilter: func(ip string, r *http.Request) *bool {
+            // Return &true to allow, &false to block, nil to defer
+            if strings.HasPrefix(ip, "192.168.") {
+                allow := true
+                return &allow // Always allow local
+            }
+            return nil // Use blocklist/allowlist
+        },
+    },
+})
+```
+
+### Modes
+
+| Mode | Behavior |
+|------|----------|
+| `IpFilterModeBlocklist` | Block IPs in blocklist, allow all others (default) |
+| `IpFilterModeAllowlist` | Only allow IPs in allowlist, block all others |
+| `IpFilterModeBoth` | Allowlist takes precedence, then blocklist is applied |
+
+### CIDR Support
+
+The SDK uses Go's native `net.ParseCIDR()` for IP range matching:
+- Single IP: `192.168.1.1` (treated as `/32`)
+- Class C: `192.168.1.0/24` (256 addresses)
+- Class B: `172.16.0.0/16` (65,536 addresses)
+- Class A: `10.0.0.0/8` (16M addresses)
+
+### Manual IP Check
+
+```go
+// Check IP manually
+result := pp.CheckIpFilter("192.168.1.50")
+// result: IpFilterResult{Allowed: bool, Reason: string, MatchedRule: string}
+
+// Get client IP from request (simple)
+clientIP := pocketping.GetClientIP(request, nil)
+// Checks: CF-Connecting-IP, X-Forwarded-For, X-Real-IP
+
+// Or with custom config (use custom proxy headers)
+clientIP := pocketping.GetClientIP(request, &pocketping.IpFilterConfig{
+    ProxyHeaders: []string{"X-Custom-IP"},
 })
 ```
 

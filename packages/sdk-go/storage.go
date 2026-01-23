@@ -28,10 +28,10 @@ type Storage interface {
 // MemoryStorage is an in-memory storage adapter.
 // Useful for development and testing. Data is lost on restart.
 type MemoryStorage struct {
-	mu           sync.RWMutex
-	sessions     map[string]*Session
-	messages     map[string][]Message // sessionID -> messages
-	messageByID  map[string]*Message  // messageID -> message
+	mu          sync.RWMutex
+	sessions    map[string]*Session
+	messages    map[string][]Message // sessionID -> messages
+	messageByID map[string]*Message  // messageID -> message
 }
 
 // NewMemoryStorage creates a new in-memory storage adapter.
