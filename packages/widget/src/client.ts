@@ -28,6 +28,9 @@ export class PocketPingClient {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  private pollingTimeout: ReturnType<typeof setTimeout> | null = null;
+  private pollingFailures = 0;
+  private maxPollingFailures = 10;
   private trackedElementCleanups: Array<() => void> = [];
   private currentTrackedElements: TrackedElement[] = [];
   private inspectorMode = false;
@@ -106,6 +109,8 @@ export class PocketPingClient {
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
     }
+    // Stop polling
+    this.stopPolling();
     // Cleanup tracked elements
     this.cleanupTrackedElements();
     // Cleanup inspector mode if active
@@ -1071,6 +1076,9 @@ export class PocketPingClient {
         const lastMessageId = this.session.messages[this.session.messages.length - 1]?.id;
         const newMessages = await this.fetchMessages(lastMessageId);
 
+        // Reset failure counter on success
+        this.pollingFailures = 0;
+
         for (const message of newMessages) {
           if (!this.session.messages.find((m) => m.id === message.id)) {
             this.session.messages.push(message);
@@ -1079,15 +1087,39 @@ export class PocketPingClient {
           }
         }
       } catch (err) {
-        console.error('[PocketPing] Polling error:', err);
+        this.pollingFailures++;
+
+        // Only log every 3rd failure to reduce console spam
+        if (this.pollingFailures <= 3 || this.pollingFailures % 3 === 0) {
+          console.warn(`[PocketPing] Polling failed (${this.pollingFailures}/${this.maxPollingFailures})`);
+        }
+
+        // Stop polling after max failures
+        if (this.pollingFailures >= this.maxPollingFailures) {
+          console.error('[PocketPing] Polling disabled after too many failures. Real-time updates unavailable.');
+          this.emit('pollingDisabled', { failures: this.pollingFailures });
+          return;
+        }
       }
 
       if (this.session) {
-        setTimeout(poll, 3000);
+        // Exponential backoff on failures: 3s -> 6s -> 12s -> max 30s
+        const delay = this.pollingFailures > 0
+          ? Math.min(3000 * Math.pow(2, this.pollingFailures - 1), 30000)
+          : 3000;
+        this.pollingTimeout = setTimeout(poll, delay);
       }
     };
 
     poll();
+  }
+
+  private stopPolling(): void {
+    if (this.pollingTimeout) {
+      clearTimeout(this.pollingTimeout);
+      this.pollingTimeout = null;
+    }
+    this.pollingFailures = 0;
   }
 
   // ─────────────────────────────────────────────────────────────────
