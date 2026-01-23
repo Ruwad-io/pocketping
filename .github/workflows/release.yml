@@ -177,6 +177,8 @@ jobs:
     needs: [release, publish-python, publish-docker]
     if: always() && (needs.release.outputs.widget-released == 'true' || needs.release.outputs.sdk-node-released == 'true')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
