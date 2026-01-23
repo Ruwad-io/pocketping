@@ -9,13 +9,16 @@ interface Props {
   config: PocketPingConfig;
 }
 
-export function ChatWidget({ client, config }: Props) {
+export function ChatWidget({ client, config: initialConfig }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [operatorOnline, setOperatorOnline] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  // Config can be updated from server (SaaS dashboard settings)
+  const [config, setConfig] = useState(initialConfig);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -37,6 +40,12 @@ export function ChatWidget({ client, config }: Props) {
       setIsConnected(true);
       setMessages(client.getMessages());
       setOperatorOnline(client.getSession()?.operatorOnline ?? false);
+      // Update config with server values after connect
+      setConfig(client.getConfig());
+    });
+    // Listen for config updates from server (SaaS dashboard changes)
+    const unsubConfig = client.on('configUpdate', () => {
+      setConfig(client.getConfig());
     });
 
     // Initial state
@@ -44,6 +53,7 @@ export function ChatWidget({ client, config }: Props) {
       setIsConnected(true);
       setMessages(client.getMessages());
       setOperatorOnline(client.getSession()?.operatorOnline ?? false);
+      setConfig(client.getConfig());
     }
 
     return () => {
@@ -52,20 +62,39 @@ export function ChatWidget({ client, config }: Props) {
       unsubTyping();
       unsubPresence();
       unsubConnect();
+      unsubConfig();
     };
   }, [client]);
 
-  // Auto-scroll to bottom
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  // Focus input when opened
+  // Auto-scroll to bottom when messages change (only if chat is open)
   useEffect(() => {
     if (isOpen) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isOpen]);
+
+  // Handle chat open: scroll to bottom and focus input
+  useEffect(() => {
+    if (isOpen) {
+      // Scroll to bottom immediately when opening (instant, not smooth)
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+      }, 50);
       inputRef.current?.focus();
+      // Clear unread count when chat opens
+      setUnreadCount(0);
     }
   }, [isOpen]);
+
+  // Track unread messages (from operator/AI) when chat is closed
+  useEffect(() => {
+    if (!isOpen && messages.length > 0) {
+      const unread = messages.filter(
+        (msg) => msg.sender !== 'visitor' && msg.status !== 'read'
+      ).length;
+      setUnreadCount(unread);
+    }
+  }, [messages, isOpen]);
 
   // Mark operator/AI messages as read when widget is open and visible
   const markMessagesAsRead = useCallback(() => {
@@ -164,7 +193,11 @@ export function ChatWidget({ client, config }: Props) {
         ) : (
           <ChatIcon />
         )}
-        {!isOpen && operatorOnline && <span class="pp-online-dot" />}
+        {/* Show unread badge when there are unread messages, otherwise show online dot */}
+        {!isOpen && unreadCount > 0 && (
+          <span class="pp-unread-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+        )}
+        {!isOpen && unreadCount === 0 && operatorOnline && <span class="pp-online-dot" />}
       </button>
 
       {/* Chat Window */}

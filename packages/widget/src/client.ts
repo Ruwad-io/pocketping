@@ -81,6 +81,29 @@ export class PocketPingClient {
       identity: response.identity || storedIdentity || undefined,
     };
 
+    // Merge server config into client config (server values take precedence)
+    // This allows SaaS dashboard settings to override widget init values
+    if (response.operatorName) {
+      this.config.operatorName = response.operatorName;
+    }
+    if (response.operatorAvatar) {
+      this.config.operatorAvatar = response.operatorAvatar;
+    }
+    if (response.primaryColor) {
+      this.config.primaryColor = response.primaryColor;
+    }
+    if (response.welcomeMessage) {
+      this.config.welcomeMessage = response.welcomeMessage;
+    }
+
+    // Emit config update for UI to re-render with server values
+    this.emit('configUpdate', {
+      operatorName: this.config.operatorName,
+      operatorAvatar: this.config.operatorAvatar,
+      primaryColor: this.config.primaryColor,
+      welcomeMessage: this.config.welcomeMessage,
+    });
+
     // Store session
     this.storeSessionId(response.sessionId);
 
@@ -350,6 +373,10 @@ export class PocketPingClient {
 
   isWidgetOpen(): boolean {
     return this.isOpen;
+  }
+
+  getConfig(): ResolvedPocketPingConfig {
+    return this.config;
   }
 
   setOpen(open: boolean): void {

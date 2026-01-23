@@ -154,6 +154,13 @@ export interface ConnectResponse {
   trackedElements?: TrackedElement[];
   /** Inspector mode active (for SaaS visual element selector) */
   inspectorMode?: boolean;
+  // Widget config from server (SaaS)
+  /** Operator/company name from server */
+  operatorName?: string;
+  /** Operator/company avatar URL from server */
+  operatorAvatar?: string;
+  /** Primary color from server */
+  primaryColor?: string;
 }
 
 export interface SendMessageResponse {

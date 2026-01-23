@@ -66,6 +66,31 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       border: 2px solid white;
     }
 
+    .pp-unread-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      background: #ef4444;
+      color: white;
+      border-radius: 10px;
+      border: 2px solid white;
+      font-size: 11px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: pp-badge-pop 0.3s ease-out;
+    }
+
+    @keyframes pp-badge-pop {
+      0% { transform: scale(0); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+
     .pp-window {
       position: fixed;
       width: 380px;
