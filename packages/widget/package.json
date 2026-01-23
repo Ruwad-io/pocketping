@@ -1,6 +1,6 @@
 {
   "name": "@pocketping/widget",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "type": "module",
   "description": "Embeddable chat widget for PocketPing",
   "main": "dist/index.cjs",
