@@ -1,9 +1,10 @@
 [build]
-buildCommand = "pnpm install && pnpm run build"
+builder = "RAILPACK"
+buildCommand = "npm install && npm run build"
 watchPatterns = ["docs-site/**"]
 
 [deploy]
-startCommand = "pnpm run serve --port $PORT --host 0.0.0.0"
+startCommand = "npm run serve -- --port $PORT --host 0.0.0.0"
 healthcheckPath = "/"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
