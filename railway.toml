@@ -1,0 +1,14 @@
+# Railway configuration for docs-site service
+# Note: This file must be at repo root for Railway to find it
+
+[build]
+builder = "RAILPACK"
+buildCommand = "cd docs-site && npm install && npm run build"
+watchPatterns = ["docs-site/**"]
+
+[deploy]
+startCommand = "cd docs-site && npm run serve -- --port $PORT --host 0.0.0.0"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
