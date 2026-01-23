@@ -17,6 +17,7 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
+      id-token: write  # Required for npm OIDC trusted publishing
     outputs:
       widget-released: ${{ steps.release-widget.outputs.new_release_published }}
       widget-version: ${{ steps.release-widget.outputs.new_release_version }}
@@ -60,7 +61,7 @@ jobs:
             semantic-release-monorepo
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true  # OIDC trusted publishing
 
       - name: Release SDK Node
         id: release-sdk-node
@@ -74,7 +75,7 @@ jobs:
             semantic-release-monorepo
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true  # OIDC trusted publishing
 
   publish-python:
     name: Publish Python SDK
