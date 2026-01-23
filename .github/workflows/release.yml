@@ -61,10 +61,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish Widget to npm (OIDC)
+      - name: Publish Widget to npm
         if: steps.release-widget.outputs.new_release_published == 'true'
         working-directory: packages/widget
         run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Release SDK Node
         id: release-sdk-node
@@ -78,11 +80,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish SDK Node to npm (OIDC)
+      - name: Publish SDK Node to npm
         if: steps.release-sdk-node.outputs.new_release_published == 'true'
-        continue-on-error: true  # Skip if trusted publisher not configured
+        continue-on-error: true
         working-directory: packages/sdk-node
         run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-python:
     name: Publish Python SDK
