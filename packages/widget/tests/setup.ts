@@ -90,6 +90,95 @@ if (typeof window !== 'undefined') {
   });
 }
 
+// Mock EventSource (SSE)
+class MockEventSource {
+  static instances: MockEventSource[] = [];
+
+  url: string;
+  readyState = 1; // OPEN
+  onopen: (() => void) | null = null;
+  onmessage: ((event: { data: string }) => void) | null = null;
+  onerror: ((error: any) => void) | null = null;
+  private eventListeners: Map<string, ((event: { data: string }) => void)[]> = new Map();
+
+  // Instance constants
+  CONNECTING = 0;
+  OPEN = 1;
+  CLOSED = 2;
+
+  constructor(url: string) {
+    this.url = url;
+    MockEventSource.instances.push(this);
+    setTimeout(() => {
+      this.readyState = 1; // OPEN
+      this.onopen?.();
+    }, 0);
+  }
+
+  close = vi.fn(() => {
+    this.readyState = 2; // CLOSED
+  });
+
+  addEventListener(type: string, listener: (event: { data: string }) => void) {
+    if (!this.eventListeners.has(type)) {
+      this.eventListeners.set(type, []);
+    }
+    this.eventListeners.get(type)!.push(listener);
+  }
+
+  removeEventListener(type: string, listener: (event: { data: string }) => void) {
+    const listeners = this.eventListeners.get(type);
+    if (listeners) {
+      const index = listeners.indexOf(listener);
+      if (index > -1) {
+        listeners.splice(index, 1);
+      }
+    }
+  }
+
+  // Test helpers
+  simulateMessage(data: any) {
+    const event = { data: JSON.stringify(data) };
+    this.onmessage?.(event);
+    const listeners = this.eventListeners.get('message') || [];
+    listeners.forEach((listener) => listener(event));
+  }
+
+  simulateEvent(eventName: string, data: any) {
+    const event = { data: JSON.stringify(data) };
+    const listeners = this.eventListeners.get(eventName) || [];
+    listeners.forEach((listener) => listener(event));
+  }
+
+  simulateError() {
+    this.readyState = 2; // CLOSED
+    this.onerror?.({});
+  }
+
+  static reset() {
+    MockEventSource.instances = [];
+  }
+}
+
+// Add static constants
+(MockEventSource as any).CONNECTING = 0;
+(MockEventSource as any).OPEN = 1;
+(MockEventSource as any).CLOSED = 2;
+
+// Replace EventSource globally
+Object.defineProperty(globalThis, 'EventSource', {
+  value: MockEventSource,
+  writable: true,
+  configurable: true
+});
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'EventSource', {
+    value: MockEventSource,
+    writable: true,
+    configurable: true
+  });
+}
+
 // Mock fetch
 globalThis.fetch = vi.fn();
 
@@ -143,4 +232,4 @@ Object.defineProperty(globalThis, 'Intl', {
   writable: true,
 });
 
-export { MockWebSocket, localStorageMock };
+export { MockWebSocket, MockEventSource, localStorageMock };

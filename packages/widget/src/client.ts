@@ -22,6 +22,7 @@ export class PocketPingClient {
   private config: ResolvedPocketPingConfig;
   private session: Session | null = null;
   private ws: WebSocket | null = null;
+  private sse: EventSource | null = null;
   private isOpen = false;
   private listeners: Map<string, Set<Listener<unknown>>> = new Map();
   private customEventHandlers: Map<string, Set<CustomEventHandler>> = new Map();
@@ -31,6 +32,9 @@ export class PocketPingClient {
   private pollingTimeout: ReturnType<typeof setTimeout> | null = null;
   private pollingFailures = 0;
   private maxPollingFailures = 10;
+  private wsConnectedAt = 0;
+  private quickFailureThreshold = 2000; // If WS fails within 2s, assume serverless
+  private connectionMode: 'none' | 'ws' | 'sse' | 'polling' = 'none';
   private trackedElementCleanups: Array<() => void> = [];
   private currentTrackedElements: TrackedElement[] = [];
   private inspectorMode = false;
@@ -107,8 +111,8 @@ export class PocketPingClient {
     // Store session
     this.storeSessionId(response.sessionId);
 
-    // Connect WebSocket for real-time updates
-    this.connectWebSocket();
+    // Connect real-time (WebSocket → SSE → Polling)
+    this.connectRealtime();
 
     // Check if inspector mode is active
     if (response.inspectorMode) {
@@ -126,9 +130,22 @@ export class PocketPingClient {
   }
 
   disconnect(): void {
-    this.ws?.close();
-    this.ws = null;
+    // Clear WebSocket handlers before closing
+    if (this.ws) {
+      this.ws.onclose = null;
+      this.ws.onmessage = null;
+      this.ws.onerror = null;
+      this.ws.onopen = null;
+      this.ws.close();
+      this.ws = null;
+    }
+    // Close SSE connection
+    if (this.sse) {
+      this.sse.close();
+      this.sse = null;
+    }
     this.session = null;
+    this.connectionMode = 'none';
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
     }
@@ -889,8 +906,25 @@ export class PocketPingClient {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // WebSocket
+  // Real-time Connection (WebSocket → SSE → Polling)
   // ─────────────────────────────────────────────────────────────────
+
+  private connectRealtime(): void {
+    if (!this.session) return;
+
+    // Use cached connection mode if we've already determined it
+    if (this.connectionMode === 'polling') {
+      this.startPolling();
+      return;
+    }
+    if (this.connectionMode === 'sse') {
+      this.connectSSE();
+      return;
+    }
+
+    // Try WebSocket first
+    this.connectWebSocket();
+  }
 
   private connectWebSocket(): void {
     if (!this.session) return;
@@ -901,34 +935,126 @@ export class PocketPingClient {
 
     try {
       this.ws = new WebSocket(wsUrl);
+      this.wsConnectedAt = Date.now();
+
+      // Timeout for hanging connections (serverless platforms)
+      const connectionTimeout = setTimeout(() => {
+        console.warn('[PocketPing] ⏱️ WebSocket timeout - trying SSE');
+        if (this.ws && this.ws.readyState !== WebSocket.OPEN) {
+          this.ws.onclose = null;
+          this.ws.onerror = null;
+          this.ws.onopen = null;
+          this.ws.close();
+          this.ws = null;
+          this.connectSSE(); // Try SSE next
+        }
+      }, 5000);
 
       this.ws.onopen = () => {
+        clearTimeout(connectionTimeout);
+        this.connectionMode = 'ws';
         this.reconnectAttempts = 0;
+        this.wsConnectedAt = Date.now();
         this.emit('wsConnected', null);
       };
 
       this.ws.onmessage = (event) => {
         try {
           const wsEvent: WebSocketEvent = JSON.parse(event.data);
-          this.handleWebSocketEvent(wsEvent);
+          this.handleRealtimeEvent(wsEvent);
         } catch (err) {
           console.error('[PocketPing] Failed to parse WS message:', err);
         }
       };
 
       this.ws.onclose = () => {
+        clearTimeout(connectionTimeout);
         this.emit('wsDisconnected', null);
-        this.scheduleReconnect();
+        this.handleWsFailure();
       };
 
-      this.ws.onerror = (err) => {
-        console.error('[PocketPing] WebSocket error:', err);
+      this.ws.onerror = () => {
+        clearTimeout(connectionTimeout);
+        // Error will be followed by onclose
       };
-    } catch (err) {
-      // WebSocket not supported or blocked, fall back to polling
-      console.warn('[PocketPing] WebSocket unavailable, using polling');
+    } catch {
+      console.warn('[PocketPing] WebSocket unavailable - trying SSE');
+      this.connectSSE();
+    }
+  }
+
+  private connectSSE(): void {
+    if (!this.session) return;
+
+    const sseUrl = this.config.endpoint.replace(/\/$/, '') + `/stream?sessionId=${this.session.sessionId}`;
+
+    try {
+      this.sse = new EventSource(sseUrl);
+
+      // Timeout for SSE connection
+      const connectionTimeout = setTimeout(() => {
+        console.warn('[PocketPing] ⏱️ SSE timeout - falling back to polling');
+        if (this.sse && this.sse.readyState !== EventSource.OPEN) {
+          this.sse.close();
+          this.sse = null;
+          this.connectionMode = 'polling';
+          this.startPolling();
+        }
+      }, 5000);
+
+      this.sse.onopen = () => {
+        clearTimeout(connectionTimeout);
+        this.connectionMode = 'sse';
+        this.emit('sseConnected', null);
+      };
+
+      this.sse.addEventListener('message', (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          this.handleRealtimeEvent(data);
+        } catch (err) {
+          console.error('[PocketPing] Failed to parse SSE message:', err);
+        }
+      });
+
+      this.sse.addEventListener('connected', () => {
+        // SSE connected event received - connection established
+      });
+
+      this.sse.onerror = () => {
+        clearTimeout(connectionTimeout);
+        console.warn('[PocketPing] ❌ SSE error - falling back to polling');
+        if (this.sse) {
+          this.sse.close();
+          this.sse = null;
+        }
+        this.connectionMode = 'polling';
+        this.startPolling();
+      };
+    } catch {
+      console.warn('[PocketPing] SSE unavailable - falling back to polling');
+      this.connectionMode = 'polling';
       this.startPolling();
     }
+  }
+
+  private handleWsFailure(): void {
+    const timeSinceConnect = Date.now() - this.wsConnectedAt;
+
+    // If WebSocket fails quickly, try SSE
+    if (timeSinceConnect < this.quickFailureThreshold) {
+      console.info('[PocketPing] WebSocket failed quickly - trying SSE');
+      this.connectSSE();
+      return;
+    }
+
+    // Otherwise try to reconnect WebSocket
+    this.scheduleReconnect();
+  }
+
+  private handleRealtimeEvent(event: WebSocketEvent): void {
+    // Unified handler for both WS and SSE events
+    this.handleWebSocketEvent(event);
   }
 
   private handleWebSocketEvent(event: WebSocketEvent): void {
@@ -1081,8 +1207,8 @@ export class PocketPingClient {
 
   private scheduleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.warn('[PocketPing] Max reconnect attempts reached, switching to polling');
-      this.startPolling();
+      console.warn('[PocketPing] Max reconnect attempts reached, trying SSE');
+      this.connectSSE();
       return;
     }
 
@@ -1115,6 +1241,7 @@ export class PocketPingClient {
         }
       } catch (err) {
         this.pollingFailures++;
+        console.error(`[PocketPing] ❌ Polling error:`, err);
 
         // Only log every 3rd failure to reduce console spam
         if (this.pollingFailures <= 3 || this.pollingFailures % 3 === 0) {
@@ -1130,15 +1257,16 @@ export class PocketPingClient {
       }
 
       if (this.session) {
-        // Exponential backoff on failures: 3s -> 6s -> 12s -> max 30s
+        // Exponential backoff on failures: 2s -> 4s -> 8s -> max 30s
         const delay = this.pollingFailures > 0
-          ? Math.min(3000 * Math.pow(2, this.pollingFailures - 1), 30000)
-          : 3000;
+          ? Math.min(2000 * Math.pow(2, this.pollingFailures - 1), 30000)
+          : 2000;
         this.pollingTimeout = setTimeout(poll, delay);
       }
     };
 
-    poll();
+    // Small delay before first poll to ensure session is ready
+    this.pollingTimeout = setTimeout(poll, 500);
   }
 
   private stopPolling(): void {

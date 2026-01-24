@@ -32,6 +32,7 @@ import { PocketPingClient } from '../src/client';
  * =====================================================================================
  */
 const MockWebSocket = globalThis.WebSocket as any;
+const MockEventSource = globalThis.EventSource as any;
 const localStorageMock = globalThis.localStorage as any;
 
 describe('PocketPingClient', () => {
@@ -44,6 +45,7 @@ describe('PocketPingClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     MockWebSocket.reset();
+    MockEventSource.reset();
     localStorageMock.clear();
 
     // WebSocket constants are defined in setup.ts
@@ -1040,6 +1042,234 @@ describe('PocketPingClient', () => {
           id: 'user_123',
           name: 'John Doe',
         });
+      });
+    });
+  });
+
+  describe('Real-time Connection Fallback (WS → SSE → Polling)', () => {
+    const mockConnectResponse = {
+      sessionId: 'session-123',
+      visitorId: 'visitor-456',
+      operatorOnline: false,
+      messages: [],
+    };
+
+    describe('WebSocket connection', () => {
+      it('should try WebSocket first', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockConnectResponse),
+          headers: new Headers(),
+        });
+
+        await client.connect();
+        await new Promise((r) => setTimeout(r, 10));
+
+        expect(MockWebSocket.instances.length).toBe(1);
+        expect(MockWebSocket.instances[0].url).toContain('stream?sessionId=session-123');
+      });
+
+      it('should emit wsConnected event when WebSocket connects', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockConnectResponse),
+          headers: new Headers(),
+        });
+
+        const connectedSpy = vi.fn();
+        client.on('wsConnected', connectedSpy);
+
+        await client.connect();
+        await new Promise((r) => setTimeout(r, 10));
+
+        expect(connectedSpy).toHaveBeenCalled();
+      });
+
+      it('should handle incoming messages via WebSocket', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockConnectResponse),
+          headers: new Headers(),
+        });
+
+        const messageSpy = vi.fn();
+        client.on('message', messageSpy);
+
+        await client.connect();
+        await new Promise((r) => setTimeout(r, 10));
+
+        const ws = MockWebSocket.instances[0];
+        ws.simulateMessage({
+          type: 'message',
+          data: {
+            id: 'msg-1',
+            content: 'Hello!',
+            sender: 'operator',
+            timestamp: new Date().toISOString(),
+          },
+        });
+
+        expect(messageSpy).toHaveBeenCalled();
+        expect(messageSpy.mock.calls[0][0].content).toBe('Hello!');
+      });
+    });
+
+    describe('SSE fallback', () => {
+      it('should fall back to SSE when WebSocket fails quickly', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockConnectResponse),
+          headers: new Headers(),
+        });
+
+        await client.connect();
+        await new Promise((r) => setTimeout(r, 10));
+
+        // Simulate WebSocket closing quickly (within quickFailureThreshold)
+        const ws = MockWebSocket.instances[0];
+        ws.simulateClose();
+
+        await new Promise((r) => setTimeout(r, 10));
+
+        // SSE should be created
+        expect(MockEventSource.instances.length).toBe(1);
+        expect(MockEventSource.instances[0].url).toContain('stream?sessionId=session-123');
+      });
+
+      it('should emit sseConnected event when SSE connects', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockConnectResponse),
+          headers: new Headers(),
+        });
+
+        const sseConnectedSpy = vi.fn();
+        client.on('sseConnected', sseConnectedSpy);
+
+        await client.connect();
+        await new Promise((r) => setTimeout(r, 10));
+
+        // Simulate WebSocket failing
+        const ws = MockWebSocket.instances[0];
+        ws.simulateClose();
+
+        await new Promise((r) => setTimeout(r, 20));
+
+        expect(sseConnectedSpy).toHaveBeenCalled();
+      });
+
+      it('should handle incoming messages via SSE', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockConnectResponse),
+          headers: new Headers(),
+        });
+
+        const messageSpy = vi.fn();
+        client.on('message', messageSpy);
+
+        await client.connect();
+        await new Promise((r) => setTimeout(r, 10));
+
+        // Simulate WebSocket failing to trigger SSE
+        const ws = MockWebSocket.instances[0];
+        ws.simulateClose();
+        await new Promise((r) => setTimeout(r, 20));
+
+        // Now simulate SSE message
+        const sse = MockEventSource.instances[0];
+        sse.simulateMessage({
+          type: 'message',
+          data: {
+            id: 'msg-2',
+            content: 'Hello via SSE!',
+            sender: 'operator',
+            timestamp: new Date().toISOString(),
+          },
+        });
+
+        expect(messageSpy).toHaveBeenCalled();
+        // Find the SSE message (not the one from disconnect/reconnect)
+        const sseMessage = messageSpy.mock.calls.find(
+          (call: any[]) => call[0].content === 'Hello via SSE!'
+        );
+        expect(sseMessage).toBeDefined();
+      });
+    });
+
+    describe('Polling fallback', () => {
+      it('should fall back to polling when SSE fails', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockConnectResponse),
+          headers: new Headers(),
+        });
+
+        // Mock messages endpoint for polling
+        (globalThis.fetch as any).mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve({ messages: [] }),
+          headers: new Headers(),
+        });
+
+        await client.connect();
+        await new Promise((r) => setTimeout(r, 10));
+
+        // Simulate WebSocket failing
+        const ws = MockWebSocket.instances[0];
+        ws.simulateClose();
+        await new Promise((r) => setTimeout(r, 20));
+
+        // Simulate SSE failing
+        const sse = MockEventSource.instances[0];
+        sse.simulateError();
+
+        // Wait for polling to start (500ms initial delay) + first poll
+        await new Promise((r) => setTimeout(r, 700));
+
+        // Should now be polling - check for messages fetch calls
+        const fetchCalls = (globalThis.fetch as any).mock.calls;
+        const pollCalls = fetchCalls.filter((c: any[]) => c[0].includes('/messages'));
+        expect(pollCalls.length).toBeGreaterThan(0);
+      });
+    });
+
+    describe('disconnect', () => {
+      it('should close WebSocket on disconnect', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockConnectResponse),
+          headers: new Headers(),
+        });
+
+        await client.connect();
+        await new Promise((r) => setTimeout(r, 10));
+
+        const ws = MockWebSocket.instances[0];
+        client.disconnect();
+
+        expect(ws.close).toHaveBeenCalled();
+      });
+
+      it('should close SSE on disconnect', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockConnectResponse),
+          headers: new Headers(),
+        });
+
+        await client.connect();
+        await new Promise((r) => setTimeout(r, 10));
+
+        // Trigger SSE fallback
+        const ws = MockWebSocket.instances[0];
+        ws.simulateClose();
+        await new Promise((r) => setTimeout(r, 20));
+
+        const sse = MockEventSource.instances[0];
+        client.disconnect();
+
+        expect(sse.close).toHaveBeenCalled();
       });
     });
   });
