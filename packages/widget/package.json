@@ -1,6 +1,6 @@
 {
   "name": "@pocketping/widget",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "type": "module",
   "description": "Embeddable chat widget for PocketPing",
   "main": "dist/index.cjs",
@@ -54,11 +54,18 @@
   },
   "release": {
     "extends": "semantic-release-monorepo",
-    "branches": ["main"],
+    "branches": [
+      "main"
+    ],
     "plugins": [
       "@semantic-release/commit-analyzer",
       "@semantic-release/release-notes-generator",
-      ["@semantic-release/exec", {"prepareCmd": "npm pkg set version=${nextRelease.version}"}],
+      [
+        "@semantic-release/exec",
+        {
+          "prepareCmd": "npm pkg set version=${nextRelease.version}"
+        }
+      ],
       "@semantic-release/github"
     ]
   }

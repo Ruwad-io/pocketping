@@ -167,7 +167,6 @@ from pocketping.bridges.slack import SlackBridge
 
 bridge = SlackBridge(
     bot_token="xoxb-your-bot-token",
-    app_token="xapp-your-app-token",  # For Socket Mode
     channel_id="C0123456789",
     show_url=True,
 )

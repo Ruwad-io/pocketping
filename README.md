@@ -272,49 +272,43 @@ DISCORD_CHANNEL_ID=123456789012345678
 2. Click **Create New App** -> **From scratch**
 3. Name it (e.g., "PocketPing") and select your workspace
 
-#### 2. Enable Socket Mode
-
-1. Go to **Socket Mode** in the sidebar
-2. Toggle **Enable Socket Mode** to ON
-3. Create an app-level token with `connections:write` scope
-4. **Save the App Token** (starts with `xapp-`)
-
-#### 3. Add bot permissions
+#### 2. Add bot permissions
 
 1. Go to **OAuth & Permissions**
 2. Under **Scopes** -> **Bot Token Scopes**, add:
    - `chat:write`
    - `channels:history`
    - `channels:read`
-   - `reactions:write`
+   - `groups:history`
+   - `groups:read`
    - `users:read`
 
-#### 4. Install to workspace
+#### 3. Install to workspace
 
 1. Go to **Install App** in the sidebar
 2. Click **Install to Workspace**
 3. **Save the Bot Token** (starts with `xoxb-`)
 
-#### 5. Subscribe to events
+#### 4. Subscribe to events
 
 1. Go to **Event Subscriptions**
 2. Toggle **Enable Events** to ON
-3. Under **Subscribe to bot events**, add:
+3. Set the **Request URL** to your webhook endpoint (e.g., `https://your-domain.com/api/webhooks/slack`)
+4. Wait for verification, then under **Subscribe to bot events**, add:
    - `message.channels`
-   - `reaction_added`
-4. Save changes
+   - `message.groups`
+5. Save changes
 
-#### 6. Invite bot to channel
+#### 5. Invite bot to channel
 
 1. In Slack, go to your support channel
 2. Type `/invite @YourBotName`
 3. Right-click the channel name -> **View channel details** -> Copy Channel ID
 
-#### 7. Configure PocketPing
+#### 6. Configure PocketPing
 
 ```env
 SLACK_BOT_TOKEN=xoxb-your-bot-token
-SLACK_APP_TOKEN=xapp-your-app-token
 SLACK_CHANNEL_ID=C0123456789
 ```
 
@@ -672,7 +666,7 @@ pp = PocketPing(
     bridges=[
         TelegramBridge(bot_token="...", forum_chat_id="..."),
         DiscordBridge(bot_token="...", channel_id=123),
-        SlackBridge(bot_token="...", app_token="...", channel_id="..."),
+        SlackBridge(bot_token="...", channel_id="..."),
     ],
 
     # Callbacks

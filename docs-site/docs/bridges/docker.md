@@ -45,7 +45,6 @@ services:
 
       # Slack (optional)
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
-      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
       - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
 
       # AI (optional)
@@ -91,7 +90,6 @@ docker compose up -d
 | `DISCORD_BOT_TOKEN` | If using Discord | Discord bot token |
 | `DISCORD_CHANNEL_ID` | If using Discord | Channel ID for threads |
 | `SLACK_BOT_TOKEN` | If using Slack | Slack bot token (xoxb-) |
-| `SLACK_APP_TOKEN` | If using Slack | Slack app token (xapp-) |
 | `SLACK_CHANNEL_ID` | If using Slack | Slack channel ID |
 | `OPENAI_API_KEY` | If using AI | OpenAI API key for AI fallback |
 

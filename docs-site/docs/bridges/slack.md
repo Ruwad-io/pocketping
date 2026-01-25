@@ -85,6 +85,8 @@ Add the necessary OAuth scopes.
 │      ├─────────────────────────────────────────────┤           │
 │      │ ✅ channels:history    (read messages)      │           │
 │      │ ✅ channels:read       (list channels)      │           │
+│      │ ✅ groups:history      (private channels)   │           │
+│      │ ✅ groups:read         (list private)       │           │
 │      │ ✅ chat:write          (post messages)      │           │
 │      │ ✅ users:read          (user info)          │           │
 │      └─────────────────────────────────────────────┘           │
@@ -101,58 +103,24 @@ Add the necessary OAuth scopes.
 
 ---
 
-## Step 3: Enable Socket Mode
+## Step 3: Enable Events
 
-Socket Mode allows real-time communication without public webhooks.
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ Step 3: Enable Socket Mode                                      │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   1. Go to "Socket Mode" in the sidebar                         │
-│                                                                 │
-│   2. Toggle "Enable Socket Mode" ON                             │
-│                                                                 │
-│   3. Create an App-Level Token                                  │
-│      └── Token Name: "pocketping-socket"                        │
-│      └── Add scope: connections:write                           │
-│      └── Click "Generate"                                       │
-│                                                                 │
-│   4. Copy the App-Level Token                                   │
-│      └── Starts with: xapp-                                     │
-│      └── Save this! You'll need it later.                       │
-│                                                                 │
-│   ┌─────────────────────────────────────────────────┐          │
-│   │ You should now have TWO tokens:                 │          │
-│   │                                                 │          │
-│   │ Bot Token: xoxb-xxxxx... (from Step 2)         │          │
-│   │ App Token: xapp-xxxxx... (from Step 3)         │          │
-│   └─────────────────────────────────────────────────┘          │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-:::info Why Socket Mode?
-Socket Mode lets your bot receive events without exposing a public webhook URL. This is especially useful for self-hosted setups behind firewalls.
-:::
-
----
-
-## Step 4: Enable Events
-
-Subscribe to message events to receive visitor replies.
+Subscribe to message events to receive operator replies.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Step 4: Subscribe to Events                                     │
+│ Step 3: Enable Event Subscriptions                              │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │   1. Go to "Event Subscriptions" in the sidebar                 │
 │                                                                 │
 │   2. Toggle "Enable Events" ON                                  │
 │                                                                 │
-│   3. Click "Subscribe to bot events"                            │
+│   3. Set the Request URL:                                       │
+│      └── https://app.pocketping.io/api/webhooks/slack           │
+│      └── Wait for "Verified ✓"                                  │
+│                                                                 │
+│   4. Click "Subscribe to bot events"                            │
 │      └── Add these events:                                      │
 │                                                                 │
 │      ┌─────────────────────────────────────────────┐           │
@@ -162,20 +130,25 @@ Subscribe to message events to receive visitor replies.
 │      │ ✅ message.groups     (private channels)    │           │
 │      └─────────────────────────────────────────────┘           │
 │                                                                 │
-│   4. Click "Save Changes"                                       │
+│   5. Click "Save Changes"                                       │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+:::info Self-Hosted Users
+If you're self-hosting, use your own URL instead:
+`https://your-domain.com/api/webhooks/slack`
+:::
+
 ---
 
-## Step 5: Get Channel ID
+## Step 4: Get Channel ID
 
 Find the ID of your support channel.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Step 5: Get Channel ID                                          │
+│ Step 4: Get Channel ID                                          │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │   1. Open Slack                                                 │
@@ -201,13 +174,13 @@ Find the ID of your support channel.
 
 ---
 
-## Step 6: Add Bot to Channel
+## Step 5: Add Bot to Channel
 
 Invite the bot to your support channel.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Step 6: Invite Bot to Channel                                   │
+│ Step 5: Invite Bot to Channel                                   │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │   1. Open your support channel                                  │
@@ -233,16 +206,13 @@ The bot won't receive messages until it's invited to the channel.
 
 ---
 
-## Step 7: Configure PocketPing
+## Step 6: Configure PocketPing
 
 ### SaaS Users
 
-1. Go to [app.pocketping.io/settings/bridges](https://app.pocketping.io/settings/bridges)
-2. Click "Add Slack"
-3. Enter:
-   - **Bot Token:** `xoxb-xxxxx...`
-   - **App Token:** `xapp-xxxxx...`
-   - **Channel ID:** `C0123456789`
+1. Go to your project's Bridges settings
+2. Click "Add to Slack" to connect via OAuth
+3. Select your support channel from the dropdown
 4. Click "Save"
 
 ### Self-Hosted Users
@@ -251,7 +221,6 @@ Add to your `.env` file:
 
 ```bash title=".env"
 SLACK_BOT_TOKEN=xoxb-your-bot-token
-SLACK_APP_TOKEN=xapp-your-app-token
 SLACK_CHANNEL_ID=C0123456789
 ```
 
@@ -339,8 +308,8 @@ Mention the bot in a thread with these commands:
 |---------|----------|
 | Bot not in channel | Use `/invite @PocketPing` in the channel |
 | Wrong Bot Token | Check it starts with `xoxb-` |
-| Socket Mode disabled | Enable in app settings |
-| Missing App Token | Generate new token with `connections:write` |
+| Events not configured | Verify Request URL is set and verified |
+| Missing event subscriptions | Add `message.channels` and `message.groups` |
 
 ### Not receiving messages?
 
@@ -349,6 +318,7 @@ Mention the bot in a thread with these commands:
 | Events not subscribed | Add `message.channels` and `message.groups` events |
 | Missing scopes | Add `channels:history` scope |
 | Wrong Channel ID | Re-copy from channel details (starts with C) |
+| Request URL not verified | Check the URL responds correctly |
 
 ### Messages not syncing?
 
@@ -356,15 +326,14 @@ Mention the bot in a thread with these commands:
 |---------|----------|
 | Bot can't write | Add `chat:write` scope |
 | Server not running | Check logs: `docker logs pocketping-bridge` |
-| Channel is private | Ensure `channels:history` and `message.groups` are enabled |
+| Channel is private | Ensure `groups:history` scope is enabled |
 
 ### Debug checklist
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ □ Bot Token starts with xoxb-                                   │
-│ □ App Token starts with xapp-                                   │
-│ □ Socket Mode is enabled                                        │
+│ □ Request URL is verified in Event Subscriptions                │
 │ □ Bot events are subscribed (message.channels, message.groups)  │
 │ □ Bot scopes are correct (channels:history, chat:write, etc.)   │
 │ □ Bot is invited to the channel (/invite @PocketPing)           │
@@ -380,7 +349,6 @@ Mention the bot in a thread with these commands:
 | Token | Starts with | Purpose | Where to find |
 |-------|-------------|---------|---------------|
 | Bot Token | `xoxb-` | Post messages, read history | OAuth & Permissions |
-| App Token | `xapp-` | Socket Mode connection | Socket Mode settings |
 
 ---
 
