@@ -182,7 +182,7 @@ SendMessageRequest {
   sessionId: string
   content: string (max 4000 chars)
   sender: 'visitor' | 'operator'
-  replyTo?: string
+  replyTo?: string // messageId being replied to (same session)
 }
 
 SendMessageResponse {
@@ -190,6 +190,13 @@ SendMessageResponse {
   timestamp: datetime
 }
 ```
+
+**Reply behavior on bridges**
+- When `replyTo` is set, bridges should try to render a reply in the external platform.
+- **Telegram**: use `reply_to_message_id` with the target Telegram message_id (if known).
+- **Discord**: use `message_reference` with the target Discord message ID (if known).
+- **Slack**: Slack doesn't support message-level replies in threads; render a quote block (left bar) in the thread.
+- If the bridge message ID is not available, send a normal message without reply linkage.
 
 ### 3. Read Receipts
 
@@ -869,7 +876,11 @@ WebhookConfig {
   telegramBotToken?: string     // For downloading files from Telegram
   slackBotToken?: string        // For downloading files and getting user info
   discordBotToken?: string      // For future use
-  onOperatorMessage: (sessionId, content, operatorName, sourceBridge, attachments) -> void
+  allowedBotIds?: string[]      // Optional allowlist of bot IDs for test automation
+  onOperatorMessage: (sessionId, content, operatorName, sourceBridge, attachments, replyToBridgeMessageId?) -> void
+  onOperatorMessageWithIds?: (sessionId, content, operatorName, sourceBridge, attachments, replyToBridgeMessageId?, bridgeMessageId) -> void
+  onOperatorMessageEdit?: (sessionId, bridgeMessageId, content, sourceBridge, editedAt?) -> void
+  onOperatorMessageDelete?: (sessionId, bridgeMessageId, sourceBridge, deletedAt?) -> void
 }
 
 OperatorAttachment {
@@ -890,9 +901,12 @@ Receives updates from Telegram Bot API via webhook.
 | `sessionId` | `message.message_thread_id` (topic ID) |
 | `content` | `message.text` or `message.caption` |
 | `operatorName` | `message.from.first_name` |
+| `bridgeMessageId` | `message.message_id` |
 | `attachments` | `message.photo`, `message.document`, `message.audio`, `message.video`, `message.voice` |
 
 File download: `GET /bot{token}/getFile?file_id={id}` → `GET /file/bot{token}/{file_path}`
+
+Also handle `edited_message` updates and call `onOperatorMessageEdit`.
 
 #### Slack Webhook
 
@@ -903,9 +917,12 @@ Receives events via Slack Events API.
 | `sessionId` | `event.thread_ts` (thread timestamp) |
 | `content` | `event.text` |
 | `operatorName` | Fetch via `users.info` API |
+| `bridgeMessageId` | `event.ts` |
 | `attachments` | `event.files[]` (download with auth header) |
 
 Must handle `url_verification` challenge: return `{ challenge: payload.challenge }`.
+
+Also handle `message_changed` → `onOperatorMessageEdit` and `message_deleted` → `onOperatorMessageDelete`.
 
 #### Discord Webhook
 
@@ -919,6 +936,8 @@ Receives interactions via Discord Interactions endpoint.
 | `attachments` | Discord Gateway `attachments[]` (direct download) |
 
 Must handle PING verification: return `{ type: 1 }`.
+
+For Gateway mode, use `MESSAGE_CREATE`, `MESSAGE_UPDATE`, and `MESSAGE_DELETE` to call `onOperatorMessageWithIds`, `onOperatorMessageEdit`, and `onOperatorMessageDelete`.
 
 #### WebhookHandler Usage Example
 

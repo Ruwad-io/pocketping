@@ -65,7 +65,15 @@ class TelegramBridge extends AbstractBridge implements BridgeWithEditDeleteInter
             $text .= "\n\n📎 {$attachmentCount} attachment(s)";
         }
 
-        $result = $this->sendMessage($text);
+        $replyToMessageId = null;
+        if ($message->replyTo !== null) {
+            $replyBridgeIds = $this->getBridgeMessageIds($message->replyTo);
+            if ($replyBridgeIds?->telegramMessageId !== null) {
+                $replyToMessageId = $replyBridgeIds->telegramMessageId;
+            }
+        }
+
+        $result = $this->sendMessage($text, $replyToMessageId);
 
         // Store the message ID for edit/delete support
         if ($result->success && $result->platformMessageId !== null) {
@@ -197,7 +205,7 @@ class TelegramBridge extends AbstractBridge implements BridgeWithEditDeleteInter
     /**
      * Send a message to the configured chat.
      */
-    private function sendMessage(string $text): BridgeMessageResult
+    private function sendMessage(string $text, ?int $replyToMessageId = null): BridgeMessageResult
     {
         $params = [
             'chat_id' => $this->chatId,
@@ -207,6 +215,9 @@ class TelegramBridge extends AbstractBridge implements BridgeWithEditDeleteInter
 
         if ($this->disableNotification) {
             $params['disable_notification'] = true;
+        }
+        if ($replyToMessageId !== null) {
+            $params['reply_to_message_id'] = $replyToMessageId;
         }
 
         $response = $this->apiRequest('sendMessage', $params);

@@ -14,6 +14,7 @@
     "test:sdk-node": "cd packages/sdk-node && pnpm test",
     "test:sdk-python": "cd packages/sdk-python && pytest",
     "test:e2e": "playwright test",
+    "test:e2e:bridges": "node scripts/bridge-e2e.js",
     "test:coverage": "pnpm run test:widget -- --coverage",
     "lint": "pnpm run lint:ts && pnpm run lint:py",
     "lint:ts": "eslint packages/**/*.ts --ignore-pattern '*.d.ts'",

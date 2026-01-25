@@ -37,6 +37,12 @@
 
 ---
 
+## Bridge E2E (Real Platforms)
+
+We maintain a lightweight API-level harness for Slack/Discord that validates **real platform messages** against widget/bridge-server behavior.
+
+See: `docs/TESTING_BRIDGES_E2E.md`
+
 ## 1. Unit Tests
 
 ### Widget (`packages/widget`)

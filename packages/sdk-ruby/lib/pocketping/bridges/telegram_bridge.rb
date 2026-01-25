@@ -70,7 +70,13 @@ module PocketPing
         # Send typing indicator first
         send_chat_action("typing")
 
-        result = send_message(text)
+        reply_to_message_id = nil
+        if message.reply_to && pocketping&.storage&.respond_to?(:get_bridge_message_ids)
+          bridge_ids = pocketping.storage.get_bridge_message_ids(message.reply_to)
+          reply_to_message_id = bridge_ids&.telegram_message_id
+        end
+
+        result = send_message(text, reply_to_message_id: reply_to_message_id)
         return nil unless result
 
         message_id = result.dig("result", "message_id")
@@ -151,7 +157,7 @@ module PocketPing
             .gsub(">", "&gt;")
       end
 
-      def send_message(text)
+      def send_message(text, reply_to_message_id: nil)
         uri = URI("#{TELEGRAM_API_BASE}/bot#{@bot_token}/sendMessage")
 
         body = {
@@ -160,6 +166,7 @@ module PocketPing
           parse_mode: @parse_mode,
           disable_notification: @disable_notification
         }
+        body[:reply_to_message_id] = reply_to_message_id if reply_to_message_id
 
         make_request(uri, body)
       end

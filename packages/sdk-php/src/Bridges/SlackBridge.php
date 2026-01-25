@@ -129,6 +129,10 @@ class SlackBridge extends AbstractBridge implements BridgeWithEditDeleteInterfac
         $content = $this->escapeSlack($message->content);
 
         $text = "💬 *{$visitorName}:*\n{$content}";
+        $quote = $this->buildReplyQuote($message);
+        if ($quote !== null) {
+            $text = $quote . "\n" . $text;
+        }
 
         // Add attachments info if present
         if (!empty($message->attachments)) {
@@ -161,6 +165,32 @@ class SlackBridge extends AbstractBridge implements BridgeWithEditDeleteInterfac
         $text = "📤 *{$operator}* (via {$sourceBridge}):\n{$content}";
 
         $this->sendMessage($text);
+    }
+
+    private function buildReplyQuote(Message $message): ?string
+    {
+        if ($message->replyTo === null || $this->pocketPing === null) {
+            return null;
+        }
+
+        $replyTarget = $this->pocketPing->getStorage()->getMessage($message->replyTo);
+        if ($replyTarget === null) {
+            return null;
+        }
+
+        $senderLabel = match ($replyTarget->sender) {
+            'operator' => 'Support',
+            'ai' => 'AI',
+            default => 'Visitor',
+        };
+
+        $preview = $replyTarget->deletedAt !== null ? 'Message deleted' : ($replyTarget->content ?: 'Message');
+        if (mb_strlen($preview) > 140) {
+            $preview = mb_substr($preview, 0, 140) . '...';
+        }
+
+        $preview = $this->escapeSlack($preview);
+        return "> *{$senderLabel}* — {$preview}";
     }
 
     public function onMessageRead(

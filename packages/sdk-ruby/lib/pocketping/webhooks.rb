@@ -30,18 +30,29 @@ module PocketPing
   # Configuration for webhook handlers
   class WebhookConfig
     attr_reader :telegram_bot_token, :slack_bot_token, :discord_bot_token
-    attr_accessor :on_operator_message
+    attr_accessor :on_operator_message, :on_operator_message_with_ids, :on_operator_message_edit, :on_operator_message_delete, :allowed_bot_ids
 
     # @param telegram_bot_token [String, nil] Telegram bot token for downloading files
     # @param slack_bot_token [String, nil] Slack bot token for downloading files
     # @param discord_bot_token [String, nil] Discord bot token (for future use)
     # @param on_operator_message [Proc] Callback when operator sends a message
-    #   Receives: session_id, content, operator_name, source_bridge, attachments
-    def initialize(telegram_bot_token: nil, slack_bot_token: nil, discord_bot_token: nil, on_operator_message: nil)
+    #   Receives: session_id, content, operator_name, source_bridge, attachments, reply_to_bridge_message_id
+    # @param on_operator_message_with_ids [Proc] Callback when operator sends a message with bridge message ID
+    #   Receives: session_id, content, operator_name, source_bridge, attachments, reply_to_bridge_message_id, bridge_message_id
+    # @param on_operator_message_edit [Proc] Callback when operator edits a message
+    #   Receives: session_id, bridge_message_id, content, source_bridge, edited_at
+    # @param on_operator_message_delete [Proc] Callback when operator deletes a message
+    #   Receives: session_id, bridge_message_id, source_bridge, deleted_at
+    # @param allowed_bot_ids [Array<String>] Optional allowlist of bot IDs for test messages
+    def initialize(telegram_bot_token: nil, slack_bot_token: nil, discord_bot_token: nil, on_operator_message: nil, on_operator_message_with_ids: nil, on_operator_message_edit: nil, on_operator_message_delete: nil, allowed_bot_ids: nil)
       @telegram_bot_token = telegram_bot_token
       @slack_bot_token = slack_bot_token
       @discord_bot_token = discord_bot_token
       @on_operator_message = on_operator_message
+      @on_operator_message_with_ids = on_operator_message_with_ids
+      @on_operator_message_edit = on_operator_message_edit
+      @on_operator_message_delete = on_operator_message_delete
+      @allowed_bot_ids = allowed_bot_ids || []
     end
   end
 
@@ -52,7 +63,7 @@ module PocketPing
   #     def telegram
   #       handler = WebhookHandler.new(WebhookConfig.new(
   #         telegram_bot_token: ENV['TELEGRAM_BOT_TOKEN'],
-  #         on_operator_message: ->(session_id, content, operator_name, source_bridge, attachments) {
+  #         on_operator_message: ->(session_id, content, operator_name, source_bridge, attachments, reply_to_bridge_message_id) {
   #           # Handle the message
   #         }
   #       ))
@@ -75,6 +86,35 @@ module PocketPing
     # @return [Hash] Response to send back
     def handle_telegram_webhook(payload)
       return { error: "Telegram not configured" } unless @config.telegram_bot_token
+
+      edited_message = payload["edited_message"]
+      if edited_message
+        text = edited_message["text"] || ""
+        caption = edited_message["caption"] || ""
+
+        return { ok: true } if text.start_with?("/")
+
+        text = caption if text.empty?
+        return { ok: true } if text.empty?
+
+        topic_id = edited_message["message_thread_id"]
+        return { ok: true } unless topic_id
+
+        if @config.on_operator_message_edit
+          bridge_message_id = edited_message["message_id"].to_s
+          if bridge_message_id != ""
+            @config.on_operator_message_edit.call(
+              topic_id.to_s,
+              bridge_message_id,
+              text,
+              "telegram",
+              Time.now
+            )
+          end
+        end
+
+        return { ok: true }
+      end
 
       message = payload["message"]
       return { ok: true } unless message
@@ -101,6 +141,9 @@ module PocketPing
       # Get operator name
       operator_name = message.dig("from", "first_name") || "Operator"
 
+      # Get reply_to_message ID if present (for visual reply linking)
+      reply_to_bridge_message_id = message.dig("reply_to_message", "message_id")
+
       # Download media if present
       attachments = []
       if media
@@ -123,8 +166,23 @@ module PocketPing
           text,
           operator_name,
           "telegram",
-          attachments
+          attachments,
+          reply_to_bridge_message_id
         )
+      end
+      if @config.on_operator_message_with_ids
+        bridge_message_id = message["message_id"].to_s
+        if bridge_message_id != ""
+          @config.on_operator_message_with_ids.call(
+            topic_id.to_s,
+            text,
+            operator_name,
+            "telegram",
+            attachments,
+            reply_to_bridge_message_id,
+            bridge_message_id
+          )
+        end
       end
 
       { ok: true }
@@ -149,10 +207,65 @@ module PocketPing
       # Handle event callbacks
       if payload["type"] == "event_callback" && payload["event"]
         event = payload["event"]
+        allowed_bot_ids = @config.allowed_bot_ids || []
+
+        return { ok: true } unless event["type"] == "message"
+
+        subtype = event["subtype"]
+        if subtype == "message_changed"
+          if @config.on_operator_message_edit
+            message = event["message"] || {}
+            previous = event["previous_message"] || {}
+            bot_id = message["bot_id"] || previous["bot_id"] || event["bot_id"]
+            if bot_id && !allowed_bot_ids.include?(bot_id)
+              return { ok: true }
+            end
+
+            thread_ts = message["thread_ts"] || previous["thread_ts"]
+            message_ts = message["ts"] || previous["ts"]
+            text = message["text"] || ""
+
+            if thread_ts && message_ts
+              @config.on_operator_message_edit.call(
+                thread_ts,
+                message_ts,
+                text,
+                "slack",
+                Time.now
+              )
+            end
+          end
+
+          return { ok: true }
+        end
+
+        if subtype == "message_deleted"
+          if @config.on_operator_message_delete
+            previous = event["previous_message"] || {}
+            bot_id = previous["bot_id"] || event["bot_id"]
+            if bot_id && !allowed_bot_ids.include?(bot_id)
+              return { ok: true }
+            end
+
+            thread_ts = previous["thread_ts"]
+            message_ts = event["deleted_ts"] || previous["ts"]
+
+            if thread_ts && message_ts
+              @config.on_operator_message_delete.call(
+                thread_ts,
+                message_ts,
+                "slack",
+                Time.now
+              )
+            end
+          end
+
+          return { ok: true }
+        end
 
         has_content = event["type"] == "message" &&
                       event["thread_ts"] &&
-                      !event["bot_id"] &&
+                      (!event["bot_id"] || allowed_bot_ids.include?(event["bot_id"])) &&
                       !event["subtype"]
 
         files = event["files"] || []
@@ -187,15 +300,30 @@ module PocketPing
             operator_name = name if name
           end
 
-          # Call callback
+          # Call callback (Slack reply support TODO)
           if @config.on_operator_message
             @config.on_operator_message.call(
               thread_ts,
               text,
               operator_name,
               "slack",
-              attachments
+              attachments,
+              nil
             )
+          end
+          if @config.on_operator_message_with_ids
+            message_ts = event["ts"]
+            if message_ts
+              @config.on_operator_message_with_ids.call(
+                thread_ts,
+                text,
+                operator_name,
+                "slack",
+                attachments,
+                nil,
+                message_ts.to_s
+              )
+            end
           end
         end
       end
@@ -242,14 +370,15 @@ module PocketPing
                             payload.dig("user", "username") ||
                             "Operator"
 
-            # Call callback
+            # Call callback (Discord reply support TODO)
             if @config.on_operator_message
               @config.on_operator_message.call(
                 thread_id,
                 content,
                 operator_name,
                 "discord",
-                []
+                [],
+                nil
               )
             end
 

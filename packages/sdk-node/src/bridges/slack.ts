@@ -60,6 +60,7 @@ export interface SlackBotOptions {
 export class SlackBridge implements Bridge {
   readonly name = 'slack';
 
+  private pocketping?: PocketPing;
   private readonly mode: 'webhook' | 'bot';
   private readonly webhookUrl?: string;
   private readonly botToken?: string;
@@ -123,7 +124,8 @@ export class SlackBridge implements Bridge {
   /**
    * Initialize the bridge (optional setup)
    */
-  async init(_pocketping: PocketPing): Promise<void> {
+  async init(pocketping: PocketPing): Promise<void> {
+    this.pocketping = pocketping;
     // Verify connection for bot mode
     if (this.mode === 'bot' && this.botToken) {
       try {
@@ -189,7 +191,35 @@ export class SlackBridge implements Bridge {
     message: Message,
     session: Session
   ): Promise<BridgeMessageResult> {
-    const blocks = [
+    const blocks: Array<Record<string, unknown>> = [];
+
+    if (message.replyTo && this.pocketping?.getStorage().getMessage) {
+      const replyTarget = await this.pocketping
+        .getStorage()
+        .getMessage(message.replyTo);
+      if (replyTarget) {
+        const senderLabel =
+          replyTarget.sender === 'visitor'
+            ? 'Visitor'
+            : replyTarget.sender === 'operator'
+              ? 'Support'
+              : 'AI';
+        const rawPreview =
+          replyTarget.deletedAt ? 'Message deleted' : replyTarget.content || 'Message';
+        const preview =
+          rawPreview.length > 140 ? `${rawPreview.slice(0, 140)}...` : rawPreview;
+        const quoted = `> *${this.escapeSlack(senderLabel)}* — ${this.escapeSlack(preview)}`;
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: quoted,
+          },
+        });
+      }
+    }
+
+    blocks.push(
       {
         type: 'section',
         text: {
@@ -206,7 +236,7 @@ export class SlackBridge implements Bridge {
           },
         ],
       },
-    ];
+    );
 
     try {
       const messageId = await this.sendBlocks(blocks);

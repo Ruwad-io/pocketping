@@ -385,10 +385,36 @@ class SlackBridge(Bridge):
             elif session.identity.email:
                 visitor_display = session.identity.email
 
-        blocks = [
-            self._create_section_block(message.content),
-            self._create_context_block([f"From: {visitor_display}"]),
-        ]
+        blocks = []
+        if message.reply_to and self._pocketping:
+            try:
+                reply_target = await self._pocketping.storage.get_message(message.reply_to)
+                if reply_target:
+                    sender_label = (
+                        "Visitor"
+                        if reply_target.sender == Sender.VISITOR
+                        else "Support"
+                        if reply_target.sender == Sender.OPERATOR
+                        else "AI"
+                    )
+                    preview = (
+                        "Message deleted"
+                        if reply_target.deleted_at
+                        else (reply_target.content or "Message")
+                    )
+                    if len(preview) > 140:
+                        preview = preview[:140] + "..."
+                    quote = f"> *{sender_label}* — {preview}"
+                    blocks.append(self._create_section_block(quote))
+            except Exception as e:
+                print(f"[PocketPing] Slack reply lookup error: {e}")
+
+        blocks.extend(
+            [
+                self._create_section_block(message.content),
+                self._create_context_block([f"From: {visitor_display}"]),
+            ]
+        )
 
         result = await self._send_message(
             text=f"{visitor_display}: {message.content}",

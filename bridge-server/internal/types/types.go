@@ -183,15 +183,38 @@ type OutgoingEvent interface {
 
 // OperatorMessageEvent is sent when an operator sends a message from a bridge
 type OperatorMessageEvent struct {
-	Type         string        `json:"type"`
-	SessionID    string        `json:"sessionId"`
-	Content      string        `json:"content"`
-	SourceBridge string        `json:"sourceBridge"`
-	OperatorName string        `json:"operatorName,omitempty"`
-	Attachments  []*Attachment `json:"attachments,omitempty"`
+	Type                   string        `json:"type"`
+	SessionID              string        `json:"sessionId"`
+	MessageID              string        `json:"messageId"`
+	Content                string        `json:"content"`
+	SourceBridge           string        `json:"sourceBridge"`
+	OperatorName           string        `json:"operatorName,omitempty"`
+	Attachments            []*Attachment `json:"attachments,omitempty"`
+	ReplyToBridgeMessageID *int          `json:"replyToBridgeMessageId,omitempty"` // Telegram message_id being replied to
 }
 
 func (e *OperatorMessageEvent) EventType() string { return "operator_message" }
+
+// OperatorMessageEditedEvent is sent when an operator edits a message from a bridge
+type OperatorMessageEditedEvent struct {
+	Type      string    `json:"type"`
+	SessionID string    `json:"sessionId"`
+	MessageID string    `json:"messageId"`
+	Content   string    `json:"content"`
+	EditedAt  time.Time `json:"editedAt"`
+}
+
+func (e *OperatorMessageEditedEvent) EventType() string { return "operator_message_edited" }
+
+// OperatorMessageDeletedEvent is sent when an operator deletes a message from a bridge
+type OperatorMessageDeletedEvent struct {
+	Type      string    `json:"type"`
+	SessionID string    `json:"sessionId"`
+	MessageID string    `json:"messageId"`
+	DeletedAt time.Time `json:"deletedAt"`
+}
+
+func (e *OperatorMessageDeletedEvent) EventType() string { return "operator_message_deleted" }
 
 // OperatorTypingEvent is sent when an operator starts/stops typing
 type OperatorTypingEvent struct {

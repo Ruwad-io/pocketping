@@ -180,6 +180,12 @@ Mention the bot with commands:
 
 Reply in thread to respond to users.
 
+### Reply Behavior
+
+- **Telegram:** native replies when `reply_to` is set and Telegram message ID is known.
+- **Discord:** native replies via `message_reference` when Discord message ID is known.
+- **Slack:** quoted block (left bar) inside the thread.
+
 ## AI Providers
 
 ### OpenAI

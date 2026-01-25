@@ -6,7 +6,13 @@ export type { AIProvider } from './ai/types';
 
 // Webhook handlers for incoming operator messages
 export { WebhookHandler } from './webhooks';
-export type { WebhookConfig, OperatorMessageCallback, OperatorAttachment } from './webhooks';
+export type {
+  WebhookConfig,
+  OperatorMessageCallback,
+  OperatorMessageEditCallback,
+  OperatorMessageDeleteCallback,
+  OperatorAttachment,
+} from './webhooks';
 
 // Bridge implementations
 export { TelegramBridge } from './bridges/telegram';

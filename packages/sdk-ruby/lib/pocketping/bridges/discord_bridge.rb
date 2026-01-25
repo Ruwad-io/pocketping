@@ -65,7 +65,13 @@ module PocketPing
         content = message.content || ""
 
         text = format_visitor_message(visitor_id, content)
-        result = send_webhook_message(text, wait: true)
+        reply_to_message_id = nil
+        if message.reply_to && pocketping&.storage&.respond_to?(:get_bridge_message_ids)
+          bridge_ids = pocketping.storage.get_bridge_message_ids(message.reply_to)
+          reply_to_message_id = bridge_ids&.discord_message_id
+        end
+
+        result = send_webhook_message(text, wait: true, reply_to_message_id: reply_to_message_id)
         return nil unless result
 
         message_id = result["id"]
@@ -124,13 +130,14 @@ module PocketPing
         "\u{1F4AC} #{prefix}#{visitor_id}:\n#{content}"
       end
 
-      def send_webhook_message(content, wait: false)
+      def send_webhook_message(content, wait: false, reply_to_message_id: nil)
         uri = URI(@webhook_url)
         uri.query = "wait=true" if wait
 
         body = { content: content }
         body[:username] = @username if @username
         body[:avatar_url] = @avatar_url if @avatar_url
+        body[:message_reference] = { message_id: reply_to_message_id } if reply_to_message_id
 
         make_request(uri, :post, body)
       end
@@ -242,7 +249,13 @@ module PocketPing
         trigger_typing
 
         text = format_visitor_message(visitor_id, content)
-        result = send_message(text)
+        reply_to_message_id = nil
+        if message.reply_to && pocketping&.storage&.respond_to?(:get_bridge_message_ids)
+          bridge_ids = pocketping.storage.get_bridge_message_ids(message.reply_to)
+          reply_to_message_id = bridge_ids&.discord_message_id
+        end
+
+        result = send_message(text, reply_to_message_id: reply_to_message_id)
         return nil unless result
 
         message_id = result["id"]
@@ -314,9 +327,10 @@ module PocketPing
         "\u{1F4AC} #{prefix}#{visitor_id}:\n#{content}"
       end
 
-      def send_message(content)
+      def send_message(content, reply_to_message_id: nil)
         uri = URI("#{DISCORD_API_BASE}/channels/#{@channel_id}/messages")
         body = { content: content }
+        body[:message_reference] = { message_id: reply_to_message_id } if reply_to_message_id
         make_request(uri, :post, body)
       end
 

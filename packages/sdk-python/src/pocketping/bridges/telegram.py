@@ -268,7 +268,19 @@ class TelegramBridge(Bridge):
             return None
 
         text = self._format_message_text(message, session)
-        result = await self._send_message(text)
+        reply_to_message_id: int | None = None
+
+        if message.reply_to and self._pocketping:
+            try:
+                bridge_ids = await self._pocketping.storage.get_bridge_message_ids(
+                    message.reply_to
+                )
+                if bridge_ids and bridge_ids.telegram_message_id:
+                    reply_to_message_id = bridge_ids.telegram_message_id
+            except Exception as e:
+                print(f"[PocketPing] Telegram reply lookup error: {e}")
+
+        result = await self._send_message(text, reply_to_message_id=reply_to_message_id)
 
         if result and "message_id" in result:
             return BridgeMessageResult(message_id=result["message_id"])

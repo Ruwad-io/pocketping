@@ -1,9 +1,9 @@
 import { render, h } from 'preact';
 import { ChatWidget } from './components/ChatWidget';
 import { PocketPingClient } from './client';
-import type { PocketPingConfig, ResolvedPocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning, UserIdentity, TriggerOptions, TrackedElement, Attachment } from './types';
+import type { PocketPingConfig, ResolvedPocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning, UserIdentity, TriggerOptions, TrackedElement, Attachment, ReplyToData } from './types';
 
-export type { PocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning, UserIdentity, TriggerOptions, TrackedElement, Attachment };
+export type { PocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning, UserIdentity, TriggerOptions, TrackedElement, Attachment, ReplyToData };
 
 let client: PocketPingClient | null = null;
 let container: HTMLElement | null = null;

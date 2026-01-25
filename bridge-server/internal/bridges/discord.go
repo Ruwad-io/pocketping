@@ -72,7 +72,7 @@ type discordMessageResponse struct {
 }
 
 // sendMessage sends a message to Discord
-func (b *DiscordBridge) sendMessage(content string, embeds []discordEmbed) (string, error) {
+func (b *DiscordBridge) sendMessage(content string, embeds []discordEmbed, replyToMessageID string) (string, error) {
 	data := map[string]interface{}{}
 
 	if content != "" {
@@ -86,6 +86,11 @@ func (b *DiscordBridge) sendMessage(content string, embeds []discordEmbed) (stri
 	}
 	if b.avatarURL != "" {
 		data["avatar_url"] = b.avatarURL
+	}
+	if replyToMessageID != "" {
+		data["message_reference"] = map[string]string{
+			"message_id": replyToMessageID,
+		}
 	}
 
 	var url string
@@ -165,12 +170,12 @@ func (b *DiscordBridge) OnNewSession(session *types.Session) error {
 		})
 	}
 
-	_, err := b.sendMessage("", []discordEmbed{embed})
+	_, err := b.sendMessage("", []discordEmbed{embed}, "")
 	return err
 }
 
 // OnVisitorMessage sends a visitor message to Discord
-func (b *DiscordBridge) OnVisitorMessage(message *types.Message, session *types.Session) (*types.BridgeMessageIDs, error) {
+func (b *DiscordBridge) OnVisitorMessage(message *types.Message, session *types.Session, reply *ReplyContext) (*types.BridgeMessageIDs, error) {
 	visitorName := session.VisitorID
 	if session.Identity != nil && session.Identity.Name != "" {
 		visitorName = session.Identity.Name
@@ -182,7 +187,12 @@ func (b *DiscordBridge) OnVisitorMessage(message *types.Message, session *types.
 		content += fmt.Sprintf(" _(+%d attachment(s))_", len(message.Attachments))
 	}
 
-	msgID, err := b.sendMessage(content, nil)
+	replyToMessageID := ""
+	if reply != nil && reply.BridgeIDs != nil {
+		replyToMessageID = reply.BridgeIDs.DiscordMessageID
+	}
+
+	msgID, err := b.sendMessage(content, nil, replyToMessageID)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +215,7 @@ func (b *DiscordBridge) OnOperatorMessage(message *types.Message, session *types
 	}
 
 	content := fmt.Sprintf("**%s** (via %s): %s", name, sourceBridge, message.Content)
-	_, err := b.sendMessage(content, nil)
+	_, err := b.sendMessage(content, nil, "")
 	return err
 }
 
@@ -250,7 +260,7 @@ func (b *DiscordBridge) OnCustomEvent(event *types.CustomEvent, session *types.S
 		embed.Description = fmt.Sprintf("```json\n%s\n```", string(data))
 	}
 
-	_, err := b.sendMessage("", []discordEmbed{embed})
+	_, err := b.sendMessage("", []discordEmbed{embed}, "")
 	return err
 }
 
@@ -283,7 +293,7 @@ func (b *DiscordBridge) OnIdentityUpdate(session *types.Session) error {
 		})
 	}
 
-	_, err := b.sendMessage("", []discordEmbed{embed})
+	_, err := b.sendMessage("", []discordEmbed{embed}, "")
 	return err
 }
 
@@ -295,7 +305,7 @@ func (b *DiscordBridge) OnAITakeover(session *types.Session, reason string) erro
 		Color:       0xFEE75C, // Yellow
 	}
 
-	_, err := b.sendMessage("", []discordEmbed{embed})
+	_, err := b.sendMessage("", []discordEmbed{embed}, "")
 	return err
 }
 

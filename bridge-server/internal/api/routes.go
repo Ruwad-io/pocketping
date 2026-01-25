@@ -25,6 +25,7 @@ type Server struct {
 	config         *config.Config
 	eventListeners sync.Map // map[chan types.OutgoingEvent]struct{}
 	bridgeIDs      sync.Map // map[string]*types.BridgeMessageIDs (messageID -> bridgeIDs)
+	messages       sync.Map // map[string]*types.Message (messageID -> message)
 }
 
 // NewServer creates a new API server
@@ -354,6 +355,55 @@ func (s *Server) saveBridgeIDs(messageID string, ids *types.BridgeMessageIDs) {
 	s.bridgeIDs.Store(messageID, ids)
 }
 
+func (s *Server) getMessage(messageID string) *types.Message {
+	if v, ok := s.messages.Load(messageID); ok {
+		return v.(*types.Message)
+	}
+	return nil
+}
+
+func (s *Server) saveMessage(message *types.Message) {
+	if message == nil {
+		return
+	}
+	s.messages.Store(message.ID, message)
+}
+
+func (s *Server) updateMessage(messageID string, update func(msg *types.Message)) {
+	if update == nil {
+		return
+	}
+	if msg := s.getMessage(messageID); msg != nil {
+		update(msg)
+		s.saveMessage(msg)
+	}
+}
+
+func (s *Server) buildReplyQuote(messageID string) string {
+	msg := s.getMessage(messageID)
+	if msg == nil {
+		return ""
+	}
+
+	senderLabel := "Visitor"
+	switch msg.Sender {
+	case "operator":
+		senderLabel = "Support"
+	case "ai":
+		senderLabel = "AI"
+	}
+
+	preview := msg.Content
+	if msg.DeletedAt != nil {
+		preview = "Message deleted"
+	}
+	if len(preview) > 140 {
+		preview = preview[:140] + "..."
+	}
+
+	return fmt.Sprintf("> *%s* — %s", senderLabel, preview)
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Event Processors
 // ─────────────────────────────────────────────────────────────────
@@ -368,8 +418,22 @@ func (s *Server) processNewSession(event *types.NewSessionEvent) error {
 }
 
 func (s *Server) processVisitorMessage(event *types.VisitorMessageEvent) error {
+	s.saveMessage(event.Message)
+
+	var replyContext *bridges.ReplyContext
+	if event.Message.ReplyTo != "" {
+		replyIDs := s.getBridgeIDs(event.Message.ReplyTo)
+		replyQuote := s.buildReplyQuote(event.Message.ReplyTo)
+		if replyIDs != nil || replyQuote != "" {
+			replyContext = &bridges.ReplyContext{
+				BridgeIDs: replyIDs,
+				Quote:     replyQuote,
+			}
+		}
+	}
+
 	for _, bridge := range s.bridges {
-		ids, err := bridge.OnVisitorMessage(event.Message, event.Session)
+		ids, err := bridge.OnVisitorMessage(event.Message, event.Session, replyContext)
 		if err != nil {
 			log.Printf("[%s] OnVisitorMessage error: %v", bridge.Name(), err)
 			continue
@@ -431,6 +495,11 @@ func (s *Server) processIdentityUpdate(event *types.IdentityUpdateEvent) error {
 
 func (s *Server) processVisitorMessageEdited(event *types.VisitorMessageEditedEvent) error {
 	bridgeIDs := s.getBridgeIDs(event.MessageID)
+	now := time.Now()
+	s.updateMessage(event.MessageID, func(msg *types.Message) {
+		msg.Content = event.Content
+		msg.EditedAt = &now
+	})
 
 	for _, bridge := range s.bridges {
 		ids, err := bridge.OnVisitorMessageEdited(event.SessionID, event.MessageID, event.Content, bridgeIDs)
@@ -447,6 +516,10 @@ func (s *Server) processVisitorMessageEdited(event *types.VisitorMessageEditedEv
 
 func (s *Server) processVisitorMessageDeleted(event *types.VisitorMessageDeletedEvent) error {
 	bridgeIDs := s.getBridgeIDs(event.MessageID)
+	now := time.Now()
+	s.updateMessage(event.MessageID, func(msg *types.Message) {
+		msg.DeletedAt = &now
+	})
 
 	for _, bridge := range s.bridges {
 		if err := bridge.OnVisitorMessageDeleted(event.SessionID, event.MessageID, bridgeIDs); err != nil {

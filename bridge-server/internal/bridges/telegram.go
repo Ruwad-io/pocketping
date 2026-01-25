@@ -82,11 +82,14 @@ func (b *TelegramBridge) callAPI(method string, data map[string]interface{}) (*t
 }
 
 // sendMessage sends a message to the configured chat
-func (b *TelegramBridge) sendMessage(text string) (int, error) {
+func (b *TelegramBridge) sendMessage(text string, replyToMessageID *int) (int, error) {
 	data := map[string]interface{}{
 		"chat_id":    b.chatID,
 		"text":       text,
 		"parse_mode": "HTML",
+	}
+	if replyToMessageID != nil && *replyToMessageID > 0 {
+		data["reply_to_message_id"] = *replyToMessageID
 	}
 
 	resp, err := b.callAPI("sendMessage", data)
@@ -125,12 +128,12 @@ func (b *TelegramBridge) OnNewSession(session *types.Session) error {
 		}
 	}
 
-	_, err := b.sendMessage(text)
+	_, err := b.sendMessage(text, nil)
 	return err
 }
 
 // OnVisitorMessage sends a visitor message to the chat
-func (b *TelegramBridge) OnVisitorMessage(message *types.Message, session *types.Session) (*types.BridgeMessageIDs, error) {
+func (b *TelegramBridge) OnVisitorMessage(message *types.Message, session *types.Session, reply *ReplyContext) (*types.BridgeMessageIDs, error) {
 	visitorName := session.VisitorID
 	if session.Identity != nil && session.Identity.Name != "" {
 		visitorName = session.Identity.Name
@@ -142,7 +145,13 @@ func (b *TelegramBridge) OnVisitorMessage(message *types.Message, session *types
 		text += fmt.Sprintf("\n📎 %d attachment(s)", len(message.Attachments))
 	}
 
-	msgID, err := b.sendMessage(text)
+	var replyToMessageID *int
+	if reply != nil && reply.BridgeIDs != nil && reply.BridgeIDs.TelegramMessageID != 0 {
+		id := reply.BridgeIDs.TelegramMessageID
+		replyToMessageID = &id
+	}
+
+	msgID, err := b.sendMessage(text, replyToMessageID)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +172,7 @@ func (b *TelegramBridge) OnOperatorMessage(message *types.Message, session *type
 	}
 
 	text := fmt.Sprintf("👤 <b>%s</b> (via %s):\n%s", name, sourceBridge, message.Content)
-	_, err := b.sendMessage(text)
+	_, err := b.sendMessage(text, nil)
 	return err
 }
 
@@ -194,7 +203,7 @@ func (b *TelegramBridge) OnCustomEvent(event *types.CustomEvent, session *types.
 		data, _ := json.Marshal(event.Data)
 		text += fmt.Sprintf("\n<code>%s</code>", string(data))
 	}
-	_, err := b.sendMessage(text)
+	_, err := b.sendMessage(text, nil)
 	return err
 }
 
@@ -212,14 +221,14 @@ func (b *TelegramBridge) OnIdentityUpdate(session *types.Session) error {
 		text += fmt.Sprintf("\nEmail: %s", session.Identity.Email)
 	}
 
-	_, err := b.sendMessage(text)
+	_, err := b.sendMessage(text, nil)
 	return err
 }
 
 // OnAITakeover sends an AI takeover notification
 func (b *TelegramBridge) OnAITakeover(session *types.Session, reason string) error {
 	text := fmt.Sprintf("🤖 <b>AI Takeover</b>\nReason: %s", reason)
-	_, err := b.sendMessage(text)
+	_, err := b.sendMessage(text, nil)
 	return err
 }
 

@@ -60,6 +60,8 @@ module PocketPing
         content = message.content || ""
 
         text = format_visitor_message(visitor_id, content)
+        quote = build_reply_quote(message)
+        text = "#{quote}\n#{text}" if quote
         send_webhook_message(text)
 
         # Slack webhooks don't return a message ID, so we can't support edit/delete
@@ -106,6 +108,52 @@ module PocketPing
       def format_visitor_message(visitor_id, content, edited: false)
         prefix = edited ? "\u{1F4DD} [edited] " : ""
         "\u{1F4AC} #{prefix}#{escape_slack(visitor_id)}:\n#{escape_slack(content)}"
+      end
+
+      def build_reply_quote(message)
+        return nil unless message.reply_to && pocketping&.storage&.respond_to?(:get_message)
+
+        reply_target = pocketping.storage.get_message(message.reply_to)
+        return nil unless reply_target
+
+        sender_label =
+          case reply_target.sender
+          when "operator" then "Support"
+          when "ai" then "AI"
+          else "Visitor"
+          end
+
+        preview = if reply_target.deleted_at
+                    "Message deleted"
+                  else
+                    reply_target.content.to_s.empty? ? "Message" : reply_target.content
+                  end
+        preview = preview[0, 140] + "..." if preview.length > 140
+
+        "> *#{escape_slack(sender_label)}* — #{escape_slack(preview)}"
+      end
+
+      def build_reply_quote(message)
+        return nil unless message.reply_to && pocketping&.storage&.respond_to?(:get_message)
+
+        reply_target = pocketping.storage.get_message(message.reply_to)
+        return nil unless reply_target
+
+        sender_label =
+          case reply_target.sender
+          when "operator" then "Support"
+          when "ai" then "AI"
+          else "Visitor"
+          end
+
+        preview = if reply_target.deleted_at
+                    "Message deleted"
+                  else
+                    reply_target.content.to_s.empty? ? "Message" : reply_target.content
+                  end
+        preview = preview[0, 140] + "..." if preview.length > 140
+
+        "> *#{escape_slack(sender_label)}* — #{escape_slack(preview)}"
       end
 
       def escape_slack(text)
@@ -203,6 +251,8 @@ module PocketPing
         content = message.content || ""
 
         text = format_visitor_message(visitor_id, content)
+        quote = build_reply_quote(message)
+        text = "#{quote}\n#{text}" if quote
         result = post_message(text)
         return nil unless result && result["ok"]
 

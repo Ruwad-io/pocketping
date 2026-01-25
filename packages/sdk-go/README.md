@@ -395,6 +395,12 @@ func (s *SlackBridge) OnVisitorMessage(ctx context.Context, message *pocketping.
 }
 ```
 
+### Reply Behavior
+
+- **Telegram:** native replies when `ReplyTo` is set and Telegram message ID is known.
+- **Discord:** native replies via `message_reference` when Discord message ID is known.
+- **Slack:** quoted block (left bar) inside the thread.
+
 ## HTTP Integration Examples
 
 ### Standard Library

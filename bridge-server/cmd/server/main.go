@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,7 +10,9 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
+	pocketping "github.com/Ruwad-io/pocketping/sdk-go"
 	"github.com/joho/godotenv"
 	"github.com/pocketping/bridge-server/internal/api"
 	"github.com/pocketping/bridge-server/internal/bridges"
@@ -61,6 +64,32 @@ func main() {
 	mux := http.NewServeMux()
 	server.SetupRoutes(mux)
 
+	// Initialize Discord Gateway if enabled
+	var discordGateway *pocketping.DiscordGateway
+	if cfg.Discord != nil && cfg.Discord.EnableGateway && cfg.Discord.BotToken != "" {
+		log.Println("[Bridge Server] Starting Discord Gateway for real-time message receiving...")
+		discordGateway = pocketping.NewDiscordGateway(pocketping.DiscordGatewayConfig{
+			BotToken:  cfg.Discord.BotToken,
+			ChannelID: cfg.Discord.ChannelID,
+			AllowedBotIDs: cfg.TestBotIDs,
+			OnOperatorMessageWithIDs: func(ctx context.Context, sessionID, content, operatorName string, attachments []pocketping.Attachment, replyToBridgeMessageID *int, bridgeMessageID string) {
+				server.RecordOperatorMessage(sessionID, content, operatorName, "discord", attachments, replyToBridgeMessageID, bridgeMessageID)
+			},
+			OnOperatorMessageEdit: func(ctx context.Context, sessionID, bridgeMessageID, content string, editedAt time.Time) {
+				server.RecordOperatorMessageEdit(sessionID, bridgeMessageID, content, "discord", editedAt)
+			},
+			OnOperatorMessageDelete: func(ctx context.Context, sessionID, bridgeMessageID string, deletedAt time.Time) {
+				server.RecordOperatorMessageDelete(sessionID, bridgeMessageID, "discord", deletedAt)
+			},
+		})
+
+		if err := discordGateway.Connect(context.Background()); err != nil {
+			log.Printf("[Bridge Server] Discord Gateway connection failed: %v", err)
+		} else {
+			log.Println("[Bridge Server] Discord Gateway connected successfully")
+		}
+	}
+
 	// Start HTTP server
 	addr := fmt.Sprintf(":%d", cfg.Port)
 
@@ -87,4 +116,11 @@ func main() {
 	<-quit
 
 	fmt.Println("\n\n🛑 Shutting down Bridge Server...")
+
+	// Close Discord Gateway if running
+	if discordGateway != nil {
+		if err := discordGateway.Close(); err != nil {
+			log.Printf("[Bridge Server] Discord Gateway close error: %v", err)
+		}
+	}
 }

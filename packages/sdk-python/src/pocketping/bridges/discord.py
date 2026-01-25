@@ -238,6 +238,7 @@ class DiscordBridge(Bridge):
         content: str | None = None,
         *,
         embeds: list[dict] | None = None,
+        reply_to_message_id: str | None = None,
     ) -> dict | None:
         """Send a message to Discord.
 
@@ -254,6 +255,8 @@ class DiscordBridge(Bridge):
             data["content"] = content
         if embeds:
             data["embeds"] = embeds
+        if reply_to_message_id:
+            data["message_reference"] = {"message_id": reply_to_message_id}
 
         # Add webhook-specific options
         if self._mode == "webhook":
@@ -404,7 +407,21 @@ class DiscordBridge(Bridge):
             author_name=f"{visitor_display}",
         )
 
-        result = await self._send_message(embeds=[embed])
+        reply_to_message_id: str | None = None
+        if message.reply_to and self._pocketping:
+            try:
+                bridge_ids = await self._pocketping.storage.get_bridge_message_ids(
+                    message.reply_to
+                )
+                if bridge_ids and bridge_ids.discord_message_id:
+                    reply_to_message_id = bridge_ids.discord_message_id
+            except Exception as e:
+                print(f"[PocketPing] Discord reply lookup error: {e}")
+
+        result = await self._send_message(
+            embeds=[embed],
+            reply_to_message_id=reply_to_message_id,
+        )
 
         if result and "id" in result:
             return BridgeMessageResult(message_id=result["id"])

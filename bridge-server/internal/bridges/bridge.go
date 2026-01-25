@@ -8,6 +8,12 @@ import (
 // EventCallback is called when a bridge receives an event to forward
 type EventCallback func(event types.OutgoingEvent)
 
+// ReplyContext provides reply metadata for bridges
+type ReplyContext struct {
+	BridgeIDs *types.BridgeMessageIDs
+	Quote     string
+}
+
 // Bridge is the interface that all notification bridges must implement
 type Bridge interface {
 	// Name returns the unique name of this bridge
@@ -21,7 +27,7 @@ type Bridge interface {
 
 	// OnVisitorMessage is called when a visitor sends a message
 	// Returns bridge message IDs for edit/delete sync
-	OnVisitorMessage(message *types.Message, session *types.Session) (*types.BridgeMessageIDs, error)
+	OnVisitorMessage(message *types.Message, session *types.Session, reply *ReplyContext) (*types.BridgeMessageIDs, error)
 
 	// OnOperatorMessage is called when an operator sends a message from another bridge
 	OnOperatorMessage(message *types.Message, session *types.Session, sourceBridge, operatorName string) error

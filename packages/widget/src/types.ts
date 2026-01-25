@@ -130,13 +130,22 @@ export interface Attachment {
   status: AttachmentStatus;
 }
 
+/** Reply reference - either a string ID or embedded data from SSE */
+export interface ReplyToData {
+  id: string;
+  content: string;
+  sender: string;
+  deleted?: boolean;
+}
+
 export interface Message {
   id: string;
   sessionId: string;
   content: string;
   sender: 'visitor' | 'operator' | 'ai';
   timestamp: string;
-  replyTo?: string;
+  /** Reply reference - string ID when sending, object with data from SSE */
+  replyTo?: string | ReplyToData;
   metadata?: Record<string, unknown>;
   attachments?: Attachment[];
 
@@ -225,7 +234,17 @@ export interface PresenceResponse {
   aiActiveAfter?: number;
 }
 
-export type WebSocketEventType = 'message' | 'typing' | 'presence' | 'ai_takeover' | 'read' | 'event' | 'version_warning' | 'config_update';
+export type WebSocketEventType =
+  | 'message'
+  | 'message_edited'
+  | 'message_deleted'
+  | 'typing'
+  | 'presence'
+  | 'ai_takeover'
+  | 'read'
+  | 'event'
+  | 'version_warning'
+  | 'config_update';
 
 export interface WebSocketEvent {
   type: WebSocketEventType;

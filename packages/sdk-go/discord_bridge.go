@@ -82,7 +82,7 @@ func (d *DiscordWebhookBridge) OnNewSession(ctx context.Context, session *Sessio
 		content += fmt.Sprintf("\n📍 %s", pageURL)
 	}
 
-	_, err := d.sendWebhookMessage(ctx, content)
+	_, err := d.sendWebhookMessage(ctx, content, "")
 	if err != nil {
 		log.Printf("[DiscordWebhookBridge] OnNewSession error: %v", err)
 	}
@@ -96,9 +96,28 @@ func (d *DiscordWebhookBridge) OnVisitorMessage(ctx context.Context, message *Me
 
 	// Note: Discord webhooks don't return message IDs in a way that allows editing
 	// For full edit/delete support, use DiscordBotBridge instead
-	_, err := d.sendWebhookMessage(ctx, content)
+	var replyToMessageID string
+	if message.ReplyTo != "" && d.pp != nil {
+		if storage, ok := d.pp.GetStorage().(StorageWithBridgeIDs); ok {
+			bridgeIDs, err := storage.GetBridgeMessageIDs(ctx, message.ReplyTo)
+			if err == nil && bridgeIDs != nil && bridgeIDs.DiscordMessageID != "" {
+				replyToMessageID = bridgeIDs.DiscordMessageID
+			}
+		}
+	}
+
+	result, err := d.sendWebhookMessage(ctx, content, replyToMessageID)
 	if err != nil {
 		log.Printf("[DiscordWebhookBridge] OnVisitorMessage error: %v", err)
+		return nil
+	}
+
+	if result != nil && result.DiscordMessageID != "" && d.pp != nil {
+		if storage, ok := d.pp.GetStorage().(StorageWithBridgeIDs); ok {
+			_ = storage.SaveBridgeMessageIDs(ctx, message.ID, BridgeMessageIds{
+				DiscordMessageID: result.DiscordMessageID,
+			})
+		}
 	}
 	return nil
 }
@@ -116,7 +135,7 @@ func (d *DiscordWebhookBridge) OnOperatorMessage(ctx context.Context, message *M
 
 	content := fmt.Sprintf("👨‍💼 %s:\n%s", name, message.Content)
 
-	_, err := d.sendWebhookMessage(ctx, content)
+	_, err := d.sendWebhookMessage(ctx, content, "")
 	if err != nil {
 		log.Printf("[DiscordWebhookBridge] OnOperatorMessage error: %v", err)
 	}
@@ -146,7 +165,7 @@ func (d *DiscordWebhookBridge) OnCustomEvent(ctx context.Context, event CustomEv
 		}
 	}
 
-	_, err := d.sendWebhookMessage(ctx, content)
+	_, err := d.sendWebhookMessage(ctx, content, "")
 	if err != nil {
 		log.Printf("[DiscordWebhookBridge] OnCustomEvent error: %v", err)
 	}
@@ -167,7 +186,7 @@ func (d *DiscordWebhookBridge) OnIdentityUpdate(ctx context.Context, session *Se
 		content += fmt.Sprintf("\n📧 Email: %s", session.Identity.Email)
 	}
 
-	_, err := d.sendWebhookMessage(ctx, content)
+	_, err := d.sendWebhookMessage(ctx, content, "")
 	if err != nil {
 		log.Printf("[DiscordWebhookBridge] OnIdentityUpdate error: %v", err)
 	}
@@ -175,16 +194,24 @@ func (d *DiscordWebhookBridge) OnIdentityUpdate(ctx context.Context, session *Se
 }
 
 type discordWebhookPayload struct {
-	Content   string `json:"content"`
-	Username  string `json:"username,omitempty"`
-	AvatarURL string `json:"avatar_url,omitempty"`
+	Content          string                   `json:"content"`
+	Username         string                   `json:"username,omitempty"`
+	AvatarURL        string                   `json:"avatar_url,omitempty"`
+	MessageReference *discordMessageReference `json:"message_reference,omitempty"`
 }
 
-func (d *DiscordWebhookBridge) sendWebhookMessage(ctx context.Context, content string) (*BridgeMessageResult, error) {
+type discordMessageReference struct {
+	MessageID string `json:"message_id"`
+}
+
+func (d *DiscordWebhookBridge) sendWebhookMessage(ctx context.Context, content string, replyToMessageID string) (*BridgeMessageResult, error) {
 	payload := discordWebhookPayload{
 		Content:   content,
 		Username:  d.Username,
 		AvatarURL: d.AvatarURL,
+	}
+	if replyToMessageID != "" {
+		payload.MessageReference = &discordMessageReference{MessageID: replyToMessageID}
 	}
 
 	body, err := json.Marshal(payload)
@@ -299,7 +326,7 @@ func (d *DiscordBotBridge) OnNewSession(ctx context.Context, session *Session) e
 		content += fmt.Sprintf("\n📍 %s", pageURL)
 	}
 
-	_, err := d.sendMessage(ctx, content)
+	_, err := d.sendMessage(ctx, content, "")
 	if err != nil {
 		log.Printf("[DiscordBotBridge] OnNewSession error: %v", err)
 	}
@@ -311,7 +338,17 @@ func (d *DiscordBotBridge) OnVisitorMessage(ctx context.Context, message *Messag
 	visitorName := d.getVisitorName(session)
 	content := fmt.Sprintf("💬 %s:\n%s", visitorName, message.Content)
 
-	result, err := d.sendMessage(ctx, content)
+	var replyToMessageID string
+	if message.ReplyTo != "" && d.pp != nil {
+		if storage, ok := d.pp.GetStorage().(StorageWithBridgeIDs); ok {
+			bridgeIDs, err := storage.GetBridgeMessageIDs(ctx, message.ReplyTo)
+			if err == nil && bridgeIDs != nil && bridgeIDs.DiscordMessageID != "" {
+				replyToMessageID = bridgeIDs.DiscordMessageID
+			}
+		}
+	}
+
+	result, err := d.sendMessage(ctx, content, replyToMessageID)
 	if err != nil {
 		log.Printf("[DiscordBotBridge] OnVisitorMessage error: %v", err)
 		return nil
@@ -342,7 +379,7 @@ func (d *DiscordBotBridge) OnOperatorMessage(ctx context.Context, message *Messa
 
 	content := fmt.Sprintf("👨‍💼 %s:\n%s", name, message.Content)
 
-	_, err := d.sendMessage(ctx, content)
+	_, err := d.sendMessage(ctx, content, "")
 	if err != nil {
 		log.Printf("[DiscordBotBridge] OnOperatorMessage error: %v", err)
 	}
@@ -379,7 +416,7 @@ func (d *DiscordBotBridge) OnCustomEvent(ctx context.Context, event CustomEvent,
 		}
 	}
 
-	_, err := d.sendMessage(ctx, content)
+	_, err := d.sendMessage(ctx, content, "")
 	if err != nil {
 		log.Printf("[DiscordBotBridge] OnCustomEvent error: %v", err)
 	}
@@ -400,7 +437,7 @@ func (d *DiscordBotBridge) OnIdentityUpdate(ctx context.Context, session *Sessio
 		content += fmt.Sprintf("\n📧 Email: %s", session.Identity.Email)
 	}
 
-	_, err := d.sendMessage(ctx, content)
+	_, err := d.sendMessage(ctx, content, "")
 	if err != nil {
 		log.Printf("[DiscordBotBridge] OnIdentityUpdate error: %v", err)
 	}
@@ -462,17 +499,21 @@ func (d *DiscordBotBridge) OnMessageDelete(ctx context.Context, sessionID, messa
 const discordAPIBase = "https://discord.com/api/v10"
 
 type discordMessagePayload struct {
-	Content string `json:"content"`
+	Content          string                   `json:"content"`
+	MessageReference *discordMessageReference `json:"message_reference,omitempty"`
 }
 
 type discordMessage struct {
 	ID string `json:"id"`
 }
 
-func (d *DiscordBotBridge) sendMessage(ctx context.Context, content string) (*BridgeMessageResult, error) {
+func (d *DiscordBotBridge) sendMessage(ctx context.Context, content string, replyToMessageID string) (*BridgeMessageResult, error) {
 	apiURL := fmt.Sprintf("%s/channels/%s/messages", discordAPIBase, d.ChannelID)
 
 	payload := discordMessagePayload{Content: content}
+	if replyToMessageID != "" {
+		payload.MessageReference = &discordMessageReference{MessageID: replyToMessageID}
+	}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("marshal payload: %w", err)

@@ -19,6 +19,7 @@ Widget  ◀──────────────▶  bridge-server  ◀─�
 - **Bidirectional messaging**: Visitors send messages, operators reply from Telegram/Discord/Slack
 - **File attachments**: Share images and files in both directions
 - **Message edit/delete sync**: Syncs modifications across all platforms
+- **Reply linking**: Telegram/Discord show native replies; Slack shows quoted block in threads
 - **SSE streaming**: Real-time updates to widgets
 - **Multi-bridge**: Supports Telegram, Discord, and Slack simultaneously
 - **Zero code**: Just configuration, no backend code needed
@@ -65,6 +66,7 @@ SLACK_CHANNEL_ID=C0123456789
 PORT=3001
 API_KEY=your-secret-key
 BACKEND_WEBHOOK_URL=https://your-backend.com/api/bridge-events
+BRIDGE_TEST_BOT_IDS=SLACK_BOT_ID,DISCORD_BOT_ID
 ```
 
 ## API Endpoints
@@ -96,6 +98,8 @@ BACKEND_WEBHOOK_URL=https://your-backend.com/api/bridge-events
 ### Outgoing (Bridge Server → Backend)
 
 - `operator_message` - Operator replied from a bridge
+- `operator_message_edited` - Operator edited a bridge message
+- `operator_message_deleted` - Operator deleted a bridge message
 - `operator_typing` - Operator is typing
 - `session_closed` - Session closed from bridge
 

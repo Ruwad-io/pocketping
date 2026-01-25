@@ -144,6 +144,12 @@ Open your site, send a message, and watch it appear in Telegram!
 
 ## Setup Guides
 
+### Reply behavior (all modes)
+
+- **Telegram:** replies appear as native Telegram replies when replying to a message.
+- **Discord:** replies appear as native Discord replies inside the thread.
+- **Slack:** Slack doesn't support message‑level replies inside threads, so replies show as a quoted block (left bar).
+
 ### Telegram (Recommended)
 
 Telegram is the easiest to set up and works great on mobile.

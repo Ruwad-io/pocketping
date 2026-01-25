@@ -54,6 +54,7 @@ export interface DiscordBotOptions {
 export class DiscordBridge implements Bridge {
   readonly name = 'discord';
 
+  private pocketping?: PocketPing;
   private readonly mode: 'webhook' | 'bot';
   private readonly webhookUrl?: string;
   private readonly botToken?: string;
@@ -112,7 +113,8 @@ export class DiscordBridge implements Bridge {
   /**
    * Initialize the bridge (optional setup)
    */
-  async init(_pocketping: PocketPing): Promise<void> {
+  async init(pocketping: PocketPing): Promise<void> {
+    this.pocketping = pocketping;
     // Verify connection based on mode
     if (this.mode === 'bot' && this.botToken) {
       try {
@@ -168,9 +170,19 @@ export class DiscordBridge implements Bridge {
       color: 0x57f287, // Green
       timestamp: new Date().toISOString(),
     };
+    let replyToMessageId: string | undefined;
+
+    if (message.replyTo && this.pocketping?.getStorage().getBridgeMessageIds) {
+      const ids = await this.pocketping
+        .getStorage()
+        .getBridgeMessageIds(message.replyTo);
+      if (ids?.discordMessageId) {
+        replyToMessageId = ids.discordMessageId;
+      }
+    }
 
     try {
-      const messageId = await this.sendEmbed(embed);
+      const messageId = await this.sendEmbed(embed, replyToMessageId);
       return { messageId };
     } catch (error) {
       console.error('[DiscordBridge] Failed to send visitor message:', error);
@@ -387,7 +399,10 @@ export class DiscordBridge implements Bridge {
   /**
    * Send an embed to Discord
    */
-  private async sendEmbed(embed: Record<string, unknown>): Promise<string | undefined> {
+  private async sendEmbed(
+    embed: Record<string, unknown>,
+    replyToMessageId?: string
+  ): Promise<string | undefined> {
     const body: Record<string, unknown> = {
       embeds: [embed],
     };
@@ -401,6 +416,9 @@ export class DiscordBridge implements Bridge {
 
     if (this.mode === 'webhook' && this.webhookUrl) {
       // Use ?wait=true to get the message back
+      if (replyToMessageId) {
+        body.message_reference = { message_id: replyToMessageId };
+      }
       const response = await fetch(`${this.webhookUrl}?wait=true`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -415,6 +433,9 @@ export class DiscordBridge implements Bridge {
       const data = (await response.json()) as DiscordMessageResponse;
       return data.id;
     } else if (this.mode === 'bot' && this.channelId) {
+      if (replyToMessageId) {
+        body.message_reference = { message_id: replyToMessageId };
+      }
       const response = await fetch(
         `https://discord.com/api/v10/channels/${this.channelId}/messages`,
         {

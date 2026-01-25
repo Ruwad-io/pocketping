@@ -230,6 +230,12 @@ $response = $pocketPing->handleMessage($request);
 // - timestamp: DateTimeImmutable
 ```
 
+#### Reply Behavior
+
+- **Telegram:** native replies when `replyTo` is set and Telegram message ID is known.
+- **Discord:** native replies via `message_reference` when Discord message ID is known.
+- **Slack:** quoted block (left bar) inside the thread.
+
 #### sendOperatorMessage(string $sessionId, string $content, ?string $sourceBridge, ?string $operatorName): Message
 
 Send a message as the operator.

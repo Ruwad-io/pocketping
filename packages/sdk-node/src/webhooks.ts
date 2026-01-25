@@ -19,7 +19,24 @@ export type OperatorMessageCallback = (
   content: string,
   operatorName: string,
   sourceBridge: 'telegram' | 'discord' | 'slack',
-  attachments: OperatorAttachment[]
+  attachments: OperatorAttachment[],
+  replyToBridgeMessageId?: number | null,
+  bridgeMessageId?: number | string | null
+) => void | Promise<void>;
+
+export type OperatorMessageEditCallback = (
+  sessionId: string,
+  bridgeMessageId: number | string,
+  content: string,
+  sourceBridge: 'telegram' | 'discord' | 'slack',
+  editedAt?: string
+) => void | Promise<void>;
+
+export type OperatorMessageDeleteCallback = (
+  sessionId: string,
+  bridgeMessageId: number | string,
+  sourceBridge: 'telegram' | 'discord' | 'slack',
+  deletedAt?: string
 ) => void | Promise<void>;
 
 /** Webhook handler configuration */
@@ -27,7 +44,10 @@ export interface WebhookConfig {
   telegramBotToken?: string;
   slackBotToken?: string;
   discordBotToken?: string;
+  allowedBotIds?: string[];
   onOperatorMessage: OperatorMessageCallback;
+  onOperatorMessageEdit?: OperatorMessageEditCallback;
+  onOperatorMessageDelete?: OperatorMessageDeleteCallback;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -37,6 +57,7 @@ export interface WebhookConfig {
 interface TelegramUpdate {
   update_id: number;
   message?: TelegramMessage;
+  edited_message?: TelegramMessage;
 }
 
 interface TelegramMessage {
@@ -51,7 +72,9 @@ interface TelegramMessage {
   audio?: TelegramAudio;
   video?: TelegramVideo;
   voice?: TelegramVoice;
+  reply_to_message?: { message_id: number };
   date: number;
+  edit_date?: number;
 }
 
 interface TelegramPhotoSize {
@@ -118,6 +141,22 @@ interface SlackEvent {
   bot_id?: string;
   subtype?: string;
   files?: SlackFile[];
+  message?: {
+    text?: string;
+    user?: string;
+    bot_id?: string;
+    ts?: string;
+    thread_ts?: string;
+    files?: SlackFile[];
+  };
+  previous_message?: {
+    text?: string;
+    user?: string;
+    bot_id?: string;
+    ts?: string;
+    thread_ts?: string;
+  };
+  deleted_ts?: string;
 }
 
 interface SlackFile {
@@ -187,6 +226,43 @@ export class WebhookHandler {
         const body = await this.parseBody(req);
         const update = body as TelegramUpdate;
 
+        if (update.edited_message) {
+          const msg = update.edited_message;
+
+          if (msg.text?.startsWith('/')) {
+            this.writeOK(res);
+            return;
+          }
+
+          const text = msg.text ?? msg.caption ?? '';
+          if (!text) {
+            this.writeOK(res);
+            return;
+          }
+
+          const topicId = msg.message_thread_id;
+          if (!topicId) {
+            this.writeOK(res);
+            return;
+          }
+
+          if (this.config.onOperatorMessageEdit) {
+            const editedAt = msg.edit_date
+              ? new Date(msg.edit_date * 1000).toISOString()
+              : new Date().toISOString();
+            await this.config.onOperatorMessageEdit(
+              String(topicId),
+              msg.message_id,
+              text,
+              'telegram',
+              editedAt
+            );
+          }
+
+          this.writeOK(res);
+          return;
+        }
+
         if (update.message) {
           const msg = update.message;
 
@@ -255,6 +331,9 @@ export class WebhookHandler {
           // Get operator name
           const operatorName = msg.from?.first_name ?? 'Operator';
 
+          // Get reply_to_message ID if present (for visual reply linking)
+          const replyToBridgeMessageId = msg.reply_to_message?.message_id ?? null;
+
           // Download media if present
           const attachments: OperatorAttachment[] = [];
           if (media) {
@@ -276,7 +355,9 @@ export class WebhookHandler {
             text,
             operatorName,
             'telegram',
-            attachments
+            attachments,
+            replyToBridgeMessageId,
+            msg.message_id
           );
         }
 
@@ -315,10 +396,71 @@ export class WebhookHandler {
         if (payload.type === 'event_callback' && payload.event) {
           const event = payload.event;
 
+          const isAllowedBot = (botId?: string) =>
+            !!botId && (this.config.allowedBotIds?.includes(botId) ?? false);
+
+          if (event.subtype === 'message_changed') {
+            if (!this.config.onOperatorMessageEdit) {
+              this.writeOK(res);
+              return;
+            }
+
+            const botId = event.message?.bot_id ?? event.previous_message?.bot_id ?? event.bot_id;
+            if (botId && !isAllowedBot(botId)) {
+              this.writeOK(res);
+              return;
+            }
+
+            const threadTs = event.message?.thread_ts ?? event.previous_message?.thread_ts;
+            const messageTs = event.message?.ts ?? event.previous_message?.ts;
+            const text = event.message?.text ?? '';
+
+            if (threadTs && messageTs) {
+              await this.config.onOperatorMessageEdit(
+                threadTs,
+                messageTs,
+                text,
+                'slack',
+                new Date().toISOString()
+              );
+            }
+
+            this.writeOK(res);
+            return;
+          }
+
+          if (event.subtype === 'message_deleted') {
+            if (!this.config.onOperatorMessageDelete) {
+              this.writeOK(res);
+              return;
+            }
+
+            const botId = event.previous_message?.bot_id ?? event.bot_id;
+            if (botId && !isAllowedBot(botId)) {
+              this.writeOK(res);
+              return;
+            }
+
+            const threadTs = event.previous_message?.thread_ts;
+            const messageTs = event.deleted_ts ?? event.previous_message?.ts;
+
+            if (threadTs && messageTs) {
+              await this.config.onOperatorMessageDelete(
+                threadTs,
+                messageTs,
+                'slack',
+                new Date().toISOString()
+              );
+            }
+
+            this.writeOK(res);
+            return;
+          }
+
           const hasContent =
             event.type === 'message' &&
             event.thread_ts &&
-            !event.bot_id &&
+            (!event.bot_id || isAllowedBot(event.bot_id)) &&
             !event.subtype;
           const hasFiles = event.files && event.files.length > 0;
 
@@ -350,13 +492,15 @@ export class WebhookHandler {
               if (name) operatorName = name;
             }
 
-            // Call callback
+            // Call callback (Slack reply support TODO)
             await this.config.onOperatorMessage(
               threadTs!,
               text,
               operatorName,
               'slack',
-              attachments
+              attachments,
+              null,
+              event.ts ?? null
             );
           }
         }
@@ -404,13 +548,14 @@ export class WebhookHandler {
                 interaction.user?.username ??
                 'Operator';
 
-              // Call callback
+              // Call callback (Discord reply support TODO)
               await this.config.onOperatorMessage(
                 threadId,
                 content,
                 operatorName,
                 'discord',
-                []
+                [],
+                null
               );
 
               // Respond to interaction

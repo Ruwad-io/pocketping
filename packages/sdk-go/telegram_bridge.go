@@ -84,7 +84,7 @@ func (t *TelegramBridge) OnNewSession(ctx context.Context, session *Session) err
 		text += fmt.Sprintf("\n📍 %s", pageURL)
 	}
 
-	_, err := t.sendMessage(ctx, text)
+	_, err := t.sendMessage(ctx, text, nil)
 	if err != nil {
 		log.Printf("[TelegramBridge] OnNewSession error: %v", err)
 	}
@@ -96,7 +96,18 @@ func (t *TelegramBridge) OnVisitorMessage(ctx context.Context, message *Message,
 	visitorName := t.getVisitorName(session)
 	text := fmt.Sprintf("💬 %s:\n%s", visitorName, message.Content)
 
-	result, err := t.sendMessage(ctx, text)
+	var replyToMessageID *int64
+	if message.ReplyTo != "" && t.pp != nil {
+		if storage, ok := t.pp.GetStorage().(StorageWithBridgeIDs); ok {
+			bridgeIDs, err := storage.GetBridgeMessageIDs(ctx, message.ReplyTo)
+			if err == nil && bridgeIDs != nil && bridgeIDs.TelegramMessageID != 0 {
+				id := bridgeIDs.TelegramMessageID
+				replyToMessageID = &id
+			}
+		}
+	}
+
+	result, err := t.sendMessage(ctx, text, replyToMessageID)
 	if err != nil {
 		log.Printf("[TelegramBridge] OnVisitorMessage error: %v", err)
 		return nil
@@ -128,7 +139,7 @@ func (t *TelegramBridge) OnOperatorMessage(ctx context.Context, message *Message
 
 	text := fmt.Sprintf("👨‍💼 %s:\n%s", name, message.Content)
 
-	_, err := t.sendMessage(ctx, text)
+	_, err := t.sendMessage(ctx, text, nil)
 	if err != nil {
 		log.Printf("[TelegramBridge] OnOperatorMessage error: %v", err)
 	}
@@ -166,7 +177,7 @@ func (t *TelegramBridge) OnCustomEvent(ctx context.Context, event CustomEvent, s
 		}
 	}
 
-	_, err := t.sendMessage(ctx, text)
+	_, err := t.sendMessage(ctx, text, nil)
 	if err != nil {
 		log.Printf("[TelegramBridge] OnCustomEvent error: %v", err)
 	}
@@ -187,7 +198,7 @@ func (t *TelegramBridge) OnIdentityUpdate(ctx context.Context, session *Session)
 		text += fmt.Sprintf("\n📧 Email: %s", session.Identity.Email)
 	}
 
-	_, err := t.sendMessage(ctx, text)
+	_, err := t.sendMessage(ctx, text, nil)
 	if err != nil {
 		log.Printf("[TelegramBridge] OnIdentityUpdate error: %v", err)
 	}
@@ -258,7 +269,7 @@ type telegramMessage struct {
 	MessageID int64 `json:"message_id"`
 }
 
-func (t *TelegramBridge) sendMessage(ctx context.Context, text string) (*BridgeMessageResult, error) {
+func (t *TelegramBridge) sendMessage(ctx context.Context, text string, replyToMessageID *int64) (*BridgeMessageResult, error) {
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", t.BotToken)
 
 	params := url.Values{}
@@ -269,6 +280,9 @@ func (t *TelegramBridge) sendMessage(ctx context.Context, text string) (*BridgeM
 	}
 	if t.DisableNotification {
 		params.Set("disable_notification", "true")
+	}
+	if replyToMessageID != nil {
+		params.Set("reply_to_message_id", fmt.Sprintf("%d", *replyToMessageID))
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBufferString(params.Encode()))

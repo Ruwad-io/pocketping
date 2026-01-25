@@ -222,6 +222,94 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       padding: 10px 14px;
       border-radius: 16px;
       word-wrap: break-word;
+      position: relative;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    /* Hover actions container - positioned above message (Slack style) */
+    .pp-message-actions {
+      position: absolute;
+      top: -28px;
+      display: flex;
+      gap: 2px;
+      background: ${colors.bg};
+      border: 1px solid ${colors.border};
+      border-radius: 6px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+      padding: 2px;
+      opacity: 0;
+      animation: pp-actions-fade-in 0.12s ease forwards;
+      z-index: 10;
+      /* Reset color inheritance from message */
+      color: ${colors.textSecondary};
+    }
+
+    @keyframes pp-actions-fade-in {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Visitor messages: actions aligned right */
+    .pp-actions-left {
+      right: 0;
+    }
+
+    /* Operator messages: actions aligned left */
+    .pp-actions-right {
+      left: 0;
+    }
+
+    .pp-message-actions .pp-action-btn {
+      width: 24px;
+      height: 24px;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: ${colors.textSecondary} !important;
+      transition: background 0.1s, color 0.1s;
+    }
+
+    .pp-message-actions .pp-action-btn:hover {
+      background: ${colors.bgSecondary};
+      color: ${colors.text} !important;
+    }
+
+    .pp-message-actions .pp-action-btn svg {
+      width: 14px;
+      height: 14px;
+      stroke: ${colors.textSecondary};
+    }
+
+    .pp-message-actions .pp-action-btn:hover svg {
+      stroke: ${colors.text};
+    }
+
+    .pp-message-actions .pp-action-delete:hover {
+      background: #fef2f2;
+    }
+
+    .pp-message-actions .pp-action-delete:hover svg {
+      stroke: #ef4444;
+    }
+
+    .pp-theme-dark .pp-message-actions .pp-action-delete:hover {
+      background: #7f1d1d;
+    }
+
+    .pp-theme-dark .pp-message-actions .pp-action-delete:hover svg {
+      stroke: #fca5a5;
+    }
+
+    /* Hide hover actions on mobile */
+    @media (hover: none) and (pointer: coarse) {
+      .pp-message-actions {
+        display: none;
+      }
     }
 
     .pp-message-visitor {
@@ -811,6 +899,8 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       margin-bottom: 6px;
       border-radius: 0 4px 4px 0;
       font-size: 12px;
+      position: relative;
+      z-index: 1;
     }
 
     .pp-reply-sender {
@@ -826,6 +916,17 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    /* Reply quote in visitor message bubble needs higher contrast */
+    .pp-message-visitor .pp-reply-quote {
+      background: rgba(255, 255, 255, 0.18);
+      border-left-color: rgba(255, 255, 255, 0.7);
+    }
+
+    .pp-message-visitor .pp-reply-sender,
+    .pp-message-visitor .pp-reply-content {
+      color: rgba(255, 255, 255, 0.9);
     }
 
     /* Deleted Message */

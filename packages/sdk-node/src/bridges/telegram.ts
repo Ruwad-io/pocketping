@@ -41,6 +41,7 @@ export interface TelegramBridgeOptions {
 export class TelegramBridge implements Bridge {
   readonly name = 'telegram';
 
+  private pocketping?: PocketPing;
   private readonly botToken: string;
   private readonly chatId: string | number;
   private readonly parseMode: 'HTML' | 'Markdown';
@@ -62,7 +63,8 @@ export class TelegramBridge implements Bridge {
   /**
    * Initialize the bridge (optional setup)
    */
-  async init(_pocketping: PocketPing): Promise<void> {
+  async init(pocketping: PocketPing): Promise<void> {
+    this.pocketping = pocketping;
     // Optionally verify bot token by calling getMe
     try {
       const response = await fetch(`${this.baseUrl}/getMe`);
@@ -98,9 +100,19 @@ export class TelegramBridge implements Bridge {
     session: Session
   ): Promise<BridgeMessageResult> {
     const text = this.formatVisitorMessage(session.visitorId, message.content);
+    let replyToMessageId: number | undefined;
+
+    if (message.replyTo && this.pocketping?.getStorage().getBridgeMessageIds) {
+      const ids = await this.pocketping
+        .getStorage()
+        .getBridgeMessageIds(message.replyTo);
+      if (ids?.telegramMessageId) {
+        replyToMessageId = ids.telegramMessageId;
+      }
+    }
 
     try {
-      const messageId = await this.sendMessage(text);
+      const messageId = await this.sendMessage(text, replyToMessageId);
       return { messageId };
     } catch (error) {
       console.error('[TelegramBridge] Failed to send visitor message:', error);
@@ -265,7 +277,10 @@ export class TelegramBridge implements Bridge {
   /**
    * Send a message to the Telegram chat
    */
-  private async sendMessage(text: string): Promise<number | undefined> {
+  private async sendMessage(
+    text: string,
+    replyToMessageId?: number
+  ): Promise<number | undefined> {
     const response = await fetch(`${this.baseUrl}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -274,6 +289,7 @@ export class TelegramBridge implements Bridge {
         text,
         parse_mode: this.parseMode,
         disable_notification: this.disableNotification,
+        ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
       }),
     });
 

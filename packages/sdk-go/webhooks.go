@@ -16,7 +16,17 @@ import (
 // ─────────────────────────────────────────────────────────────────
 
 // OperatorMessageCallback is called when an operator sends a message from a bridge
-type OperatorMessageCallback func(ctx context.Context, sessionID, content, operatorName, sourceBridge string, attachments []Attachment)
+// replyToBridgeMessageID is the Telegram message_id that this message replies to (nil if not a reply)
+type OperatorMessageCallback func(ctx context.Context, sessionID, content, operatorName, sourceBridge string, attachments []Attachment, replyToBridgeMessageID *int)
+
+// OperatorMessageWithIDsCallback is called when an operator sends a message and includes the bridge message ID
+type OperatorMessageWithIDsCallback func(ctx context.Context, sessionID, content, operatorName, sourceBridge string, attachments []Attachment, replyToBridgeMessageID *int, bridgeMessageID string)
+
+// OperatorMessageEditCallback is called when an operator edits a message on a bridge
+type OperatorMessageEditCallback func(ctx context.Context, sessionID, bridgeMessageID, content, sourceBridge string, editedAt time.Time)
+
+// OperatorMessageDeleteCallback is called when an operator deletes a message on a bridge
+type OperatorMessageDeleteCallback func(ctx context.Context, sessionID, bridgeMessageID, sourceBridge string, deletedAt time.Time)
 
 // WebhookConfig holds configuration for bridge webhooks
 type WebhookConfig struct {
@@ -29,8 +39,17 @@ type WebhookConfig struct {
 	// Discord configuration (not needed for interactions endpoint)
 	DiscordBotToken string
 
+	// Optional allowlist of bot IDs (for test bots)
+	AllowedBotIDs []string
+
 	// Callback for operator messages
 	OnOperatorMessage OperatorMessageCallback
+	// Callback for operator messages with bridge message IDs
+	OnOperatorMessageWithIDs OperatorMessageWithIDsCallback
+	// Callback for operator message edits
+	OnOperatorMessageEdit OperatorMessageEditCallback
+	// Callback for operator message deletes
+	OnOperatorMessageDelete OperatorMessageDeleteCallback
 }
 
 // WebhookHandler handles incoming webhooks from bridges (Telegram, Slack, Discord)
@@ -55,22 +74,30 @@ func NewWebhookHandler(config WebhookConfig) *WebhookHandler {
 type TelegramUpdate struct {
 	UpdateID int              `json:"update_id"`
 	Message  *TelegramMessage `json:"message,omitempty"`
+	EditedMessage *TelegramMessage `json:"edited_message,omitempty"`
 }
 
 // TelegramMessage represents a Telegram message
 type TelegramMessage struct {
-	MessageID       int                  `json:"message_id"`
-	MessageThreadID int                  `json:"message_thread_id,omitempty"`
-	Chat            TelegramChat         `json:"chat"`
-	From            *TelegramUser        `json:"from,omitempty"`
-	Text            string               `json:"text,omitempty"`
-	Caption         string               `json:"caption,omitempty"`
-	Photo           []TelegramPhotoSize  `json:"photo,omitempty"`
-	Document        *TelegramDocument    `json:"document,omitempty"`
-	Audio           *TelegramAudio       `json:"audio,omitempty"`
-	Video           *TelegramVideo       `json:"video,omitempty"`
-	Voice           *TelegramVoice       `json:"voice,omitempty"`
-	Date            int64                `json:"date"`
+	MessageID       int                    `json:"message_id"`
+	MessageThreadID int                    `json:"message_thread_id,omitempty"`
+	Chat            TelegramChat           `json:"chat"`
+	From            *TelegramUser          `json:"from,omitempty"`
+	Text            string                 `json:"text,omitempty"`
+	Caption         string                 `json:"caption,omitempty"`
+	Photo           []TelegramPhotoSize    `json:"photo,omitempty"`
+	Document        *TelegramDocument      `json:"document,omitempty"`
+	Audio           *TelegramAudio         `json:"audio,omitempty"`
+	Video           *TelegramVideo         `json:"video,omitempty"`
+	Voice           *TelegramVoice         `json:"voice,omitempty"`
+	ReplyToMessage  *TelegramReplyMessage  `json:"reply_to_message,omitempty"`
+	Date            int64                  `json:"date"`
+	EditDate        int64                  `json:"edit_date,omitempty"`
+}
+
+// TelegramReplyMessage represents the message being replied to
+type TelegramReplyMessage struct {
+	MessageID int `json:"message_id"`
 }
 
 // TelegramChat represents a Telegram chat
@@ -142,6 +169,43 @@ func (wh *WebhookHandler) HandleTelegramWebhook() http.HandlerFunc {
 		var update TelegramUpdate
 		if err := json.Unmarshal(body, &update); err != nil {
 			http.Error(w, `{"error":"Invalid JSON"}`, http.StatusBadRequest)
+			return
+		}
+
+		// Process edits
+		if update.EditedMessage != nil {
+			msg := update.EditedMessage
+
+			if strings.HasPrefix(msg.Text, "/") {
+				writeOK(w)
+				return
+			}
+
+			text := msg.Text
+			if text == "" {
+				text = msg.Caption
+			}
+
+			if text == "" {
+				writeOK(w)
+				return
+			}
+
+			topicID := msg.MessageThreadID
+			if topicID == 0 {
+				writeOK(w)
+				return
+			}
+
+			if wh.config.OnOperatorMessageEdit != nil {
+				editedAt := time.Now()
+				if msg.EditDate > 0 {
+					editedAt = time.Unix(msg.EditDate, 0)
+				}
+				wh.config.OnOperatorMessageEdit(r.Context(), fmt.Sprintf("%d", topicID), fmt.Sprintf("%d", msg.MessageID), text, "telegram", editedAt)
+			}
+
+			writeOK(w)
 			return
 		}
 
@@ -228,6 +292,12 @@ func (wh *WebhookHandler) HandleTelegramWebhook() http.HandlerFunc {
 				operatorName = msg.From.FirstName
 			}
 
+			// Get reply_to_message ID if present (for visual reply linking)
+			var replyToBridgeMessageID *int
+			if msg.ReplyToMessage != nil {
+				replyToBridgeMessageID = &msg.ReplyToMessage.MessageID
+			}
+
 			// Download media if present
 			var attachments []Attachment
 			if media != nil {
@@ -247,7 +317,11 @@ func (wh *WebhookHandler) HandleTelegramWebhook() http.HandlerFunc {
 			// Call callback
 			if wh.config.OnOperatorMessage != nil {
 				sessionID := fmt.Sprintf("%d", topicID)
-				wh.config.OnOperatorMessage(r.Context(), sessionID, text, operatorName, "telegram", attachments)
+				wh.config.OnOperatorMessage(r.Context(), sessionID, text, operatorName, "telegram", attachments, replyToBridgeMessageID)
+			}
+			if wh.config.OnOperatorMessageWithIDs != nil {
+				sessionID := fmt.Sprintf("%d", topicID)
+				wh.config.OnOperatorMessageWithIDs(r.Context(), sessionID, text, operatorName, "telegram", attachments, replyToBridgeMessageID, fmt.Sprintf("%d", msg.MessageID))
 			}
 		}
 
@@ -323,6 +397,18 @@ type SlackEvent struct {
 	BotID    string      `json:"bot_id,omitempty"`
 	Subtype  string      `json:"subtype,omitempty"`
 	Files    []SlackFile `json:"files,omitempty"`
+	Message  *SlackEventMessage `json:"message,omitempty"`
+	PreviousMessage *SlackEventMessage `json:"previous_message,omitempty"`
+	DeletedTs string `json:"deleted_ts,omitempty"`
+}
+
+type SlackEventMessage struct {
+	Text     string      `json:"text,omitempty"`
+	User     string      `json:"user,omitempty"`
+	Ts       string      `json:"ts,omitempty"`
+	ThreadTs string      `json:"thread_ts,omitempty"`
+	BotID    string      `json:"bot_id,omitempty"`
+	Files    []SlackFile `json:"files,omitempty"`
 }
 
 // SlackFile represents a Slack file
@@ -365,8 +451,78 @@ func (wh *WebhookHandler) HandleSlackWebhook() http.HandlerFunc {
 		// Handle event callbacks
 		if payload.Type == "event_callback" && payload.Event != nil {
 			event := payload.Event
+			if event.Type != "message" {
+				writeOK(w)
+				return
+			}
 
-			hasContent := event.Type == "message" && event.ThreadTs != "" && event.BotID == "" && event.Subtype == ""
+			if event.Subtype == "message_changed" {
+				if wh.config.OnOperatorMessageEdit != nil {
+					botID := ""
+					if event.Message != nil && event.Message.BotID != "" {
+						botID = event.Message.BotID
+					} else if event.PreviousMessage != nil && event.PreviousMessage.BotID != "" {
+						botID = event.PreviousMessage.BotID
+					} else if event.BotID != "" {
+						botID = event.BotID
+					}
+
+					if botID == "" || wh.isAllowedBot(botID) {
+						threadTs := ""
+						messageTs := ""
+						text := ""
+						if event.Message != nil {
+							threadTs = event.Message.ThreadTs
+							messageTs = event.Message.Ts
+							text = event.Message.Text
+						}
+						if threadTs == "" && event.PreviousMessage != nil {
+							threadTs = event.PreviousMessage.ThreadTs
+						}
+						if messageTs == "" && event.PreviousMessage != nil {
+							messageTs = event.PreviousMessage.Ts
+						}
+
+						if threadTs != "" && messageTs != "" {
+							wh.config.OnOperatorMessageEdit(r.Context(), threadTs, messageTs, text, "slack", time.Now())
+						}
+					}
+				}
+
+				writeOK(w)
+				return
+			}
+
+			if event.Subtype == "message_deleted" {
+				if wh.config.OnOperatorMessageDelete != nil {
+					botID := ""
+					if event.PreviousMessage != nil && event.PreviousMessage.BotID != "" {
+						botID = event.PreviousMessage.BotID
+					} else if event.BotID != "" {
+						botID = event.BotID
+					}
+
+					if botID == "" || wh.isAllowedBot(botID) {
+						threadTs := ""
+						if event.PreviousMessage != nil {
+							threadTs = event.PreviousMessage.ThreadTs
+						}
+						messageTs := event.DeletedTs
+						if messageTs == "" && event.PreviousMessage != nil {
+							messageTs = event.PreviousMessage.Ts
+						}
+
+						if threadTs != "" && messageTs != "" {
+							wh.config.OnOperatorMessageDelete(r.Context(), threadTs, messageTs, "slack", time.Now())
+						}
+					}
+				}
+
+				writeOK(w)
+				return
+			}
+
+			hasContent := event.Type == "message" && event.ThreadTs != "" && (event.BotID == "" || wh.isAllowedBot(event.BotID)) && event.Subtype == ""
 			hasFiles := len(event.Files) > 0
 
 			if hasContent && (event.Text != "" || hasFiles) {
@@ -399,9 +555,12 @@ func (wh *WebhookHandler) HandleSlackWebhook() http.HandlerFunc {
 					}
 				}
 
-				// Call callback
+				// Call callback (Slack reply support TODO)
 				if wh.config.OnOperatorMessage != nil {
-					wh.config.OnOperatorMessage(r.Context(), threadTs, text, operatorName, "slack", attachments)
+					wh.config.OnOperatorMessage(r.Context(), threadTs, text, operatorName, "slack", attachments, nil)
+				}
+				if wh.config.OnOperatorMessageWithIDs != nil {
+					wh.config.OnOperatorMessageWithIDs(r.Context(), threadTs, text, operatorName, "slack", attachments, nil, event.Ts)
 				}
 			}
 		}
@@ -469,6 +628,18 @@ func (wh *WebhookHandler) getSlackUserName(userID string) (string, error) {
 		return result.User.RealName, nil
 	}
 	return result.User.Name, nil
+}
+
+func (wh *WebhookHandler) isAllowedBot(botID string) bool {
+	if botID == "" {
+		return false
+	}
+	for _, allowed := range wh.config.AllowedBotIDs {
+		if allowed == botID {
+			return true
+		}
+	}
+	return false
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -568,9 +739,9 @@ func (wh *WebhookHandler) HandleDiscordWebhook() http.HandlerFunc {
 						operatorName = interaction.User.Username
 					}
 
-					// Call callback
+					// Call callback (Discord reply support TODO)
 					if wh.config.OnOperatorMessage != nil {
-						wh.config.OnOperatorMessage(r.Context(), threadID, content, operatorName, "discord", nil)
+						wh.config.OnOperatorMessage(r.Context(), threadID, content, operatorName, "discord", nil, nil)
 					}
 
 					// Respond to interaction

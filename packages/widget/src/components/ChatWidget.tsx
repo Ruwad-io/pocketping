@@ -1,7 +1,7 @@
 import { h, Fragment } from 'preact';
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import type { PocketPingClient } from '../client';
-import type { PocketPingConfig, Message, MessageStatus, Attachment } from '../types';
+import type { PocketPingConfig, Message, MessageStatus, Attachment, ReplyToData } from '../types';
 import { styles } from './styles';
 
 interface Props {
@@ -35,6 +35,8 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
   const [editContent, setEditContent] = useState('');
   const [messageMenu, setMessageMenu] = useState<{ message: Message; x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
+  const [longPressTimer, setLongPressTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   // Config can be updated from server (SaaS dashboard settings)
   const [config, setConfig] = useState(initialConfig);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -342,6 +344,27 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
     });
   };
 
+  // Long press for mobile
+  const handleTouchStart = (message: Message) => {
+    const timer = setTimeout(() => {
+      // Trigger haptic feedback if available
+      if (navigator.vibrate) navigator.vibrate(50);
+      setMessageMenu({
+        message,
+        x: window.innerWidth / 2 - 60, // Center horizontally
+        y: window.innerHeight / 2 - 50, // Center vertically
+      });
+    }, 500); // 500ms long press
+    setLongPressTimer(timer);
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+  };
+
   // Close menu when clicking outside
   useEffect(() => {
     if (!messageMenu) return;
@@ -449,6 +472,8 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
   const position = config.position ?? 'bottom-right';
   const theme = getTheme(config.theme ?? 'auto');
   const primaryColor = config.primaryColor ?? '#6366f1';
+  // Action icon color (matches styles.ts textSecondary)
+  const actionIconColor = theme === 'dark' ? '#9ca3af' : '#6b7280';
 
   return (
     <Fragment>
@@ -528,19 +553,75 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
             {messages.map((msg) => {
               const isDeleted = !!msg.deletedAt;
               const isEdited = !!msg.editedAt;
-              const replyToMsg = msg.replyTo ? messages.find((m) => m.id === msg.replyTo) : null;
+
+              // Handle replyTo - can be string ID or embedded object from SSE
+              let replyData: { sender: string; content: string; deleted?: boolean } | null = null;
+              if (msg.replyTo) {
+                if (typeof msg.replyTo === 'object') {
+                  // SSE sends embedded reply data
+                  replyData = msg.replyTo as ReplyToData;
+                } else {
+                  // String ID - try to find in local messages
+                  const replyToMsg = messages.find((m) => m.id === msg.replyTo);
+                  if (replyToMsg) {
+                    replyData = {
+                      sender: replyToMsg.sender,
+                      content: replyToMsg.content,
+                      deleted: !!replyToMsg.deletedAt,
+                    };
+                  }
+                }
+              }
+
+              const isHovered = hoveredMessageId === msg.id;
+              const showActions = isHovered && !isDeleted;
 
               return (
                 <div
                   key={msg.id}
                   class={`pp-message pp-message-${msg.sender} ${isDeleted ? 'pp-message-deleted' : ''}`}
                   onContextMenu={(e) => handleMessageContextMenu(e, msg)}
+                  onMouseEnter={() => setHoveredMessageId(msg.id)}
+                  onMouseLeave={() => setHoveredMessageId(null)}
+                  onTouchStart={() => handleTouchStart(msg)}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchCancel={handleTouchEnd}
                 >
+                  {/* Hover actions (desktop) */}
+                  {showActions && (
+                    <div class={`pp-message-actions ${msg.sender === 'visitor' ? 'pp-actions-left' : 'pp-actions-right'}`}>
+                      <button
+                        class="pp-action-btn"
+                        onClick={() => handleReply(msg)}
+                        title="Reply"
+                      >
+                        <ReplyIcon color={actionIconColor} />
+                      </button>
+                      {msg.sender === 'visitor' && (
+                        <>
+                          <button
+                            class="pp-action-btn"
+                            onClick={() => handleStartEdit(msg)}
+                            title="Edit"
+                          >
+                            <EditIcon color={actionIconColor} />
+                          </button>
+                          <button
+                            class="pp-action-btn pp-action-delete"
+                            onClick={() => handleDelete(msg)}
+                            title="Delete"
+                          >
+                            <DeleteIcon color={actionIconColor} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
                   {/* Reply quote */}
-                  {replyToMsg && (
+                  {replyData && replyData.content && (
                     <div class="pp-reply-quote">
-                      <span class="pp-reply-sender">{replyToMsg.sender === 'visitor' ? 'You' : 'Support'}</span>
-                      <span class="pp-reply-content">{replyToMsg.deletedAt ? 'Message deleted' : replyToMsg.content.slice(0, 50)}{replyToMsg.content.length > 50 ? '...' : ''}</span>
+                      <span class="pp-reply-sender">{replyData.sender === 'visitor' ? 'You' : 'Support'}</span>
+                      <span class="pp-reply-content">{replyData.deleted ? 'Message deleted' : (replyData.content || '').slice(0, 50)}{(replyData.content || '').length > 50 ? '...' : ''}</span>
                     </div>
                   )}
                   {isDeleted ? (
@@ -589,15 +670,15 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
               style={{ top: `${messageMenu.y}px`, left: `${messageMenu.x}px` }}
             >
               <button onClick={() => handleReply(messageMenu.message)}>
-                <ReplyIcon /> Reply
+                <ReplyIcon color={actionIconColor} /> Reply
               </button>
               {messageMenu.message.sender === 'visitor' && !messageMenu.message.deletedAt && (
                 <>
                   <button onClick={() => handleStartEdit(messageMenu.message)}>
-                    <EditIcon /> Edit
+                    <EditIcon color={actionIconColor} /> Edit
                   </button>
                   <button class="pp-menu-delete" onClick={() => handleDelete(messageMenu.message)}>
-                    <DeleteIcon /> Delete
+                    <DeleteIcon color="#ef4444" /> Delete
                   </button>
                 </>
               )}
@@ -822,26 +903,29 @@ function AttachIcon() {
   );
 }
 
-function ReplyIcon() {
+function ReplyIcon({ color, size = 16 }: { color?: string; size?: number }) {
+  const strokeColor = color || 'currentColor';
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" style={{ stroke: strokeColor, width: `${size}px`, minWidth: `${size}px`, height: `${size}px`, display: 'block', flexShrink: 0 }}>
       <polyline points="9 17 4 12 9 7" />
       <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
     </svg>
   );
 }
 
-function EditIcon() {
+function EditIcon({ color, size = 16 }: { color?: string; size?: number }) {
+  const strokeColor = color || 'currentColor';
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" style={{ stroke: strokeColor, width: `${size}px`, minWidth: `${size}px`, height: `${size}px`, display: 'block', flexShrink: 0 }}>
       <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
     </svg>
   );
 }
 
-function DeleteIcon() {
+function DeleteIcon({ color, size = 16 }: { color?: string; size?: number }) {
+  const strokeColor = color || 'currentColor';
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" style={{ stroke: strokeColor, width: `${size}px`, minWidth: `${size}px`, height: `${size}px`, display: 'block', flexShrink: 0 }}>
       <polyline points="3 6 5 6 21 6" />
       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
     </svg>

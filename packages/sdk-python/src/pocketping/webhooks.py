@@ -19,8 +19,53 @@ class OperatorAttachment:
 
 
 # Callback type for operator messages
+# Args: session_id, content, operator_name, source, attachments, reply_to_bridge_message_id
 OperatorMessageCallback = Callable[
-    [str, str, str, Literal["telegram", "discord", "slack"], list[OperatorAttachment]],
+    [
+        str,  # session_id (topic_id for Telegram, thread_ts for Slack, etc.)
+        str,  # content
+        str,  # operator_name
+        Literal["telegram", "discord", "slack"],  # source
+        list[OperatorAttachment],  # attachments
+        Optional[int],  # reply_to_bridge_message_id (Telegram message_id being replied to)
+    ],
+    Optional[Awaitable[None]],
+]
+
+# Callback type for operator messages with bridge message ID
+OperatorMessageWithIdsCallback = Callable[
+    [
+        str,  # session_id
+        str,  # content
+        str,  # operator_name
+        Literal["telegram", "discord", "slack"],  # source
+        list[OperatorAttachment],  # attachments
+        Optional[int],  # reply_to_bridge_message_id
+        str,  # bridge_message_id
+    ],
+    Optional[Awaitable[None]],
+]
+
+# Callback type for operator message edits
+OperatorMessageEditCallback = Callable[
+    [
+        str,  # session_id
+        str,  # bridge_message_id
+        str,  # content
+        Literal["telegram", "discord", "slack"],  # source
+        str,  # edited_at (ISO string)
+    ],
+    Optional[Awaitable[None]],
+]
+
+# Callback type for operator message deletes
+OperatorMessageDeleteCallback = Callable[
+    [
+        str,  # session_id
+        str,  # bridge_message_id
+        Literal["telegram", "discord", "slack"],  # source
+        str,  # deleted_at (ISO string)
+    ],
     Optional[Awaitable[None]],
 ]
 
@@ -33,6 +78,10 @@ class WebhookConfig:
     slack_bot_token: Optional[str] = None
     discord_bot_token: Optional[str] = None
     on_operator_message: Optional[OperatorMessageCallback] = None
+    on_operator_message_with_ids: Optional[OperatorMessageWithIdsCallback] = None
+    on_operator_message_edit: Optional[OperatorMessageEditCallback] = None
+    on_operator_message_delete: Optional[OperatorMessageDeleteCallback] = None
+    allowed_bot_ids: Optional[list[str]] = None
 
 
 @dataclass
@@ -87,6 +136,35 @@ class WebhookHandler:
         """
         if not self.config.telegram_bot_token:
             return {"error": "Telegram not configured"}
+
+        edited_message = payload.get("edited_message")
+        if edited_message:
+            text = edited_message.get("text", "")
+            caption = edited_message.get("caption", "")
+
+            if text.startswith("/"):
+                return {"ok": True}
+
+            if not text:
+                text = caption
+
+            if not text:
+                return {"ok": True}
+
+            topic_id = edited_message.get("message_thread_id")
+            if not topic_id:
+                return {"ok": True}
+
+            if self.config.on_operator_message_edit:
+                edit_date = edited_message.get("edit_date") or int(time.time())
+                edited_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(edit_date))
+                bridge_message_id = str(edited_message.get("message_id", ""))
+                if bridge_message_id:
+                    self.config.on_operator_message_edit(
+                        str(topic_id), bridge_message_id, text, "telegram", edited_at
+                    )
+
+            return {"ok": True}
 
         message = payload.get("message")
         if not message:
@@ -160,6 +238,12 @@ class WebhookHandler:
         from_user = message.get("from", {})
         operator_name = from_user.get("first_name", "Operator")
 
+        # Get reply_to_message ID if present (for visual reply linking)
+        reply_to_message_id: Optional[int] = None
+        reply_to = message.get("reply_to_message")
+        if reply_to:
+            reply_to_message_id = reply_to.get("message_id")
+
         # Download media if present
         attachments: list[OperatorAttachment] = []
         if media:
@@ -178,8 +262,20 @@ class WebhookHandler:
         # Call callback
         if self.config.on_operator_message:
             self.config.on_operator_message(
-                str(topic_id), text, operator_name, "telegram", attachments
+                str(topic_id), text, operator_name, "telegram", attachments, reply_to_message_id
             )
+        if self.config.on_operator_message_with_ids:
+            bridge_message_id = str(message.get("message_id", ""))
+            if bridge_message_id:
+                self.config.on_operator_message_with_ids(
+                    str(topic_id),
+                    text,
+                    operator_name,
+                    "telegram",
+                    attachments,
+                    reply_to_message_id,
+                    bridge_message_id,
+                )
 
         return {"ok": True}
 
@@ -238,11 +334,57 @@ class WebhookHandler:
         # Handle event callbacks
         if payload.get("type") == "event_callback" and payload.get("event"):
             event = payload["event"]
+            allowed_bot_ids = set(self.config.allowed_bot_ids or [])
+            def is_allowed_bot(bot_id: Optional[str]) -> bool:
+                return bool(bot_id) and bot_id in allowed_bot_ids
+
+            if event.get("type") != "message":
+                return {"ok": True}
+
+            subtype = event.get("subtype")
+
+            if subtype == "message_changed":
+                if self.config.on_operator_message_edit:
+                    message = event.get("message", {}) or {}
+                    previous = event.get("previous_message", {}) or {}
+                    bot_id = message.get("bot_id") or previous.get("bot_id") or event.get("bot_id")
+                    if bot_id and not is_allowed_bot(bot_id):
+                        return {"ok": True}
+
+                    thread_ts = message.get("thread_ts") or previous.get("thread_ts")
+                    message_ts = message.get("ts") or previous.get("ts")
+                    text = message.get("text", "")
+
+                    if thread_ts and message_ts:
+                        edited_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                        self.config.on_operator_message_edit(
+                            thread_ts, message_ts, text, "slack", edited_at
+                        )
+
+                return {"ok": True}
+
+            if subtype == "message_deleted":
+                if self.config.on_operator_message_delete:
+                    previous = event.get("previous_message", {}) or {}
+                    bot_id = previous.get("bot_id") or event.get("bot_id")
+                    if bot_id and not is_allowed_bot(bot_id):
+                        return {"ok": True}
+
+                    thread_ts = previous.get("thread_ts")
+                    message_ts = event.get("deleted_ts") or previous.get("ts")
+
+                    if thread_ts and message_ts:
+                        deleted_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                        self.config.on_operator_message_delete(
+                            thread_ts, message_ts, "slack", deleted_at
+                        )
+
+                return {"ok": True}
 
             has_content = (
                 event.get("type") == "message"
                 and event.get("thread_ts")
-                and not event.get("bot_id")
+                and (not event.get("bot_id") or is_allowed_bot(event.get("bot_id")))
                 and not event.get("subtype")
             )
             files = event.get("files", [])
@@ -276,11 +418,23 @@ class WebhookHandler:
                     if name:
                         operator_name = name
 
-                # Call callback
+                # Call callback (Slack reply support TODO)
                 if self.config.on_operator_message:
                     self.config.on_operator_message(
-                        thread_ts, text, operator_name, "slack", attachments
+                        thread_ts, text, operator_name, "slack", attachments, None
                     )
+                if self.config.on_operator_message_with_ids:
+                    message_ts = event.get("ts")
+                    if message_ts:
+                        self.config.on_operator_message_with_ids(
+                            thread_ts,
+                            text,
+                            operator_name,
+                            "slack",
+                            attachments,
+                            None,
+                            message_ts,
+                        )
 
         return {"ok": True}
 
@@ -368,10 +522,10 @@ class WebhookHandler:
                     if user.get("username"):
                         operator_name = user["username"]
 
-                    # Call callback
+                    # Call callback (Discord reply support TODO)
                     if self.config.on_operator_message:
                         self.config.on_operator_message(
-                            thread_id, content, operator_name, "discord", []
+                            thread_id, content, operator_name, "discord", [], None
                         )
 
                     return {

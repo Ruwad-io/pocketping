@@ -93,6 +93,9 @@ func (s *SlackWebhookBridge) OnNewSession(ctx context.Context, session *Session)
 func (s *SlackWebhookBridge) OnVisitorMessage(ctx context.Context, message *Message, session *Session) error {
 	visitorName := s.getVisitorName(session)
 	text := fmt.Sprintf(":speech_balloon: %s:\n%s", visitorName, message.Content)
+	if quote := s.buildReplyQuote(ctx, message); quote != "" {
+		text = quote + "\n" + text
+	}
 
 	// Note: Slack webhooks don't return message timestamps for editing
 	// For full edit/delete support, use SlackBotBridge instead
@@ -292,6 +295,9 @@ func (s *SlackBotBridge) OnNewSession(ctx context.Context, session *Session) err
 func (s *SlackBotBridge) OnVisitorMessage(ctx context.Context, message *Message, session *Session) error {
 	visitorName := s.getVisitorName(session)
 	text := fmt.Sprintf(":speech_balloon: %s:\n%s", visitorName, message.Content)
+	if quote := s.buildReplyQuote(ctx, message); quote != "" {
+		text = quote + "\n" + text
+	}
 
 	result, err := s.postMessage(ctx, text)
 	if err != nil {
@@ -329,6 +335,48 @@ func (s *SlackBotBridge) OnOperatorMessage(ctx context.Context, message *Message
 		log.Printf("[SlackBotBridge] OnOperatorMessage error: %v", err)
 	}
 	return nil
+}
+
+func (s *SlackWebhookBridge) buildReplyQuote(ctx context.Context, message *Message) string {
+	if message.ReplyTo == "" || s.pp == nil {
+		return ""
+	}
+	replyTarget, err := s.pp.GetStorage().GetMessage(ctx, message.ReplyTo)
+	if err != nil || replyTarget == nil {
+		return ""
+	}
+	return formatSlackReplyQuote(replyTarget)
+}
+
+func (s *SlackBotBridge) buildReplyQuote(ctx context.Context, message *Message) string {
+	if message.ReplyTo == "" || s.pp == nil {
+		return ""
+	}
+	replyTarget, err := s.pp.GetStorage().GetMessage(ctx, message.ReplyTo)
+	if err != nil || replyTarget == nil {
+		return ""
+	}
+	return formatSlackReplyQuote(replyTarget)
+}
+
+func formatSlackReplyQuote(replyTarget *Message) string {
+	senderLabel := "Visitor"
+	switch replyTarget.Sender {
+	case SenderOperator:
+		senderLabel = "Support"
+	case SenderAI:
+		senderLabel = "AI"
+	}
+
+	preview := replyTarget.Content
+	if replyTarget.DeletedAt != nil {
+		preview = "Message deleted"
+	}
+	if len(preview) > 140 {
+		preview = preview[:140] + "..."
+	}
+
+	return fmt.Sprintf("> *%s* — %s", senderLabel, preview)
 }
 
 // OnTyping is called when visitor starts/stops typing.

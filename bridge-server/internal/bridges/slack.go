@@ -192,13 +192,16 @@ func (b *SlackBridge) OnNewSession(session *types.Session) error {
 }
 
 // OnVisitorMessage sends a visitor message to Slack
-func (b *SlackBridge) OnVisitorMessage(message *types.Message, session *types.Session) (*types.BridgeMessageIDs, error) {
+func (b *SlackBridge) OnVisitorMessage(message *types.Message, session *types.Session, reply *ReplyContext) (*types.BridgeMessageIDs, error) {
 	visitorName := session.VisitorID
 	if session.Identity != nil && session.Identity.Name != "" {
 		visitorName = session.Identity.Name
 	}
 
 	text := fmt.Sprintf("*%s*: %s", escapeSlack(visitorName), escapeSlack(message.Content))
+	if reply != nil && reply.Quote != "" {
+		text = reply.Quote + "\n" + text
+	}
 
 	if len(message.Attachments) > 0 {
 		text += fmt.Sprintf(" _(+%d attachment(s))_", len(message.Attachments))

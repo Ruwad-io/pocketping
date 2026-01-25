@@ -209,6 +209,12 @@ pp.addBridge(DiscordBridge.withBot({ ... }));
 pp.addBridge(SlackBridge.withWebhook({ ... }));
 ```
 
+### Reply Behavior
+
+- **Telegram:** uses native replies when `replyTo` is set and the Telegram message ID is available.
+- **Discord:** uses native replies via `message_reference` when the Discord message ID is available.
+- **Slack:** renders a quoted block (left bar) in the thread.
+
 ## Architecture Options
 
 ### 1. Embedded Mode with Built-in Bridges (Simple)
@@ -255,6 +261,7 @@ const webhookHandler = new WebhookHandler({
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
   slackBotToken: process.env.SLACK_BOT_TOKEN,
   discordBotToken: process.env.DISCORD_BOT_TOKEN,
+  allowedBotIds: process.env.BRIDGE_TEST_BOT_IDS?.split(',').map((id) => id.trim()).filter(Boolean),
   onOperatorMessage: async (sessionId, content, operatorName, source, attachments) => {
     console.log(`Message from ${operatorName} via ${source}: ${content}`);
 
@@ -266,6 +273,12 @@ const webhookHandler = new WebhookHandler({
       console.log(`Attachment: ${att.filename} (${att.size} bytes)`);
       // att.data contains the file bytes
     }
+  },
+  onOperatorMessageEdit: async (sessionId, bridgeMessageId, content, source) => {
+    console.log(`Edited message ${bridgeMessageId} via ${source}: ${content}`);
+  },
+  onOperatorMessageDelete: async (sessionId, bridgeMessageId, source) => {
+    console.log(`Deleted message ${bridgeMessageId} via ${source}`);
   },
 });
 

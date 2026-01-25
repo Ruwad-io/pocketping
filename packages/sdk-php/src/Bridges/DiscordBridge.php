@@ -134,7 +134,15 @@ class DiscordBridge extends AbstractBridge implements BridgeWithEditDeleteInterf
             $text .= "\n\n📎 {$attachmentCount} attachment(s)";
         }
 
-        $result = $this->sendMessage($text);
+        $replyToMessageId = null;
+        if ($message->replyTo !== null) {
+            $replyBridgeIds = $this->getBridgeMessageIds($message->replyTo);
+            if ($replyBridgeIds?->discordMessageId !== null) {
+                $replyToMessageId = $replyBridgeIds->discordMessageId;
+            }
+        }
+
+        $result = $this->sendMessage($text, $replyToMessageId);
 
         // Store the message ID for edit/delete support
         if ($result->success && $result->platformMessageId !== null) {
@@ -297,7 +305,7 @@ class DiscordBridge extends AbstractBridge implements BridgeWithEditDeleteInterf
     /**
      * Send a plain text message.
      */
-    private function sendMessage(string $content): BridgeMessageResult
+    private function sendMessage(string $content, ?string $replyToMessageId = null): BridgeMessageResult
     {
         $payload = ['content' => $content];
 
@@ -308,6 +316,9 @@ class DiscordBridge extends AbstractBridge implements BridgeWithEditDeleteInterf
         if ($this->avatarUrl !== null) {
             $payload['avatar_url'] = $this->avatarUrl;
         }
+        if ($replyToMessageId !== null) {
+            $payload['message_reference'] = ['message_id' => $replyToMessageId];
+        }
 
         return $this->doSendMessage($payload);
     }
@@ -317,7 +328,7 @@ class DiscordBridge extends AbstractBridge implements BridgeWithEditDeleteInterf
      *
      * @param array<string, mixed> $embed
      */
-    private function sendEmbed(array $embed): BridgeMessageResult
+    private function sendEmbed(array $embed, ?string $replyToMessageId = null): BridgeMessageResult
     {
         $payload = ['embeds' => [$embed]];
 
@@ -327,6 +338,9 @@ class DiscordBridge extends AbstractBridge implements BridgeWithEditDeleteInterf
 
         if ($this->avatarUrl !== null) {
             $payload['avatar_url'] = $this->avatarUrl;
+        }
+        if ($replyToMessageId !== null) {
+            $payload['message_reference'] = ['message_id' => $replyToMessageId];
         }
 
         return $this->doSendMessage($payload);

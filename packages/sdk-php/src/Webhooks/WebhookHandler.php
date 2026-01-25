@@ -48,6 +48,43 @@ class WebhookHandler
             return ['error' => 'Telegram not configured'];
         }
 
+        $editedMessage = $payload['edited_message'] ?? null;
+        if (is_array($editedMessage)) {
+            $text = $editedMessage['text'] ?? '';
+            $caption = $editedMessage['caption'] ?? '';
+
+            if (str_starts_with($text, '/')) {
+                return ['ok' => true];
+            }
+
+            if ($text === '') {
+                $text = $caption;
+            }
+
+            if ($text === '') {
+                return ['ok' => true];
+            }
+
+            $topicId = $editedMessage['message_thread_id'] ?? null;
+            if ($topicId === null) {
+                return ['ok' => true];
+            }
+
+            if ($this->config->onOperatorMessageEdit !== null) {
+                $bridgeMessageId = (string) ($editedMessage['message_id'] ?? '');
+                if ($bridgeMessageId !== '') {
+                    ($this->config->onOperatorMessageEdit)(
+                        (string) $topicId,
+                        $bridgeMessageId,
+                        $text,
+                        'telegram'
+                    );
+                }
+            }
+
+            return ['ok' => true];
+        }
+
         $message = $payload['message'] ?? null;
         if ($message === null) {
             return ['ok' => true];
@@ -124,6 +161,9 @@ class WebhookHandler
         // Get operator name
         $operatorName = $message['from']['first_name'] ?? 'Operator';
 
+        // Get reply_to_message ID if present (for visual reply linking)
+        $replyToBridgeMessageId = $message['reply_to_message']['message_id'] ?? null;
+
         // Download media if present
         $attachments = [];
         if ($media !== null) {
@@ -146,8 +186,23 @@ class WebhookHandler
                 $text,
                 $operatorName,
                 'telegram',
-                $attachments
+                $attachments,
+                $replyToBridgeMessageId
             );
+        }
+        if ($this->config->onOperatorMessageWithIds !== null) {
+            $bridgeMessageId = (string) ($message['message_id'] ?? '');
+            if ($bridgeMessageId !== '') {
+                ($this->config->onOperatorMessageWithIds)(
+                    (string) $topicId,
+                    $text,
+                    $operatorName,
+                    'telegram',
+                    $attachments,
+                    $replyToBridgeMessageId,
+                    $bridgeMessageId
+                );
+            }
         }
 
         return ['ok' => true];
@@ -215,10 +270,65 @@ class WebhookHandler
         // Handle event callbacks
         if (($payload['type'] ?? '') === 'event_callback' && isset($payload['event'])) {
             $event = $payload['event'];
+            $allowedBotIds = $this->config->allowedBotIds ?? [];
+
+            if (($event['type'] ?? '') !== 'message') {
+                return ['ok' => true];
+            }
+
+            $subtype = $event['subtype'] ?? null;
+            if ($subtype === 'message_changed') {
+                if ($this->config->onOperatorMessageEdit !== null) {
+                    $message = $event['message'] ?? [];
+                    $previous = $event['previous_message'] ?? [];
+                    $botId = $message['bot_id'] ?? $previous['bot_id'] ?? $event['bot_id'] ?? null;
+                    if ($botId !== null && !in_array($botId, $allowedBotIds, true)) {
+                        return ['ok' => true];
+                    }
+
+                    $threadTs = $message['thread_ts'] ?? $previous['thread_ts'] ?? null;
+                    $messageTs = $message['ts'] ?? $previous['ts'] ?? null;
+                    $text = $message['text'] ?? '';
+
+                    if ($threadTs !== null && $messageTs !== null) {
+                        ($this->config->onOperatorMessageEdit)(
+                            $threadTs,
+                            $messageTs,
+                            $text,
+                            'slack'
+                        );
+                    }
+                }
+
+                return ['ok' => true];
+            }
+
+            if ($subtype === 'message_deleted') {
+                if ($this->config->onOperatorMessageDelete !== null) {
+                    $previous = $event['previous_message'] ?? [];
+                    $botId = $previous['bot_id'] ?? $event['bot_id'] ?? null;
+                    if ($botId !== null && !in_array($botId, $allowedBotIds, true)) {
+                        return ['ok' => true];
+                    }
+
+                    $threadTs = $previous['thread_ts'] ?? null;
+                    $messageTs = $event['deleted_ts'] ?? $previous['ts'] ?? null;
+
+                    if ($threadTs !== null && $messageTs !== null) {
+                        ($this->config->onOperatorMessageDelete)(
+                            $threadTs,
+                            $messageTs,
+                            'slack'
+                        );
+                    }
+                }
+
+                return ['ok' => true];
+            }
 
             $hasContent = ($event['type'] ?? '') === 'message'
                 && isset($event['thread_ts'])
-                && !isset($event['bot_id'])
+                && (!isset($event['bot_id']) || in_array($event['bot_id'], $allowedBotIds, true))
                 && !isset($event['subtype']);
 
             $files = $event['files'] ?? [];
@@ -255,15 +365,30 @@ class WebhookHandler
                     }
                 }
 
-                // Call callback
+                // Call callback (Slack reply support TODO)
                 if ($this->config->onOperatorMessage !== null) {
                     ($this->config->onOperatorMessage)(
                         $threadTs,
                         $text,
                         $operatorName,
                         'slack',
-                        $attachments
+                        $attachments,
+                        null
                     );
+                }
+                if ($this->config->onOperatorMessageWithIds !== null) {
+                    $messageTs = $event['ts'] ?? null;
+                    if ($messageTs !== null) {
+                        ($this->config->onOperatorMessageWithIds)(
+                            $threadTs,
+                            $text,
+                            $operatorName,
+                            'slack',
+                            $attachments,
+                            null,
+                            (string) $messageTs
+                        );
+                    }
                 }
             }
         }
@@ -364,14 +489,15 @@ class WebhookHandler
                         ?? $payload['user']['username']
                         ?? 'Operator';
 
-                    // Call callback
+                    // Call callback (Discord reply support TODO)
                     if ($this->config->onOperatorMessage !== null) {
                         ($this->config->onOperatorMessage)(
                             $threadId,
                             $content,
                             $operatorName,
                             'discord',
-                            []
+                            [],
+                            null
                         );
                     }
 

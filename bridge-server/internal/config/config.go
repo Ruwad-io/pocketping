@@ -4,6 +4,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 // TelegramConfig holds Telegram bridge configuration
@@ -19,6 +20,8 @@ type DiscordConfig struct {
 	ChannelID string
 	// Webhook mode
 	WebhookURL string
+	// Gateway mode (for receiving messages)
+	EnableGateway bool
 	// Optional
 	Username  string
 	AvatarURL string
@@ -48,6 +51,8 @@ type Config struct {
 	BackendWebhookURL   string
 	EventsWebhookURL    string
 	EventsWebhookSecret string
+
+	TestBotIDs []string
 }
 
 // Load reads configuration from environment variables
@@ -67,6 +72,17 @@ func Load() *Config {
 		EventsWebhookSecret: os.Getenv("EVENTS_WEBHOOK_SECRET"),
 	}
 
+	if ids := os.Getenv("BRIDGE_TEST_BOT_IDS"); ids != "" {
+		var parsed []string
+		for _, id := range strings.Split(ids, ",") {
+			id = strings.TrimSpace(id)
+			if id != "" {
+				parsed = append(parsed, id)
+			}
+		}
+		cfg.TestBotIDs = parsed
+	}
+
 	// Telegram config
 	if token := os.Getenv("TELEGRAM_BOT_TOKEN"); token != "" {
 		cfg.Telegram = &TelegramConfig{
@@ -77,11 +93,13 @@ func Load() *Config {
 
 	// Discord config
 	if token := os.Getenv("DISCORD_BOT_TOKEN"); token != "" {
+		enableGateway := os.Getenv("DISCORD_ENABLE_GATEWAY") == "true" || os.Getenv("DISCORD_ENABLE_GATEWAY") == "1"
 		cfg.Discord = &DiscordConfig{
-			BotToken:  token,
-			ChannelID: os.Getenv("DISCORD_CHANNEL_ID"),
-			Username:  os.Getenv("DISCORD_USERNAME"),
-			AvatarURL: os.Getenv("DISCORD_AVATAR_URL"),
+			BotToken:      token,
+			ChannelID:     os.Getenv("DISCORD_CHANNEL_ID"),
+			EnableGateway: enableGateway,
+			Username:      os.Getenv("DISCORD_USERNAME"),
+			AvatarURL:     os.Getenv("DISCORD_AVATAR_URL"),
 		}
 	} else if webhook := os.Getenv("DISCORD_WEBHOOK_URL"); webhook != "" {
 		cfg.Discord = &DiscordConfig{

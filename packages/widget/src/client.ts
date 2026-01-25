@@ -1196,7 +1196,17 @@ export class PocketPingClient {
   private connectSSE(): void {
     if (!this.session) return;
 
-    const sseUrl = this.config.endpoint.replace(/\/$/, '') + `/stream?sessionId=${this.session.sessionId}`;
+    // Build SSE URL with last known message timestamp
+    const params = new URLSearchParams({
+      sessionId: this.session.sessionId,
+    });
+
+    const lastEventTimestamp = this.getLastEventTimestamp();
+    if (lastEventTimestamp) {
+      params.set('after', lastEventTimestamp);
+    }
+
+    const sseUrl = this.config.endpoint.replace(/\/$/, '') + `/stream?${params.toString()}`;
 
     try {
       this.sse = new EventSource(sseUrl);
@@ -1267,6 +1277,26 @@ export class PocketPingClient {
     this.handleWebSocketEvent(event);
   }
 
+  private getLastEventTimestamp(): string | null {
+    if (!this.session) return null;
+
+    let latest: Date | null = null;
+    for (const msg of this.session.messages) {
+      const candidates = [msg.timestamp, msg.editedAt, msg.deletedAt, msg.deliveredAt, msg.readAt]
+        .filter(Boolean)
+        .map((value) => new Date(value as string))
+        .filter((date) => !isNaN(date.getTime()));
+
+      for (const date of candidates) {
+        if (!latest || date > latest) {
+          latest = date;
+        }
+      }
+    }
+
+    return latest ? latest.toISOString() : null;
+  }
+
   private handleWebSocketEvent(event: WebSocketEvent): void {
     switch (event.type) {
       case 'message':
@@ -1301,12 +1331,41 @@ export class PocketPingClient {
           if (existingIndex >= 0) {
             // Update existing message (status update from server)
             const existing = this.session.messages[existingIndex];
+            let updated = false;
             if (message.status && message.status !== existing.status) {
               existing.status = message.status;
-              if (message.deliveredAt) existing.deliveredAt = message.deliveredAt;
-              if (message.readAt) existing.readAt = message.readAt;
+              updated = true;
+              if (message.deliveredAt) {
+                existing.deliveredAt = message.deliveredAt;
+              }
+              if (message.readAt) {
+                existing.readAt = message.readAt;
+              }
               // Emit read event to trigger UI update
               this.emit('read', { messageIds: [message.id], status: message.status });
+            }
+            if (message.content !== undefined && message.content !== existing.content) {
+              existing.content = message.content;
+              updated = true;
+            }
+            if (message.editedAt !== undefined && message.editedAt !== existing.editedAt) {
+              existing.editedAt = message.editedAt;
+              updated = true;
+            }
+            if (message.deletedAt !== undefined && message.deletedAt !== existing.deletedAt) {
+              existing.deletedAt = message.deletedAt;
+              updated = true;
+            }
+            if (message.replyTo !== undefined) {
+              existing.replyTo = message.replyTo;
+              updated = true;
+            }
+            if (message.attachments !== undefined) {
+              existing.attachments = message.attachments;
+              updated = true;
+            }
+            if (updated) {
+              this.emit('message', existing);
             }
           } else {
             // Add new message (operator/AI messages)
@@ -1352,6 +1411,31 @@ export class PocketPingClient {
           }
         }
         this.emit('read', readData);
+        break;
+
+      case 'message_edited':
+        if (this.session) {
+          const editData = event.data as { messageId: string; content: string; editedAt?: string };
+          const msgIndex = this.session.messages.findIndex((m) => m.id === editData.messageId);
+          if (msgIndex >= 0) {
+            const existing = this.session.messages[msgIndex];
+            existing.content = editData.content;
+            existing.editedAt = editData.editedAt ?? new Date().toISOString();
+            this.emit('message', existing);
+          }
+        }
+        break;
+
+      case 'message_deleted':
+        if (this.session) {
+          const deleteData = event.data as { messageId: string; deletedAt?: string };
+          const msgIndex = this.session.messages.findIndex((m) => m.id === deleteData.messageId);
+          if (msgIndex >= 0) {
+            const existing = this.session.messages[msgIndex];
+            existing.deletedAt = deleteData.deletedAt ?? new Date().toISOString();
+            this.emit('message', existing);
+          }
+        }
         break;
 
       case 'event':
@@ -1436,14 +1520,48 @@ export class PocketPingClient {
       if (!this.session) return;
 
       try {
-        const lastMessageId = this.session.messages[this.session.messages.length - 1]?.id;
-        const newMessages = await this.fetchMessages(lastMessageId);
+        const lastEventTimestamp = this.getLastEventTimestamp();
+        const newMessages = await this.fetchMessages(lastEventTimestamp ?? undefined);
 
         // Reset failure counter on success
         this.pollingFailures = 0;
 
         for (const message of newMessages) {
-          if (!this.session.messages.find((m) => m.id === message.id)) {
+          const existingIndex = this.session.messages.findIndex((m) => m.id === message.id);
+          if (existingIndex >= 0) {
+            const existing = this.session.messages[existingIndex];
+            let updated = false;
+            if (message.status && message.status !== existing.status) {
+              existing.status = message.status;
+              updated = true;
+              if (message.deliveredAt) existing.deliveredAt = message.deliveredAt;
+              if (message.readAt) existing.readAt = message.readAt;
+              this.emit('read', { messageIds: [message.id], status: message.status });
+            }
+            if (message.content !== undefined && message.content !== existing.content) {
+              existing.content = message.content;
+              updated = true;
+            }
+            if (message.editedAt !== undefined && message.editedAt !== existing.editedAt) {
+              existing.editedAt = message.editedAt;
+              updated = true;
+            }
+            if (message.deletedAt !== undefined && message.deletedAt !== existing.deletedAt) {
+              existing.deletedAt = message.deletedAt;
+              updated = true;
+            }
+            if (message.replyTo !== undefined) {
+              existing.replyTo = message.replyTo;
+              updated = true;
+            }
+            if (message.attachments !== undefined) {
+              existing.attachments = message.attachments;
+              updated = true;
+            }
+            if (updated) {
+              this.emit('message', existing);
+            }
+          } else {
             this.session.messages.push(message);
             this.emit('message', message);
             this.config.onMessage?.(message);
