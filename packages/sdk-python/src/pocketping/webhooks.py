@@ -166,12 +166,41 @@ class WebhookHandler:
 
             return {"ok": True}
 
+        message_reaction = payload.get("message_reaction")
+        if message_reaction:
+            new_reactions = message_reaction.get("new_reaction") or []
+            emoji = new_reactions[0].get("emoji") if new_reactions else None
+            topic_id = message_reaction.get("message_thread_id")
+
+            if emoji and "🗑" in emoji and topic_id and self.config.on_operator_message_delete:
+                reaction_date = message_reaction.get("date", int(time.time()))
+                deleted_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(reaction_date))
+                bridge_message_id = str(message_reaction.get("message_id", ""))
+                if bridge_message_id:
+                    self.config.on_operator_message_delete(
+                        str(topic_id), bridge_message_id, "telegram", deleted_at
+                    )
+
+            return {"ok": True}
+
         message = payload.get("message")
         if not message:
             return {"ok": True}
 
         text = message.get("text", "")
         caption = message.get("caption", "")
+
+        # Handle /delete command (reply-based)
+        if text.startswith("/delete"):
+            topic_id = message.get("message_thread_id")
+            reply_to = message.get("reply_to_message") or {}
+            reply_id = reply_to.get("message_id")
+            if topic_id and reply_id and self.config.on_operator_message_delete:
+                deleted_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                self.config.on_operator_message_delete(
+                    str(topic_id), str(reply_id), "telegram", deleted_at
+                )
+            return {"ok": True}
 
         # Skip commands
         if text.startswith("/"):

@@ -58,6 +58,7 @@ interface TelegramUpdate {
   update_id: number;
   message?: TelegramMessage;
   edited_message?: TelegramMessage;
+  message_reaction?: TelegramMessageReaction;
 }
 
 interface TelegramMessage {
@@ -110,6 +111,21 @@ interface TelegramVoice {
   file_id: string;
   mime_type?: string;
   file_size?: number;
+}
+
+interface TelegramReaction {
+  type: string;
+  emoji?: string;
+}
+
+interface TelegramMessageReaction {
+  message_id: number;
+  message_thread_id?: number;
+  chat: { id: number };
+  user?: { id: number };
+  new_reaction?: TelegramReaction[];
+  old_reaction?: TelegramReaction[];
+  date?: number;
 }
 
 interface ParsedMedia {
@@ -263,8 +279,47 @@ export class WebhookHandler {
           return;
         }
 
+        if (update.message_reaction) {
+          const reaction = update.message_reaction;
+          const emoji = reaction.new_reaction?.[0]?.emoji;
+          const topicId = reaction.message_thread_id;
+
+          if (emoji && emoji.includes('🗑') && topicId && this.config.onOperatorMessageDelete) {
+            const deletedAt = reaction.date
+              ? new Date(reaction.date * 1000).toISOString()
+              : new Date().toISOString();
+            await this.config.onOperatorMessageDelete(
+              String(topicId),
+              reaction.message_id,
+              'telegram',
+              deletedAt
+            );
+          }
+
+          this.writeOK(res);
+          return;
+        }
+
         if (update.message) {
           const msg = update.message;
+
+          // Handle /delete command (reply-based)
+          if (msg.text && /^\/delete(@\w+)?(\s|$)/.test(msg.text)) {
+            const topicId = msg.message_thread_id;
+            const replyToId = msg.reply_to_message?.message_id;
+
+            if (topicId && replyToId && this.config.onOperatorMessageDelete) {
+              await this.config.onOperatorMessageDelete(
+                String(topicId),
+                replyToId,
+                'telegram',
+                new Date().toISOString()
+              );
+            }
+
+            this.writeOK(res);
+            return;
+          }
 
           // Skip commands
           if (msg.text?.startsWith('/')) {

@@ -191,18 +191,49 @@ Object.defineProperty(globalThis, 'location', {
   writable: true,
 });
 
-// Mock document
-Object.defineProperty(globalThis, 'document', {
-  value: {
-    ...globalThis.document,
-    referrer: 'http://google.com',
-    title: 'Test Page',
-    visibilityState: 'visible',
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-  },
-  writable: true,
-});
+// Add document properties (don't replace the whole document, jsdom provides it)
+if (typeof document !== 'undefined') {
+  // Only mock properties that jsdom might not have or we need to spy on
+  Object.defineProperty(document, 'referrer', {
+    value: 'http://google.com',
+    writable: true,
+    configurable: true,
+  });
+  Object.defineProperty(document, 'visibilityState', {
+    value: 'visible',
+    writable: true,
+    configurable: true,
+  });
+}
+
+// Mock window.matchMedia (not implemented in jsdom)
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+// Mock Element.scrollIntoView (not implemented in jsdom)
+if (typeof Element !== 'undefined') {
+  Element.prototype.scrollIntoView = vi.fn();
+}
+
+// Mock URL.createObjectURL (for file preview generation)
+if (typeof URL !== 'undefined' && !URL.createObjectURL) {
+  URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+  URL.revokeObjectURL = vi.fn();
+}
 
 // Mock navigator
 Object.defineProperty(globalThis, 'navigator', {

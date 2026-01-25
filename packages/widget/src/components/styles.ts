@@ -691,9 +691,8 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     /* Drag & Drop */
-    .pp-dragging {
-      position: relative;
-    }
+    /* Note: .pp-window already has position: fixed which acts as
+       containing block for the absolutely positioned overlay */
 
     .pp-drop-overlay {
       position: absolute;

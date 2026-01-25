@@ -85,6 +85,28 @@ class WebhookHandler
             return ['ok' => true];
         }
 
+        $messageReaction = $payload['message_reaction'] ?? null;
+        if (is_array($messageReaction)) {
+            $newReactions = $messageReaction['new_reaction'] ?? [];
+            $emoji = $newReactions[0]['emoji'] ?? null;
+            $topicId = $messageReaction['message_thread_id'] ?? null;
+
+            if ($emoji !== null && str_contains($emoji, '🗑') && $topicId !== null) {
+                if ($this->config->onOperatorMessageDelete !== null) {
+                    $bridgeMessageId = (string) ($messageReaction['message_id'] ?? '');
+                    if ($bridgeMessageId !== '') {
+                        ($this->config->onOperatorMessageDelete)(
+                            (string) $topicId,
+                            $bridgeMessageId,
+                            'telegram'
+                        );
+                    }
+                }
+            }
+
+            return ['ok' => true];
+        }
+
         $message = $payload['message'] ?? null;
         if ($message === null) {
             return ['ok' => true];
@@ -92,6 +114,20 @@ class WebhookHandler
 
         $text = $message['text'] ?? '';
         $caption = $message['caption'] ?? '';
+
+        // Handle /delete command (reply-based)
+        if ($text !== '' && str_starts_with($text, '/delete')) {
+            $topicId = $message['message_thread_id'] ?? null;
+            $replyId = $message['reply_to_message']['message_id'] ?? null;
+            if ($topicId !== null && $replyId !== null && $this->config->onOperatorMessageDelete !== null) {
+                ($this->config->onOperatorMessageDelete)(
+                    (string) $topicId,
+                    (string) $replyId,
+                    'telegram'
+                );
+            }
+            return ['ok' => true];
+        }
 
         // Skip commands
         if (str_starts_with($text, '/')) {

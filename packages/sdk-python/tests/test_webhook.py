@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import json
+import time
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -10,6 +11,7 @@ import pytest
 
 from pocketping import CustomEvent, PocketPing
 from pocketping.models import ConnectRequest, SessionMetadata
+from pocketping.webhooks import WebhookConfig, WebhookHandler
 
 
 class TestWebhookConfiguration:
@@ -238,6 +240,100 @@ class TestWebhookSignature:
             headers = call_args[1]["headers"]
 
             assert "X-PocketPing-Signature" not in headers
+
+
+class TestTelegramWebhookInbound:
+    """Tests for Telegram webhook handling."""
+
+    def test_edited_message_triggers_edit_callback(self):
+        """Test that edited_message updates call on_operator_message_edit."""
+        on_edit = MagicMock()
+        handler = WebhookHandler(
+            WebhookConfig(
+                telegram_bot_token="test-token",
+                on_operator_message_edit=on_edit,
+            )
+        )
+
+        payload = {
+            "edited_message": {
+                "message_id": 123,
+                "message_thread_id": 456,
+                "text": "Updated message",
+                "edit_date": 1700000000,
+            }
+        }
+
+        result = handler.handle_telegram_webhook(payload)
+
+        assert result == {"ok": True}
+        assert on_edit.call_count == 1
+        args = on_edit.call_args[0]
+        assert args[0] == "456"
+        assert args[1] == "123"
+        assert args[2] == "Updated message"
+        assert args[3] == "telegram"
+        expected_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(1700000000))
+        assert args[4] == expected_time
+
+    def test_delete_command_triggers_delete_callback(self):
+        """Test that /delete replies call on_operator_message_delete."""
+        on_delete = MagicMock()
+        handler = WebhookHandler(
+            WebhookConfig(
+                telegram_bot_token="test-token",
+                on_operator_message_delete=on_delete,
+            )
+        )
+
+        payload = {
+            "message": {
+                "message_id": 200,
+                "message_thread_id": 456,
+                "text": "/delete",
+                "reply_to_message": {"message_id": 999},
+            }
+        }
+
+        result = handler.handle_telegram_webhook(payload)
+
+        assert result == {"ok": True}
+        assert on_delete.call_count == 1
+        args = on_delete.call_args[0]
+        assert args[0] == "456"
+        assert args[1] == "999"
+        assert args[2] == "telegram"
+        assert isinstance(args[3], str)
+
+    def test_reaction_delete_triggers_delete_callback(self):
+        """Test that 🗑 reactions trigger on_operator_message_delete."""
+        on_delete = MagicMock()
+        handler = WebhookHandler(
+            WebhookConfig(
+                telegram_bot_token="test-token",
+                on_operator_message_delete=on_delete,
+            )
+        )
+
+        payload = {
+            "message_reaction": {
+                "message_id": 999,
+                "message_thread_id": 456,
+                "new_reaction": [{"type": "emoji", "emoji": "🗑️"}],
+                "date": 1700000000,
+            }
+        }
+
+        result = handler.handle_telegram_webhook(payload)
+
+        assert result == {"ok": True}
+        assert on_delete.call_count == 1
+        args = on_delete.call_args[0]
+        assert args[0] == "456"
+        assert args[1] == "999"
+        assert args[2] == "telegram"
+        expected_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(1700000000))
+        assert args[3] == expected_time
 
 
 class TestWebhookErrorHandling:

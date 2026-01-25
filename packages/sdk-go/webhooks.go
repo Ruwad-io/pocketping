@@ -75,6 +75,7 @@ type TelegramUpdate struct {
 	UpdateID int              `json:"update_id"`
 	Message  *TelegramMessage `json:"message,omitempty"`
 	EditedMessage *TelegramMessage `json:"edited_message,omitempty"`
+	MessageReaction *TelegramMessageReaction `json:"message_reaction,omitempty"`
 }
 
 // TelegramMessage represents a Telegram message
@@ -98,6 +99,23 @@ type TelegramMessage struct {
 // TelegramReplyMessage represents the message being replied to
 type TelegramReplyMessage struct {
 	MessageID int `json:"message_id"`
+}
+
+// TelegramReaction represents a message reaction
+type TelegramReaction struct {
+	Type  string `json:"type"`
+	Emoji string `json:"emoji,omitempty"`
+}
+
+// TelegramMessageReaction represents a reaction update
+type TelegramMessageReaction struct {
+	MessageID       int                `json:"message_id"`
+	MessageThreadID int                `json:"message_thread_id,omitempty"`
+	Chat            TelegramChat       `json:"chat"`
+	User            *TelegramUser      `json:"user,omitempty"`
+	NewReaction     []TelegramReaction `json:"new_reaction,omitempty"`
+	OldReaction     []TelegramReaction `json:"old_reaction,omitempty"`
+	Date            int64              `json:"date,omitempty"`
 }
 
 // TelegramChat represents a Telegram chat
@@ -209,9 +227,48 @@ func (wh *WebhookHandler) HandleTelegramWebhook() http.HandlerFunc {
 			return
 		}
 
+		// Process delete via reaction (🗑)
+		if update.MessageReaction != nil {
+			reaction := update.MessageReaction
+
+			hasTrash := false
+			for _, r := range reaction.NewReaction {
+				if r.Emoji == "🗑" || r.Emoji == "🗑️" {
+					hasTrash = true
+					break
+				}
+			}
+
+			if hasTrash && reaction.MessageThreadID != 0 && wh.config.OnOperatorMessageDelete != nil {
+				deletedAt := time.Now()
+				if reaction.Date > 0 {
+					deletedAt = time.Unix(reaction.Date, 0)
+				}
+				wh.config.OnOperatorMessageDelete(r.Context(), fmt.Sprintf("%d", reaction.MessageThreadID), fmt.Sprintf("%d", reaction.MessageID), "telegram", deletedAt)
+			}
+
+			writeOK(w)
+			return
+		}
+
 		// Process message
 		if update.Message != nil {
 			msg := update.Message
+
+			// Handle /delete command (reply-based)
+			if strings.HasPrefix(msg.Text, "/delete") {
+				if msg.MessageThreadID == 0 || msg.ReplyToMessage == nil {
+					writeOK(w)
+					return
+				}
+
+				if wh.config.OnOperatorMessageDelete != nil {
+					wh.config.OnOperatorMessageDelete(r.Context(), fmt.Sprintf("%d", msg.MessageThreadID), fmt.Sprintf("%d", msg.ReplyToMessage.MessageID), "telegram", time.Now())
+				}
+
+				writeOK(w)
+				return
+			}
 
 			// Skip commands
 			if strings.HasPrefix(msg.Text, "/") {

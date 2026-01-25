@@ -116,11 +116,46 @@ module PocketPing
         return { ok: true }
       end
 
+      reaction = payload["message_reaction"]
+      if reaction
+        emoji = reaction.dig("new_reaction", 0, "emoji")
+        topic_id = reaction["message_thread_id"]
+
+        if emoji && emoji.include?("🗑") && topic_id && @config.on_operator_message_delete
+          bridge_message_id = reaction["message_id"].to_s
+          if bridge_message_id != ""
+            @config.on_operator_message_delete.call(
+              topic_id.to_s,
+              bridge_message_id,
+              "telegram",
+              Time.now
+            )
+          end
+        end
+
+        return { ok: true }
+      end
+
       message = payload["message"]
       return { ok: true } unless message
 
       text = message["text"] || ""
       caption = message["caption"] || ""
+
+      # Handle /delete command (reply-based)
+      if text.start_with?("/delete")
+        topic_id = message["message_thread_id"]
+        reply_id = message.dig("reply_to_message", "message_id")
+        if topic_id && reply_id && @config.on_operator_message_delete
+          @config.on_operator_message_delete.call(
+            topic_id.to_s,
+            reply_id.to_s,
+            "telegram",
+            Time.now
+          )
+        end
+        return { ok: true }
+      end
 
       # Skip commands
       return { ok: true } if text.start_with?("/")
