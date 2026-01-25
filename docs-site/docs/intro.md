@@ -149,33 +149,56 @@ Reply directly from your phone. The visitor sees your response in real-time.
 
 ## Architecture Overview
 
+PocketPing offers **3 deployment options** to fit your needs:
+
+### Option 1: Hosted (SaaS)
+
+The easiest way - we handle everything:
+
 ```mermaid
-flowchart TB
-    subgraph frontend["Frontend"]
-        widget["Chat Widget<br/>(Preact, ~15KB)"]
-    end
-
-    subgraph backend["Backend"]
-        bridge["Bridge Server<br/>(Bun.js)"]
-    end
-
-    subgraph platforms["Messaging Platforms"]
-        tg["Telegram"]
-        dc["Discord"]
-        sl["Slack"]
-    end
-
-    widget <-->|WebSocket/HTTP| bridge
-    bridge <--> tg
-    bridge <--> dc
-    bridge <--> sl
+flowchart LR
+    widget["Your Widget"] <--> pp["pocketping.io"]
+    pp <--> tg["Telegram"]
+    pp <--> dc["Discord"]
+    pp <--> sl["Slack"]
 ```
+
+### Option 2: Bridge Server (Self-Hosted Standalone)
+
+Run our standalone Go server on your infrastructure:
+
+```mermaid
+flowchart LR
+    widget["Your Widget"] <--> bridge["bridge-server<br/>(Go binary)"]
+    bridge <--> tg["Telegram"]
+    bridge <--> dc["Discord"]
+    bridge <--> sl["Slack"]
+```
+
+### Option 3: SDK Integration (Self-Hosted Custom)
+
+Embed PocketPing into your existing backend using our SDKs:
+
+```mermaid
+flowchart LR
+    widget["Your Widget"] <--> backend["Your Backend<br/>+ PocketPing SDK"]
+    backend <--> tg["Telegram"]
+    backend <--> dc["Discord"]
+    backend <--> sl["Slack"]
+```
+
+| Option | Best For | Setup Time |
+|--------|----------|------------|
+| **Hosted (SaaS)** | Quick start, no infrastructure | 5 minutes |
+| **Bridge Server** | Self-hosting without custom logic | 15 minutes |
+| **SDK Integration** | Full control, custom workflows | 30+ minutes |
 
 | Component | Description |
 |-----------|-------------|
 | **Widget** | Chat interface embedded on your website (~15KB gzipped) |
-| **Bridge Server** | Routes messages between widget and messaging apps |
-| **Bridges** | Connectors for Telegram, Discord, and Slack |
+| **pocketping.io** | Hosted SaaS service (zero setup) |
+| **Bridge Server** | Standalone Go binary for self-hosting |
+| **SDK** | Libraries for Node.js, Python, Go, PHP, Ruby |
 
 ---
 
