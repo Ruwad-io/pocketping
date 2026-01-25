@@ -136,6 +136,10 @@ export interface ReplyToData {
   content: string;
   sender: string;
   deleted?: boolean;
+  /** Indicates if the replied message has attachments (e.g., image) */
+  hasAttachment?: boolean;
+  /** MIME type of the first attachment (for icon display) */
+  attachmentType?: string;
 }
 
 export interface Message {

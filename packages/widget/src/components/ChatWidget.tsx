@@ -373,6 +373,19 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [messageMenu]);
 
+  // Scroll to message when clicking on a reply quote
+  const scrollToMessage = (messageId: string) => {
+    const messageElement = document.getElementById(`pp-msg-${messageId}`);
+    if (messageElement) {
+      messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Add highlight animation
+      messageElement.classList.add('pp-message-highlight');
+      setTimeout(() => {
+        messageElement.classList.remove('pp-message-highlight');
+      }, 1500);
+    }
+  };
+
   // ─────────────────────────────────────────────────────────────────
   // Drag & Drop handlers
   // ─────────────────────────────────────────────────────────────────
@@ -555,7 +568,7 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
               const isEdited = !!msg.editedAt;
 
               // Handle replyTo - can be string ID or embedded object from SSE
-              let replyData: { sender: string; content: string; deleted?: boolean } | null = null;
+              let replyData: ReplyToData | null = null;
               if (msg.replyTo) {
                 if (typeof msg.replyTo === 'object') {
                   // SSE sends embedded reply data
@@ -564,10 +577,14 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
                   // String ID - try to find in local messages
                   const replyToMsg = messages.find((m) => m.id === msg.replyTo);
                   if (replyToMsg) {
+                    const hasAttachment = !!(replyToMsg.attachments && replyToMsg.attachments.length > 0);
                     replyData = {
+                      id: replyToMsg.id,
                       sender: replyToMsg.sender,
                       content: replyToMsg.content,
                       deleted: !!replyToMsg.deletedAt,
+                      hasAttachment,
+                      attachmentType: hasAttachment ? replyToMsg.attachments![0].mimeType : undefined,
                     };
                   }
                 }
@@ -579,6 +596,7 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
               return (
                 <div
                   key={msg.id}
+                  id={`pp-msg-${msg.id}`}
                   class={`pp-message pp-message-${msg.sender} ${isDeleted ? 'pp-message-deleted' : ''}`}
                   onContextMenu={(e) => handleMessageContextMenu(e, msg)}
                   onMouseEnter={() => setHoveredMessageId(msg.id)}
@@ -617,11 +635,32 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
                       )}
                     </div>
                   )}
-                  {/* Reply quote */}
-                  {replyData && replyData.content && (
-                    <div class="pp-reply-quote">
+                  {/* Reply quote - clickable to scroll to original message */}
+                  {replyData && (replyData.content || replyData.hasAttachment) && (
+                    <div
+                      class="pp-reply-quote pp-reply-quote-clickable"
+                      onClick={() => scrollToMessage(replyData.id)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === 'Enter' && scrollToMessage(replyData.id)}
+                    >
                       <span class="pp-reply-sender">{replyData.sender === 'visitor' ? 'You' : 'Support'}</span>
-                      <span class="pp-reply-content">{replyData.deleted ? 'Message deleted' : (replyData.content || '').slice(0, 50)}{(replyData.content || '').length > 50 ? '...' : ''}</span>
+                      <span class="pp-reply-content">
+                        {replyData.deleted ? 'Message deleted' : (
+                          <>
+                            {replyData.hasAttachment && (
+                              <span class="pp-reply-attachment-icon">
+                                {replyData.attachmentType?.startsWith('image/') ? '📷 ' : '📎 '}
+                              </span>
+                            )}
+                            {replyData.content ? (
+                              <>{(replyData.content || '').slice(0, 50)}{(replyData.content || '').length > 50 ? '...' : ''}</>
+                            ) : (
+                              replyData.attachmentType?.startsWith('image/') ? 'Photo' : 'File'
+                            )}
+                          </>
+                        )}
+                      </span>
                     </div>
                   )}
                   {isDeleted ? (
@@ -710,7 +749,18 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
             <div class="pp-reply-preview">
               <div class="pp-reply-preview-content">
                 <span class="pp-reply-label">Replying to</span>
-                <span class="pp-reply-text">{replyingTo.content.slice(0, 50)}{replyingTo.content.length > 50 ? '...' : ''}</span>
+                <span class="pp-reply-text">
+                  {replyingTo.attachments && replyingTo.attachments.length > 0 && (
+                    <span class="pp-reply-attachment-icon">
+                      {replyingTo.attachments[0].mimeType.startsWith('image/') ? '📷 ' : '📎 '}
+                    </span>
+                  )}
+                  {replyingTo.content ? (
+                    <>{replyingTo.content.slice(0, 50)}{replyingTo.content.length > 50 ? '...' : ''}</>
+                  ) : (
+                    replyingTo.attachments?.[0]?.mimeType.startsWith('image/') ? 'Photo' : 'File'
+                  )}
+                </span>
               </div>
               <button class="pp-reply-cancel" onClick={handleCancelReply}><CloseIcon /></button>
             </div>

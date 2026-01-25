@@ -917,15 +917,50 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       text-overflow: ellipsis;
     }
 
+    /* Clickable reply quote */
+    .pp-reply-quote-clickable {
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .pp-reply-quote-clickable:hover {
+      background: ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)'};
+    }
+
+    .pp-reply-quote-clickable:active {
+      transform: scale(0.98);
+    }
+
     /* Reply quote in visitor message bubble needs higher contrast */
     .pp-message-visitor .pp-reply-quote {
       background: rgba(255, 255, 255, 0.18);
       border-left-color: rgba(255, 255, 255, 0.7);
     }
 
+    .pp-message-visitor .pp-reply-quote-clickable:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
     .pp-message-visitor .pp-reply-sender,
     .pp-message-visitor .pp-reply-content {
       color: rgba(255, 255, 255, 0.9);
+    }
+
+    /* Message highlight animation (when scrolling to a message) */
+    .pp-message-highlight {
+      animation: pp-highlight-pulse 1.5s ease-out;
+    }
+
+    @keyframes pp-highlight-pulse {
+      0% {
+        box-shadow: 0 0 0 0 ${primaryColor}80;
+      }
+      30% {
+        box-shadow: 0 0 0 6px ${primaryColor}40;
+      }
+      100% {
+        box-shadow: 0 0 0 0 ${primaryColor}00;
+      }
     }
 
     /* Deleted Message */

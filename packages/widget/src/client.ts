@@ -474,12 +474,13 @@ export class PocketPingClient {
       throw new Error('Not connected');
     }
 
-    const response = await this.fetch<DeleteMessageResponse>(`/message/${messageId}`, {
-      method: 'DELETE',
-      body: JSON.stringify({
-        sessionId: this.session.sessionId,
-      }),
-    });
+    // Note: DELETE endpoint expects sessionId in query params, not body
+    const response = await this.fetch<DeleteMessageResponse>(
+      `/message/${messageId}?sessionId=${encodeURIComponent(this.session.sessionId)}`,
+      {
+        method: 'DELETE',
+      }
+    );
 
     if (response.deleted) {
       // Update local message

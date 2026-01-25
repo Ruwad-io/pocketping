@@ -238,6 +238,136 @@ describe('PocketPingClient', () => {
     });
   });
 
+  describe('editMessage', () => {
+    beforeEach(async () => {
+      const mockResponse = {
+        sessionId: 'session-123',
+        visitorId: 'visitor-456',
+        operatorOnline: false,
+        messages: [
+          { id: 'msg-1', content: 'Original', sender: 'visitor', timestamp: new Date().toISOString() },
+        ],
+      };
+
+      (globalThis.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+        headers: new Headers(),
+      });
+
+      await client.connect();
+    });
+
+    it('should send PATCH request with sessionId in body', async () => {
+      const mockEditResponse = {
+        message: {
+          id: 'msg-1',
+          content: 'Edited content',
+          editedAt: new Date().toISOString(),
+        },
+      };
+
+      (globalThis.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockEditResponse),
+        headers: new Headers(),
+      });
+
+      await client.editMessage('msg-1', 'Edited content');
+
+      // Verify PATCH request
+      const calls = (globalThis.fetch as any).mock.calls;
+      const editCall = calls.find(
+        (call: [string, RequestInit]) =>
+          call[0].includes('/message/msg-1') && call[1]?.method === 'PATCH'
+      );
+      expect(editCall).toBeDefined();
+
+      // Verify sessionId is in body (not query params for PATCH)
+      const body = JSON.parse(editCall[1].body);
+      expect(body.sessionId).toBe('session-123');
+      expect(body.content).toBe('Edited content');
+    });
+
+    it('should throw if not connected', async () => {
+      const disconnectedClient = new PocketPingClient(mockConfig);
+      await expect(disconnectedClient.editMessage('msg-1', 'New content')).rejects.toThrow(
+        'Not connected'
+      );
+    });
+  });
+
+  describe('deleteMessage', () => {
+    beforeEach(async () => {
+      const mockResponse = {
+        sessionId: 'session-123',
+        visitorId: 'visitor-456',
+        operatorOnline: false,
+        messages: [
+          { id: 'msg-1', content: 'To delete', sender: 'visitor', timestamp: new Date().toISOString() },
+        ],
+      };
+
+      (globalThis.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+        headers: new Headers(),
+      });
+
+      await client.connect();
+    });
+
+    it('should send DELETE request with sessionId in query params (not body)', async () => {
+      const mockDeleteResponse = { deleted: true };
+
+      (globalThis.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockDeleteResponse),
+        headers: new Headers(),
+      });
+
+      await client.deleteMessage('msg-1');
+
+      // Verify DELETE request
+      const calls = (globalThis.fetch as any).mock.calls;
+      const deleteCall = calls.find(
+        (call: [string, RequestInit]) =>
+          call[0].includes('/message/msg-1') && call[1]?.method === 'DELETE'
+      );
+      expect(deleteCall).toBeDefined();
+
+      // CRITICAL: sessionId MUST be in query params, NOT in body
+      // The API expects: DELETE /message/[id]?sessionId=xxx
+      // NOT: DELETE /message/[id] with body: { sessionId: xxx }
+      expect(deleteCall[0]).toContain('sessionId=session-123');
+    });
+
+    it('should update local message state on successful delete', async () => {
+      const mockDeleteResponse = { deleted: true };
+
+      (globalThis.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockDeleteResponse),
+        headers: new Headers(),
+      });
+
+      await client.deleteMessage('msg-1');
+
+      // Local message should be marked as deleted
+      const messages = client.getMessages();
+      const deletedMsg = messages.find((m) => m.id === 'msg-1');
+      expect(deletedMsg?.deletedAt).toBeDefined();
+      expect(deletedMsg?.content).toBe('');
+    });
+
+    it('should throw if not connected', async () => {
+      const disconnectedClient = new PocketPingClient(mockConfig);
+      await expect(disconnectedClient.deleteMessage('msg-1')).rejects.toThrow(
+        'Not connected'
+      );
+    });
+  });
+
   describe('WebSocket events', () => {
     beforeEach(async () => {
       const mockResponse = {
