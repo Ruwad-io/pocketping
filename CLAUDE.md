@@ -139,6 +139,40 @@ Widget  ◀──────────────▶  BRIDGE-SERVER  ◀─�
 | File Attachments | ✅ | ✅ | ✅ | ✅ |
 | **Attachments (incoming)** | ✅ | ✅ | ✅ | ✅ |
 
+### Bridge Platform Support Matrix
+
+Chaque plateforme a des contraintes techniques différentes:
+
+| Feature | Telegram | Slack | Discord |
+|---------|----------|-------|---------|
+| **Send messages** | ✅ Webhook | ✅ Webhook | ✅ Webhook |
+| **Receive messages** | ✅ Webhook | ✅ Events API | ⚠️ Gateway only |
+| **Receive media** | ✅ Webhook | ✅ Events API | ⚠️ Gateway only |
+| **Threads/Topics** | ✅ Forum topics | ✅ Thread replies | ✅ Forum channels |
+
+**Discord Gateway Limitation:**
+- Discord ne permet PAS de recevoir les messages utilisateurs via webhooks
+- Pour recevoir les messages Discord, il faut le **Gateway API** (WebSocket persistant)
+- Le Gateway n'est PAS compatible avec les environnements serverless (Vercel, Netlify, etc.)
+
+**Solutions Discord:**
+1. **Bridge-server (Go)** - Peut implémenter Gateway (pas serverless)
+2. **pocketping-app sur Railway/Fly.io** - Peut implémenter Gateway (pas serverless)
+3. **Slash commands** - Alternative limitée (pas de média, UX moins naturelle)
+
+### Deployment Environments
+
+| Environnement | Type | Discord Gateway | Recommandé pour |
+|---------------|------|-----------------|-----------------|
+| **Vercel** | Serverless | ❌ Non supporté | Frontend, APIs simples |
+| **Railway** | Container | ✅ Supporté | Full-stack, WebSocket |
+| **Fly.io** | Container | ✅ Supporté | Full-stack, WebSocket |
+| **Docker** | Container | ✅ Supporté | Self-hosted |
+| **VPS** | VM | ✅ Supporté | Self-hosted |
+
+**pocketping-app** est déployé sur **Railway** → Discord Gateway possible.
+**bridge-server** est un binaire Go → Discord Gateway possible partout.
+
 ---
 
 ## Project Structure
