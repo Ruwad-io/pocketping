@@ -11,7 +11,7 @@ services:
 
   # Development with hot reload
   dev:
-    image: golang:1.21-alpine
+    image: golang:1.22-alpine
     working_dir: /app
     volumes:
       - .:/app
@@ -23,7 +23,7 @@ services:
 
   # Build and lint
   build:
-    image: golang:1.21-alpine
+    image: golang:1.22-alpine
     working_dir: /app
     volumes:
       - .:/app
