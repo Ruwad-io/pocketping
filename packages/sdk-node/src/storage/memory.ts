@@ -1,4 +1,4 @@
-import type { Storage } from './types';
+import type { Storage, BridgeMessageIds } from './types';
 import type { Session, Message } from '../types';
 
 /**
@@ -9,6 +9,7 @@ export class MemoryStorage implements Storage {
   private sessions: Map<string, Session> = new Map();
   private messages: Map<string, Message[]> = new Map();
   private messageById: Map<string, Message> = new Map();
+  private bridgeMessageIds: Map<string, BridgeMessageIds> = new Map();
 
   async createSession(session: Session): Promise<void> {
     this.sessions.set(session.id, session);
@@ -62,6 +63,27 @@ export class MemoryStorage implements Storage {
 
   async getMessage(messageId: string): Promise<Message | null> {
     return this.messageById.get(messageId) ?? null;
+  }
+
+  async updateMessage(message: Message): Promise<void> {
+    this.messageById.set(message.id, message);
+    // Also update in the session's messages array
+    const sessionMessages = this.messages.get(message.sessionId);
+    if (sessionMessages) {
+      const index = sessionMessages.findIndex((m) => m.id === message.id);
+      if (index !== -1) {
+        sessionMessages[index] = message;
+      }
+    }
+  }
+
+  async saveBridgeMessageIds(messageId: string, bridgeIds: BridgeMessageIds): Promise<void> {
+    const existing = this.bridgeMessageIds.get(messageId) ?? {};
+    this.bridgeMessageIds.set(messageId, { ...existing, ...bridgeIds });
+  }
+
+  async getBridgeMessageIds(messageId: string): Promise<BridgeMessageIds | null> {
+    return this.bridgeMessageIds.get(messageId) ?? null;
   }
 
   async cleanupOldSessions(olderThan: Date): Promise<number> {

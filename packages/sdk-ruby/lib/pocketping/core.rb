@@ -410,6 +410,106 @@ module PocketPing
       ReadResponse.new(updated: updated)
     end
 
+    # Handle editing a visitor's message
+    #
+    # @param request [EditMessageRequest] The edit request
+    # @return [EditMessageResponse]
+    # @raise [ValidationError] If content is empty or too long
+    # @raise [SessionNotFoundError] If session not found
+    # @raise [MessageNotFoundError] If message not found
+    # @raise [UnauthorizedError] If message doesn't belong to visitor
+    def handle_edit_message(request)
+      request.validate!
+
+      session = @storage.get_session(request.session_id)
+      raise SessionNotFoundError, "Session not found" unless session
+
+      message = @storage.get_message(request.message_id)
+      raise MessageNotFoundError, "Message not found" unless message
+
+      # Verify message belongs to this session
+      raise MessageNotFoundError, "Message not found" unless message.session_id == request.session_id
+
+      # Only visitors can edit their own messages
+      raise UnauthorizedError, "Unauthorized: can only edit own messages" unless message.sender == Sender::VISITOR
+
+      # Cannot edit deleted messages
+      raise ValidationError, "Cannot edit deleted message" if message.deleted_at
+
+      now = Time.now.utc
+      message.content = request.content
+      message.edited_at = now
+
+      @storage.update_message(message)
+
+      # Sync edit to bridges
+      sync_edit_to_bridges(request.session_id, request.message_id, request.content, now)
+
+      # Broadcast to WebSocket
+      broadcast_to_session(
+        request.session_id,
+        WebSocketEvent.new(
+          type: "message_edited",
+          data: {
+            messageId: request.message_id,
+            content: request.content,
+            editedAt: now.iso8601
+          }
+        )
+      )
+
+      EditMessageResponse.new(
+        message: {
+          id: message.id,
+          content: message.content,
+          editedAt: now.iso8601
+        }
+      )
+    end
+
+    # Handle deleting a visitor's message
+    #
+    # @param request [DeleteMessageRequest] The delete request
+    # @return [DeleteMessageResponse]
+    # @raise [SessionNotFoundError] If session not found
+    # @raise [MessageNotFoundError] If message not found
+    # @raise [UnauthorizedError] If message doesn't belong to visitor
+    def handle_delete_message(request)
+      session = @storage.get_session(request.session_id)
+      raise SessionNotFoundError, "Session not found" unless session
+
+      message = @storage.get_message(request.message_id)
+      raise MessageNotFoundError, "Message not found" unless message
+
+      # Verify message belongs to this session
+      raise MessageNotFoundError, "Message not found" unless message.session_id == request.session_id
+
+      # Only visitors can delete their own messages
+      raise UnauthorizedError, "Unauthorized: can only delete own messages" unless message.sender == Sender::VISITOR
+
+      # Sync delete to bridges BEFORE soft delete (we need bridge IDs)
+      now = Time.now.utc
+      sync_delete_to_bridges(request.session_id, request.message_id, now)
+
+      # Soft delete the message
+      message.deleted_at = now
+      @storage.update_message(message)
+
+      # Broadcast to WebSocket
+      broadcast_to_session(
+        request.session_id,
+        WebSocketEvent.new(
+          type: "message_deleted",
+          data: {
+            messageId: request.message_id,
+            deletedAt: now.iso8601
+          }
+        )
+      )
+
+      DeleteMessageResponse.new(deleted: true)
+    end
+
     # ─────────────────────────────────────────────────────────────────
     # User Identity
     # ─────────────────────────────────────────────────────────────────
@@ -783,6 +883,26 @@ module PocketPing
         bridge.on_identity_update(session)
       rescue StandardError => e
         warn "[PocketPing] Bridge #{bridge.name} identity notification error: #{e.message}"
+      end
+    end
+
+    def sync_edit_to_bridges(session_id, message_id, content, edited_at)
+      @bridges.each do |bridge|
+        next unless bridge.respond_to?(:on_message_edit)
+
+        bridge.on_message_edit(session_id, message_id, content, edited_at)
+      rescue StandardError => e
+        warn "[PocketPing] Bridge #{bridge.name} edit sync error: #{e.message}"
+      end
+    end
+
+    def sync_delete_to_bridges(session_id, message_id, deleted_at)
+      @bridges.each do |bridge|
+        next unless bridge.respond_to?(:on_message_delete)
+
+        bridge.on_message_delete(session_id, message_id, deleted_at)
+      rescue StandardError => e
+        warn "[PocketPing] Bridge #{bridge.name} delete sync error: #{e.message}"
       end
     end
 

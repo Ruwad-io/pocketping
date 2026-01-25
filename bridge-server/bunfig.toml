@@ -1,7 +1,0 @@
-[test]
-coverage = true
-coverageDir = "./coverage"
-
-# Test file patterns
-root = "."
-preload = ["./tests/setup.ts"]

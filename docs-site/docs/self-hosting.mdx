@@ -143,9 +143,9 @@ For production or when you want to use multiple bridges, run the bridge server s
 
 ### 1. Deploy Bridge Server
 
-```yaml title="docker-compose.yml"
-version: '3.8'
+The bridge server is written in Go and provides HTTP-only communication with messaging platforms.
 
+```yaml title="docker-compose.yml"
 services:
   bridge:
     image: ghcr.io/pocketping/pocketping-bridge:latest

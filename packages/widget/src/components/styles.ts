@@ -366,5 +366,485 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     .pp-footer a:hover {
       text-decoration: underline;
     }
+
+    /* Attachment Styles */
+    .pp-file-input {
+      /* Use offscreen positioning instead of display:none for better browser compatibility */
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .pp-attach-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: transparent;
+      color: ${colors.textSecondary};
+      border: 1px solid ${colors.border};
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s, border-color 0.2s;
+      flex-shrink: 0;
+    }
+
+    .pp-attach-btn:hover:not(:disabled) {
+      color: ${primaryColor};
+      border-color: ${primaryColor};
+    }
+
+    .pp-attach-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .pp-attach-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .pp-attachments-preview {
+      display: flex;
+      gap: 8px;
+      padding: 8px 12px;
+      border-top: 1px solid ${colors.border};
+      overflow-x: auto;
+      background: ${colors.bgSecondary};
+    }
+
+    .pp-attachment-preview {
+      position: relative;
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      overflow: hidden;
+      flex-shrink: 0;
+      background: ${colors.bg};
+      border: 1px solid ${colors.border};
+    }
+
+    .pp-preview-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .pp-preview-file {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: ${colors.textSecondary};
+    }
+
+    .pp-preview-file svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .pp-remove-attachment {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.6);
+      color: white;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+
+    .pp-remove-attachment svg {
+      width: 10px;
+      height: 10px;
+    }
+
+    .pp-upload-progress {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 3px;
+      background: ${primaryColor};
+      transition: width 0.1s;
+    }
+
+    .pp-upload-error {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #ef4444;
+      color: white;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .pp-attachment-uploading {
+      opacity: 0.7;
+    }
+
+    .pp-attachment-error {
+      border-color: #ef4444;
+    }
+
+    /* Message Attachments */
+    .pp-message-attachments {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .pp-attachment {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .pp-attachment-image img {
+      max-width: 200px;
+      max-height: 200px;
+      border-radius: 8px;
+      display: block;
+    }
+
+    .pp-attachment-audio {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .pp-attachment-audio audio {
+      width: 200px;
+      height: 36px;
+    }
+
+    .pp-attachment-audio .pp-attachment-name {
+      font-size: 11px;
+      opacity: 0.7;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+
+    .pp-attachment-video video {
+      max-width: 200px;
+      max-height: 200px;
+      border-radius: 8px;
+      display: block;
+    }
+
+    .pp-attachment-file {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'};
+      border-radius: 8px;
+      transition: background 0.2s;
+    }
+
+    .pp-attachment-file:hover {
+      background: ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)'};
+    }
+
+    .pp-attachment-file svg {
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .pp-attachment-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .pp-attachment-name {
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pp-attachment-size {
+      font-size: 11px;
+      opacity: 0.7;
+    }
+
+    /* Drag & Drop */
+    .pp-dragging {
+      position: relative;
+    }
+
+    .pp-drop-overlay {
+      position: absolute;
+      inset: 0;
+      background: ${isDark ? 'rgba(0,0,0,0.9)' : 'rgba(255,255,255,0.95)'};
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      z-index: 100;
+      border: 3px dashed ${primaryColor};
+      border-radius: 16px;
+      margin: 4px;
+      pointer-events: none;
+    }
+
+    .pp-drop-icon svg {
+      width: 48px;
+      height: 48px;
+      color: ${primaryColor};
+    }
+
+    .pp-drop-text {
+      font-size: 16px;
+      font-weight: 500;
+      color: ${colors.text};
+    }
+
+    /* Message Context Menu */
+    .pp-message-menu {
+      position: fixed;
+      background: ${colors.bg};
+      border: 1px solid ${colors.border};
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      padding: 4px;
+      z-index: 200;
+      min-width: 120px;
+    }
+
+    .pp-message-menu button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 8px 12px;
+      border: none;
+      background: transparent;
+      color: ${colors.text};
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 4px;
+      text-align: left;
+    }
+
+    .pp-message-menu button:hover {
+      background: ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'};
+    }
+
+    .pp-message-menu button svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .pp-menu-delete {
+      color: #ef4444 !important;
+    }
+
+    /* Edit Modal */
+    .pp-edit-modal {
+      position: absolute;
+      bottom: 80px;
+      left: 12px;
+      right: 12px;
+      background: ${colors.bg};
+      border: 1px solid ${colors.border};
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      z-index: 150;
+      overflow: hidden;
+    }
+
+    .pp-edit-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid ${colors.border};
+      font-weight: 500;
+    }
+
+    .pp-edit-header button {
+      background: transparent;
+      border: none;
+      color: ${colors.textSecondary};
+      cursor: pointer;
+      padding: 4px;
+    }
+
+    .pp-edit-header button svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .pp-edit-input {
+      width: 100%;
+      padding: 12px 16px;
+      border: none;
+      background: transparent;
+      color: ${colors.text};
+      font-size: 14px;
+      resize: none;
+      min-height: 80px;
+      outline: none;
+    }
+
+    .pp-edit-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid ${colors.border};
+    }
+
+    .pp-edit-cancel {
+      padding: 8px 16px;
+      border: 1px solid ${colors.border};
+      border-radius: 6px;
+      background: transparent;
+      color: ${colors.text};
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .pp-edit-save {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      background: ${primaryColor};
+      color: white;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .pp-edit-save:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Reply Preview */
+    .pp-reply-preview {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'};
+      border-top: 1px solid ${colors.border};
+      border-left: 3px solid ${primaryColor};
+    }
+
+    .pp-reply-preview-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .pp-reply-label {
+      display: block;
+      font-size: 11px;
+      color: ${primaryColor};
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+
+    .pp-reply-text {
+      display: block;
+      font-size: 12px;
+      color: ${colors.textSecondary};
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pp-reply-cancel {
+      background: transparent;
+      border: none;
+      color: ${colors.textSecondary};
+      cursor: pointer;
+      padding: 4px;
+      flex-shrink: 0;
+    }
+
+    .pp-reply-cancel svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Reply Quote in Message */
+    .pp-reply-quote {
+      background: ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'};
+      border-left: 2px solid ${primaryColor};
+      padding: 4px 8px;
+      margin-bottom: 6px;
+      border-radius: 0 4px 4px 0;
+      font-size: 12px;
+    }
+
+    .pp-reply-sender {
+      display: block;
+      font-weight: 500;
+      color: ${primaryColor};
+      margin-bottom: 2px;
+    }
+
+    .pp-reply-content {
+      display: block;
+      color: ${colors.textSecondary};
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Deleted Message */
+    .pp-message-deleted {
+      opacity: 0.6;
+    }
+
+    .pp-deleted-content {
+      font-style: italic;
+      color: ${colors.textSecondary};
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .pp-deleted-icon {
+      font-size: 12px;
+    }
+
+    /* Edited Badge */
+    .pp-edited-badge {
+      font-size: 10px;
+      color: ${colors.textSecondary};
+      margin-left: 4px;
+      font-style: italic;
+    }
   `;
 }

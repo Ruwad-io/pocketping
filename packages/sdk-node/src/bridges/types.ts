@@ -2,6 +2,15 @@ import type { PocketPing } from '../pocketping';
 import type { Session, Message, MessageStatus, CustomEvent } from '../types';
 
 /**
+ * Result from sending a message to a bridge.
+ * Contains the bridge-specific message ID for later edit/delete.
+ */
+export interface BridgeMessageResult {
+  /** Bridge-specific message ID */
+  messageId?: string | number;
+}
+
+/**
  * Bridge interface for notification channels.
  * Implement this interface to add support for Telegram, Discord, Slack, etc.
  */
@@ -15,8 +24,14 @@ export interface Bridge {
   /** Called when a new chat session is created */
   onNewSession?(session: Session): void | Promise<void>;
 
-  /** Called when a visitor sends a message */
-  onVisitorMessage?(message: Message, session: Session): void | Promise<void>;
+  /**
+   * Called when a visitor sends a message.
+   * Return the bridge message ID for edit/delete sync.
+   */
+  onVisitorMessage?(
+    message: Message,
+    session: Session
+  ): void | BridgeMessageResult | Promise<void | BridgeMessageResult>;
 
   /** Called when an operator sends a message (for cross-bridge sync) */
   onOperatorMessage?(
@@ -36,6 +51,30 @@ export interface Bridge {
     status: MessageStatus,
     session: Session
   ): void | Promise<void>;
+
+  /**
+   * Called when a visitor edits their message.
+   * @param messageId - The message ID in PocketPing
+   * @param newContent - The new message content
+   * @param bridgeMessageId - The bridge-specific message ID
+   * @returns true if edit succeeded, false otherwise
+   */
+  onMessageEdit?(
+    messageId: string,
+    newContent: string,
+    bridgeMessageId: string | number
+  ): boolean | Promise<boolean>;
+
+  /**
+   * Called when a visitor deletes their message.
+   * @param messageId - The message ID in PocketPing
+   * @param bridgeMessageId - The bridge-specific message ID
+   * @returns true if delete succeeded, false otherwise
+   */
+  onMessageDelete?(
+    messageId: string,
+    bridgeMessageId: string | number
+  ): boolean | Promise<boolean>;
 
   /** Called when a custom event is triggered from the widget */
   onCustomEvent?(event: CustomEvent, session: Session): void | Promise<void>;

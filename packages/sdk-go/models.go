@@ -25,6 +25,49 @@ const (
 	MessageStatusRead      MessageStatus = "read"
 )
 
+// AttachmentStatus represents the upload status of an attachment.
+type AttachmentStatus string
+
+const (
+	AttachmentStatusPending   AttachmentStatus = "pending"
+	AttachmentStatusUploading AttachmentStatus = "uploading"
+	AttachmentStatusReady     AttachmentStatus = "ready"
+	AttachmentStatusFailed    AttachmentStatus = "failed"
+)
+
+// UploadSource represents where an attachment was uploaded from.
+type UploadSource string
+
+const (
+	UploadSourceWidget   UploadSource = "widget"
+	UploadSourceTelegram UploadSource = "telegram"
+	UploadSourceDiscord  UploadSource = "discord"
+	UploadSourceSlack    UploadSource = "slack"
+	UploadSourceAPI      UploadSource = "api"
+)
+
+// Attachment represents a file attachment in a message.
+type Attachment struct {
+	// ID is the unique attachment identifier.
+	ID string `json:"id"`
+	// Filename is the original filename.
+	Filename string `json:"filename"`
+	// MimeType is the MIME type (e.g., 'image/jpeg', 'application/pdf').
+	MimeType string `json:"mimeType"`
+	// Size is the file size in bytes.
+	Size int64 `json:"size"`
+	// URL is the URL to access the file.
+	URL string `json:"url"`
+	// ThumbnailURL is the thumbnail URL (for images/videos).
+	ThumbnailURL string `json:"thumbnailUrl,omitempty"`
+	// Status is the upload status.
+	Status AttachmentStatus `json:"status"`
+	// UploadedFrom is the source of the upload.
+	UploadedFrom UploadSource `json:"uploadedFrom,omitempty"`
+	// BridgeFileID is the external file ID (from Telegram/Discord/Slack).
+	BridgeFileID string `json:"bridgeFileId,omitempty"`
+}
+
 // VersionStatus represents the result of a version check.
 type VersionStatus string
 
@@ -145,11 +188,17 @@ type Message struct {
 	Timestamp time.Time              `json:"timestamp"`
 	ReplyTo   string                 `json:"replyTo,omitempty"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	// Attachments contains file attachments in this message.
+	Attachments []Attachment `json:"attachments,omitempty"`
 
 	// Read receipt fields
 	Status      MessageStatus `json:"status,omitempty"`
 	DeliveredAt *time.Time    `json:"deliveredAt,omitempty"`
 	ReadAt      *time.Time    `json:"readAt,omitempty"`
+
+	// Edit/delete fields
+	EditedAt  *time.Time `json:"editedAt,omitempty"`
+	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
 // TrackedElement represents a tracked element configuration for SaaS auto-tracking.
@@ -196,6 +245,10 @@ type SendMessageRequest struct {
 	Content   string `json:"content"`
 	Sender    Sender `json:"sender"`
 	ReplyTo   string `json:"replyTo,omitempty"`
+	// AttachmentIDs contains IDs of attachments to include with the message.
+	AttachmentIDs []string `json:"attachmentIds,omitempty"`
+	// Attachments contains inline attachments (for operator messages from bridges).
+	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
 // SendMessageResponse is the response after sending a message.
@@ -234,6 +287,43 @@ type ReadRequest struct {
 // ReadResponse is the response after marking messages as read.
 type ReadResponse struct {
 	Updated int `json:"updated"`
+}
+
+// EditMessageRequest is the request to edit a message.
+type EditMessageRequest struct {
+	SessionID string `json:"sessionId"`
+	MessageID string `json:"messageId"`
+	Content   string `json:"content"`
+}
+
+// EditMessageResponse is the response after editing a message.
+type EditMessageResponse struct {
+	Message struct {
+		ID       string    `json:"id"`
+		Content  string    `json:"content"`
+		EditedAt time.Time `json:"editedAt"`
+	} `json:"message"`
+}
+
+// DeleteMessageRequest is the request to delete a message.
+type DeleteMessageRequest struct {
+	SessionID string `json:"sessionId"`
+	MessageID string `json:"messageId"`
+}
+
+// DeleteMessageResponse is the response after deleting a message.
+type DeleteMessageResponse struct {
+	Deleted bool `json:"deleted"`
+}
+
+// BridgeMessageIds holds platform-specific message IDs for edit/delete sync.
+type BridgeMessageIds struct {
+	// TelegramMessageID is the Telegram message ID.
+	TelegramMessageID int64 `json:"telegramMessageId,omitempty"`
+	// DiscordMessageID is the Discord snowflake ID.
+	DiscordMessageID string `json:"discordMessageId,omitempty"`
+	// SlackMessageTS is the Slack message timestamp.
+	SlackMessageTS string `json:"slackMessageTs,omitempty"`
 }
 
 // IdentifyRequest is the request to identify a user.

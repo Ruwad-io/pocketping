@@ -26,6 +26,8 @@ require_relative "pocketping/core"
 module PocketPing
   class Error < StandardError; end
   class SessionNotFoundError < Error; end
+  class MessageNotFoundError < Error; end
+  class UnauthorizedError < Error; end
   class InvalidRequestError < Error; end
   class ValidationError < Error; end
 

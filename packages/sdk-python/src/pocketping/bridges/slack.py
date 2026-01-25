@@ -1,471 +1,554 @@
-"""Slack bridge for PocketPing."""
+"""Slack bridge for PocketPing using httpx."""
 
-import asyncio
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
+
+import httpx
 
 from pocketping.bridges.base import Bridge
-from pocketping.models import Message, Sender, Session
+from pocketping.models import BridgeMessageResult, Message, MessageStatus, Sender, Session
 
 if TYPE_CHECKING:
     from pocketping.core import PocketPing
 
 
 class SlackBridge(Bridge):
-    """Slack notification bridge.
+    """Slack notification bridge using httpx.
 
-    Receives notifications in Slack and can reply directly using Slack's thread replies.
+    Supports two modes:
+    1. Webhook mode: Simple, no authentication needed, send-only
+    2. Bot mode: Full API access with bot token, can edit/delete messages
 
-    Usage:
+    Webhook mode (recommended for simple notifications):
         from pocketping import PocketPing
-        from pocketping.bridges.slack import SlackBridge
+        from pocketping.bridges import SlackBridge
 
         pp = PocketPing(
             bridges=[
                 SlackBridge(
+                    webhook_url="https://hooks.slack.com/services/T.../B.../xxx",
+                    username="PocketPing",  # Optional custom username
+                    icon_emoji=":robot_face:",  # Optional custom emoji
+                )
+            ]
+        )
+
+    Bot mode (for full functionality):
+        pp = PocketPing(
+            bridges=[
+                SlackBridge(
                     bot_token="xoxb-your-bot-token",
-                    app_token="xapp-your-app-token",  # For Socket Mode
                     channel_id="C0123456789",
                 )
             ]
         )
 
-    Setup:
-        1. Create a Slack app at https://api.slack.com/apps
-        2. Enable Socket Mode and get an App-Level Token (xapp-...)
-        3. Add bot scopes: chat:write, channels:history, channels:read
-        4. Install to workspace and get Bot Token (xoxb-...)
-        5. Invite bot to the channel
+    Setup (Webhook mode):
+        1. Go to https://api.slack.com/apps
+        2. Create a new app or select existing
+        3. Go to "Incoming Webhooks" and activate
+        4. Add a new webhook to your workspace
+        5. Copy the webhook URL
+
+    Setup (Bot mode):
+        1. Go to https://api.slack.com/apps
+        2. Create a new app
+        3. Go to "OAuth & Permissions"
+        4. Add scopes: chat:write, chat:write.customize
+        5. Install to workspace and get Bot Token (xoxb-...)
+        6. Invite bot to the channel: /invite @YourBot
+        7. Get channel ID from channel details
     """
 
     def __init__(
         self,
-        bot_token: str,
-        app_token: str,
-        channel_id: str,
-        show_url: bool = True,
+        # Webhook mode
+        webhook_url: str | None = None,
+        *,
+        username: str | None = None,
+        icon_emoji: str | None = None,
+        icon_url: str | None = None,
+        # Bot mode
+        bot_token: str | None = None,
+        channel_id: str | None = None,
     ):
-        self.bot_token = bot_token
-        self.app_token = app_token
-        self.channel_id = channel_id
-        self.show_url = show_url
-        self._pocketping: Optional["PocketPing"] = None
-        self._client = None
-        self._socket_client = None
-        self._session_thread_map: dict[str, str] = {}  # session_id -> thread_ts
-        self._thread_session_map: dict[str, str] = {}  # thread_ts -> session_id
+        """Initialize Slack bridge.
 
-        # Read receipts: track operator message reactions
-        # pocketping_message_id -> (channel_id, message_ts)
-        self._operator_message_map: dict[str, tuple[str, str]] = {}
+        Args:
+            webhook_url: Slack webhook URL (for webhook mode)
+            username: Custom username for messages
+            icon_emoji: Custom emoji for messages (e.g., ":robot_face:")
+            icon_url: Custom icon URL for messages
+            bot_token: Slack bot token (xoxb-...) for bot mode
+            channel_id: Channel ID to send messages to (for bot mode)
+        """
+        # Validate that either webhook or bot mode is configured
+        if webhook_url:
+            self._mode = "webhook"
+            self._webhook_url = webhook_url
+        elif bot_token and channel_id:
+            self._mode = "bot"
+            self._bot_token = bot_token
+            self._channel_id = channel_id
+        else:
+            raise ValueError(
+                "Either webhook_url or (bot_token + channel_id) must be provided"
+            )
+
+        self._username = username
+        self._icon_emoji = icon_emoji
+        self._icon_url = icon_url
+        self._client: httpx.AsyncClient | None = None
+        self._pocketping: "PocketPing | None" = None
+
+        # Base URL for Slack API
+        self._api_base = "https://slack.com/api"
 
     @property
     def name(self) -> str:
         return "slack"
 
     async def init(self, pocketping: "PocketPing") -> None:
+        """Initialize the bridge with an httpx client."""
         self._pocketping = pocketping
 
-        try:
-            from slack_sdk.socket_mode.aiohttp import SocketModeClient
-            from slack_sdk.socket_mode.request import SocketModeRequest
-            from slack_sdk.socket_mode.response import SocketModeResponse
-            from slack_sdk.web.async_client import AsyncWebClient
-        except ImportError:
-            raise ImportError("slack-sdk required. Install with: pip install pocketping[slack]")
+        headers = {"Content-Type": "application/json"}
+        if self._mode == "bot":
+            headers["Authorization"] = f"Bearer {self._bot_token}"
 
-        self._client = AsyncWebClient(token=self.bot_token)
-        self._socket_client = SocketModeClient(
-            app_token=self.app_token,
-            web_client=self._client,
+        self._client = httpx.AsyncClient(
+            timeout=30.0,
+            headers=headers,
         )
 
-        # Handle message events
-        async def handle_socket_event(client: SocketModeClient, req: SocketModeRequest):
-            if req.type == "events_api":
-                # Acknowledge the event
-                response = SocketModeResponse(envelope_id=req.envelope_id)
-                await client.send_socket_mode_response(response)
+    async def _webhook_request(self, payload: dict) -> bool:
+        """Send a message via webhook.
 
-                event = req.payload.get("event", {})
+        Args:
+            payload: Message payload
 
-                if event.get("type") == "message" and not event.get("bot_id"):
-                    await self._handle_message_event(event)
-
-                elif event.get("type") == "app_mention":
-                    await self._handle_mention(event)
-
-            elif req.type == "slash_commands":
-                response = SocketModeResponse(envelope_id=req.envelope_id)
-                await client.send_socket_mode_response(response)
-                await self._handle_slash_command(req.payload)
-
-        self._socket_client.socket_mode_request_listeners.append(handle_socket_event)
-
-        # Start socket mode
-        asyncio.create_task(self._socket_client.connect())
-
-        # Send startup message
-        await self._client.chat_postMessage(
-            channel=self.channel_id,
-            blocks=[
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": (
-                            "🔔 *PocketPing Connected*\n\n"
-                            "*Commands (mention me):*\n"
-                            "• `@PocketPing online` - Mark yourself as available\n"
-                            "• `@PocketPing offline` - Mark yourself as away\n"
-                            "• `@PocketPing status` - View current status\n\n"
-                            "_Reply in thread to respond to users._"
-                        ),
-                    },
-                }
-            ],
-        )
-
-    async def _handle_message_event(self, event: dict) -> None:
-        """Handle incoming messages (thread replies)."""
-        if not self._pocketping:
-            return
-
-        thread_ts = event.get("thread_ts")
-        if not thread_ts:
-            return  # Not a thread reply
-
-        session_id = self._thread_session_map.get(thread_ts)
-        if not session_id:
-            return  # Not a tracked thread
-
-        text = event.get("text", "")
-        if not text:
-            return
-
-        # Get operator name from user ID
-        user_id = event.get("user")
-        operator_name = None
-        if user_id:
-            try:
-                user_info = await self._client.users_info(user=user_id)
-                if user_info.get("ok"):
-                    operator_name = user_info["user"].get("real_name") or user_info["user"].get("name")
-            except Exception:
-                pass
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._client:
+            print("[PocketPing] Slack bridge not initialized")
+            return False
 
         try:
-            pp_message = await self._pocketping.send_operator_message(
-                session_id,
-                text,
-                source_bridge=self.name,
-                operator_name=operator_name,
-            )
-            self._pocketping.set_operator_online(True)
+            response = await self._client.post(self._webhook_url, json=payload)
 
-            # Track message for read receipts
-            msg_ts = event.get("ts")
-            if msg_ts:
-                self._operator_message_map[pp_message.id] = (self.channel_id, msg_ts)
+            if response.status_code != 200:
+                print(f"[PocketPing] Slack webhook error: {response.status_code} - {response.text}")
+                return False
 
-            # React to confirm (sent)
-            await self._client.reactions_add(
-                channel=self.channel_id,
-                name="white_check_mark",
-                timestamp=msg_ts,
-            )
+            # Slack webhooks return "ok" as text on success
+            return response.text == "ok"
+        except httpx.HTTPError as e:
+            print(f"[PocketPing] Slack HTTP error: {e}")
+            return False
         except Exception as e:
-            await self._client.chat_postMessage(
-                channel=self.channel_id,
-                thread_ts=thread_ts,
-                text=f"❌ Failed to send: {e}",
-            )
+            print(f"[PocketPing] Slack error: {e}")
+            return False
 
-    async def _handle_mention(self, event: dict) -> None:
-        """Handle @mentions for commands."""
-        if not self._pocketping:
-            return
+    async def _api_request(
+        self,
+        method: str,
+        **params,
+    ) -> dict | None:
+        """Make a request to the Slack API.
 
-        text = event.get("text", "").lower()
+        Args:
+            method: API method name (e.g., "chat.postMessage")
+            **params: Parameters to send with the request
 
-        if "online" in text:
-            self._pocketping.set_operator_online(True)
-            await self._client.chat_postMessage(
-                channel=self.channel_id,
-                text="✅ You're now online. Users will see you as available.",
-            )
-        elif "offline" in text:
-            self._pocketping.set_operator_online(False)
-            await self._client.chat_postMessage(
-                channel=self.channel_id,
-                text="🌙 You're now offline. AI will handle conversations if configured.",
-            )
-        elif "status" in text:
-            online = self._pocketping.is_operator_online()
-            status = "🟢 Online" if online else "🔴 Offline"
-            await self._client.chat_postMessage(
-                channel=self.channel_id,
-                text=f"📊 *Status*: {status}",
-            )
+        Returns:
+            API response as dict, or None on error
+        """
+        if not self._client:
+            print("[PocketPing] Slack bridge not initialized")
+            return None
 
-    async def _handle_slash_command(self, payload: dict) -> None:
-        """Handle slash commands."""
-        # You can add custom slash commands here
-        pass
+        url = f"{self._api_base}/{method}"
+
+        try:
+            response = await self._client.post(url, json=params)
+            data = response.json()
+
+            if not data.get("ok"):
+                error = data.get("error", "Unknown error")
+                print(f"[PocketPing] Slack API error: {error}")
+                return None
+
+            return data
+        except httpx.HTTPError as e:
+            print(f"[PocketPing] Slack HTTP error: {e}")
+            return None
+        except Exception as e:
+            print(f"[PocketPing] Slack error: {e}")
+            return None
+
+    async def _send_message(
+        self,
+        text: str | None = None,
+        *,
+        blocks: list[dict] | None = None,
+        thread_ts: str | None = None,
+    ) -> dict | None:
+        """Send a message to Slack.
+
+        Args:
+            text: Plain text message (fallback)
+            blocks: Block Kit blocks
+            thread_ts: Thread timestamp to reply in
+
+        Returns:
+            API response with message details, or None on error
+        """
+        payload: dict = {}
+
+        if text:
+            payload["text"] = text
+        if blocks:
+            payload["blocks"] = blocks
+
+        # Add common options
+        if self._username:
+            payload["username"] = self._username
+        if self._icon_emoji:
+            payload["icon_emoji"] = self._icon_emoji
+        if self._icon_url:
+            payload["icon_url"] = self._icon_url
+
+        if self._mode == "webhook":
+            success = await self._webhook_request(payload)
+            # Webhooks don't return message ID
+            return {"ok": success} if success else None
+        else:
+            payload["channel"] = self._channel_id
+            if thread_ts:
+                payload["thread_ts"] = thread_ts
+            return await self._api_request("chat.postMessage", **payload)
+
+    async def _update_message(
+        self,
+        ts: str,
+        text: str | None = None,
+        *,
+        blocks: list[dict] | None = None,
+    ) -> dict | None:
+        """Update a message (bot mode only).
+
+        Args:
+            ts: Message timestamp to update
+            text: New plain text message
+            blocks: New Block Kit blocks
+
+        Returns:
+            API response, or None on error
+        """
+        if self._mode != "bot":
+            print("[PocketPing] Slack: Message update only available in bot mode")
+            return None
+
+        params: dict = {
+            "channel": self._channel_id,
+            "ts": ts,
+        }
+
+        if text:
+            params["text"] = text
+        if blocks:
+            params["blocks"] = blocks
+
+        return await self._api_request("chat.update", **params)
+
+    async def _delete_message(self, ts: str) -> bool:
+        """Delete a message (bot mode only).
+
+        Args:
+            ts: Message timestamp to delete
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if self._mode != "bot":
+            print("[PocketPing] Slack: Message delete only available in bot mode")
+            return False
+
+        result = await self._api_request(
+            "chat.delete",
+            channel=self._channel_id,
+            ts=ts,
+        )
+        return result is not None
+
+    def _create_section_block(
+        self,
+        text: str,
+        *,
+        markdown: bool = True,
+    ) -> dict:
+        """Create a section block.
+
+        Args:
+            text: Block text
+            markdown: Use markdown formatting
+
+        Returns:
+            Section block dict
+        """
+        return {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn" if markdown else "plain_text",
+                "text": text,
+            },
+        }
+
+    def _create_header_block(self, text: str) -> dict:
+        """Create a header block.
+
+        Args:
+            text: Header text
+
+        Returns:
+            Header block dict
+        """
+        return {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": text,
+                "emoji": True,
+            },
+        }
+
+    def _create_context_block(self, elements: list[str]) -> dict:
+        """Create a context block.
+
+        Args:
+            elements: List of text elements
+
+        Returns:
+            Context block dict
+        """
+        return {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": el}
+                for el in elements
+            ],
+        }
+
+    def _create_divider_block(self) -> dict:
+        """Create a divider block."""
+        return {"type": "divider"}
 
     async def on_new_session(self, session: Session) -> None:
-        if not self._client:
-            return
+        """Send notification for new chat session."""
+        visitor_display = session.visitor_id[:8]
+        if session.identity:
+            if session.identity.name:
+                visitor_display = session.identity.name
+            elif session.identity.email:
+                visitor_display = session.identity.email
 
-        fields = [
-            {
-                "type": "mrkdwn",
-                "text": f"*Session*\n`{session.id[:8]}...`",
-            }
+        blocks = [
+            self._create_header_block("New chat session"),
+            self._create_section_block(f"*Visitor:* {visitor_display}"),
         ]
 
-        if self.show_url and session.metadata and session.metadata.url:
-            fields.append(
-                {
-                    "type": "mrkdwn",
-                    "text": f"*📍 Page*\n{session.metadata.url}",
-                }
+        if session.metadata and session.metadata.url:
+            blocks.append(
+                self._create_section_block(f"*Page:* {session.metadata.url}")
             )
 
-        if self.show_metadata and session.metadata:
-            meta = session.metadata
-            if meta.referrer:
-                fields.append(
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*↩️ From*\n{meta.referrer}",
-                    }
-                )
-            if meta.ip:
-                fields.append(
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*🌐 IP*\n`{meta.ip}`",
-                    }
-                )
-            if meta.device_type or meta.browser or meta.os:
-                device_parts = [p for p in [meta.device_type, meta.browser, meta.os] if p]
-                device_str = " • ".join(p.title() if p == meta.device_type else p for p in device_parts)
-                fields.append(
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*💻 Device*\n{device_str}",
-                    }
-                )
-            if meta.language:
-                fields.append(
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*🌍 Language*\n{meta.language}",
-                    }
-                )
-            if meta.timezone:
-                fields.append(
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*🕐 Timezone*\n{meta.timezone}",
-                    }
-                )
-
-        result = await self._client.chat_postMessage(
-            channel=self.channel_id,
-            blocks=[
-                {
-                    "type": "header",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "🆕 New Visitor",
-                    },
-                },
-                {
-                    "type": "section",
-                    "fields": fields,
-                },
-                {
-                    "type": "context",
-                    "elements": [
-                        {
-                            "type": "mrkdwn",
-                            "text": "_Reply in this thread to respond to the user_",
-                        }
-                    ],
-                },
-            ],
+        await self._send_message(
+            text=f"New chat session from {visitor_display}",
+            blocks=blocks,
         )
 
-        thread_ts = result.get("ts")
-        if thread_ts:
-            self._session_thread_map[session.id] = thread_ts
-            self._thread_session_map[thread_ts] = session.id
+    async def on_visitor_message(
+        self, message: Message, session: Session
+    ) -> BridgeMessageResult | None:
+        """Send visitor message to Slack.
 
-    async def on_message(self, message: Message, session: Session) -> None:
-        if message.sender != Sender.VISITOR or not self._client:
+        Returns:
+            BridgeMessageResult with the Slack message timestamp
+        """
+        if message.sender != Sender.VISITOR:
+            return None
+
+        visitor_display = session.visitor_id[:8]
+        if session.identity:
+            if session.identity.name:
+                visitor_display = session.identity.name
+            elif session.identity.email:
+                visitor_display = session.identity.email
+
+        blocks = [
+            self._create_section_block(message.content),
+            self._create_context_block([f"From: {visitor_display}"]),
+        ]
+
+        result = await self._send_message(
+            text=f"{visitor_display}: {message.content}",
+            blocks=blocks,
+        )
+
+        if result and "ts" in result:
+            return BridgeMessageResult(message_id=result["ts"])
+
+        return BridgeMessageResult()
+
+    async def on_message_edit(
+        self,
+        message: Message,
+        session: Session,
+        platform_message_id: str | int | None = None,
+    ) -> None:
+        """Edit a message on Slack (bot mode only)."""
+        if not platform_message_id:
+            print("[PocketPing] Slack: Cannot edit message without platform_message_id")
             return
 
-        thread_ts = self._session_thread_map.get(session.id)
+        if self._mode != "bot":
+            print("[PocketPing] Slack: Message edit only available in bot mode")
+            return
 
-        text = f"💬 *Message*\n\n{message.content}"
+        visitor_display = session.visitor_id[:8]
+        if session.identity:
+            if session.identity.name:
+                visitor_display = session.identity.name
+            elif session.identity.email:
+                visitor_display = session.identity.email
 
-        if not thread_ts:
-            # Create new thread for this session
-            result = await self._client.chat_postMessage(
-                channel=self.channel_id,
-                blocks=[
-                    {
-                        "type": "section",
-                        "text": {"type": "mrkdwn", "text": text},
-                    },
-                    {
-                        "type": "context",
-                        "elements": [
-                            {
-                                "type": "mrkdwn",
-                                "text": f"_Session: `{session.id[:8]}...`_",
-                            }
-                        ],
-                    },
-                ],
-            )
-            thread_ts = result.get("ts")
-            if thread_ts:
-                self._session_thread_map[session.id] = thread_ts
-                self._thread_session_map[thread_ts] = session.id
-        else:
-            # Reply in existing thread
-            await self._client.chat_postMessage(
-                channel=self.channel_id,
-                thread_ts=thread_ts,
-                text=message.content,
-            )
+        blocks = [
+            self._create_section_block(f"{message.content}\n_(edited)_"),
+            self._create_context_block([f"From: {visitor_display}"]),
+        ]
+
+        await self._update_message(
+            str(platform_message_id),
+            text=f"{visitor_display}: {message.content} (edited)",
+            blocks=blocks,
+        )
+
+    async def on_message_delete(
+        self,
+        message: Message,
+        session: Session,
+        platform_message_id: str | int | None = None,
+    ) -> None:
+        """Delete a message on Slack (bot mode only)."""
+        if not platform_message_id:
+            print("[PocketPing] Slack: Cannot delete message without platform_message_id")
+            return
+
+        if self._mode != "bot":
+            print("[PocketPing] Slack: Message delete only available in bot mode")
+            return
+
+        await self._delete_message(str(platform_message_id))
+
+    async def on_typing(self, session_id: str, is_typing: bool) -> None:
+        """Handle typing indicator (Slack doesn't support this for bots)."""
+        # Slack doesn't have a typing indicator API for bots
+        pass
 
     async def on_ai_takeover(self, session: Session, reason: str) -> None:
-        if not self._client:
-            return
+        """Notify when AI takes over a conversation."""
+        blocks = [
+            self._create_header_block("AI Takeover"),
+            self._create_section_block(
+                f"*Session:* `{session.id[:8]}`\n*Reason:* {reason}"
+            ),
+        ]
 
-        thread_ts = self._session_thread_map.get(session.id)
-
-        await self._client.chat_postMessage(
-            channel=self.channel_id,
-            thread_ts=thread_ts,
-            blocks=[
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"🤖 *AI Takeover*\nSession: `{session.id[:8]}...`\nReason: {reason}",
-                    },
-                }
-            ],
+        await self._send_message(
+            text=f"AI Takeover - Session: {session.id[:8]} - Reason: {reason}",
+            blocks=blocks,
         )
 
     async def on_operator_message(
         self,
         message: Message,
         session: Session,
-        source_bridge: str,
+        source_bridge: str | None = None,
         operator_name: str | None = None,
     ) -> None:
         """Show operator messages from other bridges (cross-bridge sync)."""
         # Skip if message is from this bridge
-        if source_bridge == self.name or not self._client:
+        if source_bridge == self.name:
             return
 
-        thread_ts = self._session_thread_map.get(session.id)
-        if not thread_ts:
-            return
-
-        # Format the synced message
-        bridge_emoji = {"telegram": ":airplane:", "discord": ":video_game:", "api": ":electric_plug:"}.get(
-            source_bridge, ":incoming_envelope:"
-        )
         name = operator_name or "Operator"
+        source_text = f" via {source_bridge}" if source_bridge else ""
 
-        await self._client.chat_postMessage(
-            channel=self.channel_id,
-            thread_ts=thread_ts,
-            blocks=[
-                {
-                    "type": "context",
-                    "elements": [
-                        {
-                            "type": "mrkdwn",
-                            "text": f"{bridge_emoji} *{name}* _via {source_bridge}_",
-                        }
-                    ],
-                },
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": message.content,
-                    },
-                },
-            ],
+        blocks = [
+            self._create_section_block(message.content),
+            self._create_context_block([f"{name}{source_text}"]),
+        ]
+
+        await self._send_message(
+            text=f"{name}{source_text}: {message.content}",
+            blocks=blocks,
         )
 
     async def on_message_read(
         self,
         session_id: str,
         message_ids: list[str],
-        status: str,
+        status: MessageStatus,
         session: Session,
     ) -> None:
-        """Update message reactions based on read receipt status.
+        """Handle read receipts (no-op for Slack in this implementation)."""
+        # Slack doesn't have a built-in way to show read receipts
+        # This could be extended to use reactions if in bot mode
+        pass
 
-        Status indicators:
-        - ✅ (white_check_mark) = sent (default)
-        - ☑️ (ballot_box_with_check) = delivered to widget
-        - 👁️ (eyes) = read by visitor
-        """
-        if not self._client:
+    async def on_custom_event(self, event, session: Session) -> None:
+        """Handle custom events."""
+        blocks = [
+            self._create_header_block("Custom Event"),
+            self._create_section_block(
+                f"*Event:* {event.name}\n*Session:* `{session.id[:8]}`"
+            ),
+        ]
+
+        if event.data:
+            blocks.append(
+                self._create_section_block(f"```{event.data}```")
+            )
+
+        await self._send_message(
+            text=f"Custom Event: {event.name}",
+            blocks=blocks,
+        )
+
+    async def on_identity_update(self, session: Session) -> None:
+        """Handle identity updates."""
+        if not session.identity:
             return
 
-        # Map status to Slack reaction names
-        status_reactions = {
-            "delivered": "ballot_box_with_check",
-            "read": "eyes",
-        }
+        parts = []
+        if session.identity.name:
+            parts.append(f"*Name:* {session.identity.name}")
+        if session.identity.email:
+            parts.append(f"*Email:* {session.identity.email}")
+        parts.append(f"*Session:* `{session.id[:8]}`")
 
-        reaction = status_reactions.get(status)
-        if not reaction:
-            return
+        blocks = [
+            self._create_header_block("Identity Updated"),
+            self._create_section_block("\n".join(parts)),
+        ]
 
-        for message_id in message_ids:
-            mapping = self._operator_message_map.get(message_id)
-            if not mapping:
-                continue
-
-            channel_id, msg_ts = mapping
-
-            try:
-                # Remove old reaction
-                try:
-                    await self._client.reactions_remove(
-                        channel=channel_id,
-                        name="white_check_mark",
-                        timestamp=msg_ts,
-                    )
-                except Exception:
-                    pass  # Reaction may already be removed
-
-                # Add new reaction
-                await self._client.reactions_add(
-                    channel=channel_id,
-                    name=reaction,
-                    timestamp=msg_ts,
-                )
-            except Exception:
-                # Reaction update may fail (permissions, message deleted, etc.)
-                pass
-
-            # Clean up read messages from tracking
-            if status == "read":
-                self._operator_message_map.pop(message_id, None)
+        await self._send_message(
+            text="Identity Updated",
+            blocks=blocks,
+        )
 
     async def destroy(self) -> None:
-        if self._socket_client:
-            await self._socket_client.close()
+        """Close the httpx client."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None

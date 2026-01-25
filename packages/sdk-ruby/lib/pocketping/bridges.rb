@@ -246,3 +246,8 @@ module PocketPing
     end
   end
 end
+
+# Require bridge implementations after Base class is defined
+require_relative "bridges/telegram_bridge"
+require_relative "bridges/discord_bridge"
+require_relative "bridges/slack_bridge"

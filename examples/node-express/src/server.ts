@@ -1,8 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
-import { PocketPing } from '@pocketping/sdk';
-import { TelegramBridge } from '@pocketping/bridge-telegram';
+import { PocketPing, TelegramBridge } from '@pocketping/sdk-node';
 
 const app = express();
 const server = createServer(app);

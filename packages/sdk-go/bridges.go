@@ -2,6 +2,7 @@ package pocketping
 
 import (
 	"context"
+	"time"
 )
 
 // Bridge is the interface for notification bridges.
@@ -38,6 +39,29 @@ type Bridge interface {
 
 	// Destroy is called for cleanup when the bridge is removed.
 	Destroy(ctx context.Context) error
+}
+
+// BridgeWithEditDelete extends Bridge with edit/delete support.
+// Implement this interface to support direct message editing/deletion in the platform.
+type BridgeWithEditDelete interface {
+	Bridge
+
+	// OnMessageEdit is called when a message is edited.
+	// Returns BridgeMessageResult with the platform-specific message ID.
+	OnMessageEdit(ctx context.Context, sessionID, messageID, content string, editedAt time.Time) (*BridgeMessageResult, error)
+
+	// OnMessageDelete is called when a message is deleted.
+	OnMessageDelete(ctx context.Context, sessionID, messageID string, deletedAt time.Time) error
+}
+
+// BridgeMessageResult contains the result of a bridge operation.
+type BridgeMessageResult struct {
+	// TelegramMessageID is the Telegram message ID.
+	TelegramMessageID int64 `json:"telegramMessageId,omitempty"`
+	// DiscordMessageID is the Discord snowflake ID.
+	DiscordMessageID string `json:"discordMessageId,omitempty"`
+	// SlackMessageTS is the Slack message timestamp.
+	SlackMessageTS string `json:"slackMessageTs,omitempty"`
 }
 
 // BaseBridge provides a default implementation of the Bridge interface.

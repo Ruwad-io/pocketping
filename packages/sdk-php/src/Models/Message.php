@@ -11,6 +11,7 @@ final class Message implements \JsonSerializable
 {
     /**
      * @param array<string, mixed>|null $messageMetadata Additional message metadata
+     * @param list<Attachment>|null $attachments File attachments in this message
      */
     public function __construct(
         public readonly string $id,
@@ -20,9 +21,12 @@ final class Message implements \JsonSerializable
         public \DateTimeImmutable $timestamp,
         public readonly ?string $replyTo = null,
         public readonly ?array $messageMetadata = null,
+        public readonly ?array $attachments = null,
         public MessageStatus $status = MessageStatus::SENT,
         public ?\DateTimeImmutable $deliveredAt = null,
         public ?\DateTimeImmutable $readAt = null,
+        public ?\DateTimeImmutable $editedAt = null,
+        public ?\DateTimeImmutable $deletedAt = null,
     ) {
     }
 
@@ -58,6 +62,15 @@ final class Message implements \JsonSerializable
                 : \DateTimeImmutable::createFromInterface($data['readAt']);
         }
 
+        // Parse attachments
+        $attachments = null;
+        if (isset($data['attachments']) && is_array($data['attachments'])) {
+            $attachments = array_map(
+                fn ($att) => is_array($att) ? Attachment::fromArray($att) : $att,
+                $data['attachments']
+            );
+        }
+
         return new self(
             id: (string) $id,
             sessionId: (string) $sessionId,
@@ -66,11 +79,22 @@ final class Message implements \JsonSerializable
             timestamp: $timestamp,
             replyTo: isset($data['replyTo']) ? (string) $data['replyTo'] : null,
             messageMetadata: $data['metadata'] ?? null,
+            attachments: $attachments,
             status: isset($data['status'])
                 ? (is_string($data['status']) ? MessageStatus::from($data['status']) : $data['status'])
                 : MessageStatus::SENT,
             deliveredAt: $deliveredAt,
             readAt: $readAt,
+            editedAt: isset($data['editedAt'])
+                ? (is_string($data['editedAt'])
+                    ? new \DateTimeImmutable($data['editedAt'])
+                    : \DateTimeImmutable::createFromInterface($data['editedAt']))
+                : null,
+            deletedAt: isset($data['deletedAt'])
+                ? (is_string($data['deletedAt'])
+                    ? new \DateTimeImmutable($data['deletedAt'])
+                    : \DateTimeImmutable::createFromInterface($data['deletedAt']))
+                : null,
         );
     }
 
@@ -96,12 +120,27 @@ final class Message implements \JsonSerializable
             $data['metadata'] = $this->messageMetadata;
         }
 
+        if ($this->attachments !== null) {
+            $data['attachments'] = array_map(
+                fn ($att) => $att instanceof Attachment ? $att->toArray() : $att,
+                $this->attachments
+            );
+        }
+
         if ($this->deliveredAt !== null) {
             $data['deliveredAt'] = $this->deliveredAt->format(\DateTimeInterface::ATOM);
         }
 
         if ($this->readAt !== null) {
             $data['readAt'] = $this->readAt->format(\DateTimeInterface::ATOM);
+        }
+
+        if ($this->editedAt !== null) {
+            $data['editedAt'] = $this->editedAt->format(\DateTimeInterface::ATOM);
+        }
+
+        if ($this->deletedAt !== null) {
+            $data['deletedAt'] = $this->deletedAt->format(\DateTimeInterface::ATOM);
         }
 
         return $data;

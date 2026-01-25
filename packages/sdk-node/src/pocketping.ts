@@ -19,6 +19,10 @@ import type {
   ReadResponse,
   IdentifyRequest,
   IdentifyResponse,
+  EditMessageRequest,
+  EditMessageResponse,
+  DeleteMessageRequest,
+  DeleteMessageResponse,
   CustomEvent,
   CustomEventHandler,
   WebhookPayload,
@@ -272,6 +276,12 @@ export class PocketPing {
             break;
           case 'identify':
             result = await this.handleIdentify(body as IdentifyRequest);
+            break;
+          case 'edit':
+            result = await this.handleEditMessage(body as EditMessageRequest);
+            break;
+          case 'delete':
+            result = await this.handleDeleteMessage(body as DeleteMessageRequest);
             break;
           default:
             if (next) {
@@ -693,6 +703,132 @@ export class PocketPing {
   }
 
   // ─────────────────────────────────────────────────────────────────
+  // Message Edit/Delete
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Handle message edit from widget
+   * Only the message sender can edit their own messages
+   */
+  async handleEditMessage(request: EditMessageRequest): Promise<EditMessageResponse> {
+    const session = await this.storage.getSession(request.sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    const message = await this.storage.getMessage(request.messageId);
+    if (!message) {
+      throw new Error('Message not found');
+    }
+
+    if (message.sessionId !== request.sessionId) {
+      throw new Error('Message does not belong to this session');
+    }
+
+    if (message.deletedAt) {
+      throw new Error('Cannot edit deleted message');
+    }
+
+    // Only visitor messages can be edited from widget
+    if (message.sender !== 'visitor') {
+      throw new Error('Cannot edit this message');
+    }
+
+    // Validate content
+    if (!request.content || request.content.trim().length === 0) {
+      throw new Error('Content is required');
+    }
+
+    if (request.content.length > 4000) {
+      throw new Error('Content exceeds maximum length');
+    }
+
+    // Update message
+    message.content = request.content.trim();
+    message.editedAt = new Date();
+
+    if (this.storage.updateMessage) {
+      await this.storage.updateMessage(message);
+    } else {
+      // Fallback: save message again
+      await this.storage.saveMessage(message);
+    }
+
+    // Sync edit to bridges
+    await this.syncEditToBridges(message.id, message.content);
+
+    // Broadcast to WebSocket clients
+    this.broadcastToSession(request.sessionId, {
+      type: 'message_edited',
+      data: {
+        messageId: message.id,
+        content: message.content,
+        editedAt: message.editedAt.toISOString(),
+      },
+    });
+
+    return {
+      message: {
+        id: message.id,
+        content: message.content,
+        editedAt: message.editedAt.toISOString(),
+      },
+    };
+  }
+
+  /**
+   * Handle message delete from widget
+   * Only the message sender can delete their own messages
+   */
+  async handleDeleteMessage(request: DeleteMessageRequest): Promise<DeleteMessageResponse> {
+    const session = await this.storage.getSession(request.sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    const message = await this.storage.getMessage(request.messageId);
+    if (!message) {
+      throw new Error('Message not found');
+    }
+
+    if (message.sessionId !== request.sessionId) {
+      throw new Error('Message does not belong to this session');
+    }
+
+    if (message.deletedAt) {
+      throw new Error('Message already deleted');
+    }
+
+    // Only visitor messages can be deleted from widget
+    if (message.sender !== 'visitor') {
+      throw new Error('Cannot delete this message');
+    }
+
+    // Sync delete to bridges BEFORE soft delete (need bridge IDs)
+    await this.syncDeleteToBridges(message.id);
+
+    // Soft delete message
+    message.deletedAt = new Date();
+
+    if (this.storage.updateMessage) {
+      await this.storage.updateMessage(message);
+    } else {
+      await this.storage.saveMessage(message);
+    }
+
+    // Broadcast to WebSocket clients
+    this.broadcastToSession(request.sessionId, {
+      type: 'message_deleted',
+      data: {
+        messageId: message.id,
+        deletedAt: message.deletedAt.toISOString(),
+      },
+    });
+
+    return { deleted: true };
+  }
+
+  // ─────────────────────────────────────────────────────────────────
   // Operator Actions (for bridges)
   // ─────────────────────────────────────────────────────────────────
 
@@ -857,9 +993,25 @@ export class PocketPing {
           case 'new_session':
             await bridge.onNewSession?.(args[0] as Session);
             break;
-          case 'message':
-            await bridge.onVisitorMessage?.(args[0] as Message, args[1] as Session);
+          case 'message': {
+            const message = args[0] as Message;
+            const session = args[1] as Session;
+            const result = await bridge.onVisitorMessage?.(message, session);
+
+            // Save bridge message ID if returned and storage supports it
+            if (result?.messageId && this.storage.saveBridgeMessageIds) {
+              const bridgeIds: Record<string, unknown> = {};
+              if (bridge.name === 'telegram') {
+                bridgeIds.telegramMessageId = result.messageId;
+              } else if (bridge.name === 'discord') {
+                bridgeIds.discordMessageId = result.messageId;
+              } else if (bridge.name === 'slack') {
+                bridgeIds.slackMessageTs = result.messageId;
+              }
+              await this.storage.saveBridgeMessageIds(message.id, bridgeIds as import('./storage/types').BridgeMessageIds);
+            }
             break;
+          }
         }
       } catch (err) {
         console.error(`[PocketPing] Bridge ${bridge.name} error:`, err);
@@ -898,6 +1050,79 @@ export class PocketPing {
         await bridge.onIdentityUpdate?.(session);
       } catch (err) {
         console.error(`[PocketPing] Bridge ${bridge.name} identity notification error:`, err);
+      }
+    }
+  }
+
+  /**
+   * Sync message edit to all bridges that support it
+   */
+  private async syncEditToBridges(messageId: string, newContent: string): Promise<void> {
+    if (!this.storage.getBridgeMessageIds) {
+      return; // Storage doesn't support bridge message IDs
+    }
+
+    const bridgeIds = await this.storage.getBridgeMessageIds(messageId);
+    if (!bridgeIds) {
+      return;
+    }
+
+    for (const bridge of this.bridges) {
+      if (!bridge.onMessageEdit) continue;
+
+      try {
+        let bridgeMessageId: string | number | undefined;
+
+        // Get the bridge-specific message ID
+        if (bridge.name === 'telegram' && bridgeIds.telegramMessageId) {
+          bridgeMessageId = bridgeIds.telegramMessageId;
+        } else if (bridge.name === 'discord' && bridgeIds.discordMessageId) {
+          bridgeMessageId = bridgeIds.discordMessageId;
+        } else if (bridge.name === 'slack' && bridgeIds.slackMessageTs) {
+          bridgeMessageId = bridgeIds.slackMessageTs;
+        }
+
+        if (bridgeMessageId) {
+          await bridge.onMessageEdit(messageId, newContent, bridgeMessageId);
+        }
+      } catch (err) {
+        console.error(`[PocketPing] Bridge ${bridge.name} edit sync error:`, err);
+      }
+    }
+  }
+
+  /**
+   * Sync message delete to all bridges that support it
+   */
+  private async syncDeleteToBridges(messageId: string): Promise<void> {
+    if (!this.storage.getBridgeMessageIds) {
+      return;
+    }
+
+    const bridgeIds = await this.storage.getBridgeMessageIds(messageId);
+    if (!bridgeIds) {
+      return;
+    }
+
+    for (const bridge of this.bridges) {
+      if (!bridge.onMessageDelete) continue;
+
+      try {
+        let bridgeMessageId: string | number | undefined;
+
+        if (bridge.name === 'telegram' && bridgeIds.telegramMessageId) {
+          bridgeMessageId = bridgeIds.telegramMessageId;
+        } else if (bridge.name === 'discord' && bridgeIds.discordMessageId) {
+          bridgeMessageId = bridgeIds.discordMessageId;
+        } else if (bridge.name === 'slack' && bridgeIds.slackMessageTs) {
+          bridgeMessageId = bridgeIds.slackMessageTs;
+        }
+
+        if (bridgeMessageId) {
+          await bridge.onMessageDelete(messageId, bridgeMessageId);
+        }
+      } catch (err) {
+        console.error(`[PocketPing] Bridge ${bridge.name} delete sync error:`, err);
       }
     }
   }

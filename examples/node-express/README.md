@@ -40,8 +40,7 @@ Now when someone sends a message through the chat widget, you'll get a Telegram 
 ## Code Overview
 
 ```javascript
-import { PocketPing } from '@pocketping/sdk';
-import { TelegramBridge } from '@pocketping/bridge-telegram';
+import { PocketPing, TelegramBridge } from '@pocketping/sdk-node';
 
 // Initialize PocketPing
 const pp = new PocketPing({

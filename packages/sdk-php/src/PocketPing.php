@@ -5,9 +5,15 @@ declare(strict_types=1);
 namespace PocketPing;
 
 use PocketPing\Bridges\BridgeInterface;
+use PocketPing\Bridges\BridgeWithEditDeleteInterface;
+use PocketPing\Models\BridgeMessageIds;
 use PocketPing\Models\ConnectRequest;
 use PocketPing\Models\ConnectResponse;
 use PocketPing\Models\CustomEvent;
+use PocketPing\Models\DeleteMessageRequest;
+use PocketPing\Models\DeleteMessageResponse;
+use PocketPing\Models\EditMessageRequest;
+use PocketPing\Models\EditMessageResponse;
 use PocketPing\Models\IdentifyRequest;
 use PocketPing\Models\IdentifyResponse;
 use PocketPing\Models\Message;
@@ -26,6 +32,7 @@ use PocketPing\Models\VersionWarning;
 use PocketPing\Models\WebSocketEvent;
 use PocketPing\Storage\MemoryStorage;
 use PocketPing\Storage\StorageInterface;
+use PocketPing\Storage\StorageWithBridgeIdsInterface;
 use PocketPing\Utils\IpFilter;
 use PocketPing\Utils\IpFilterConfig;
 use PocketPing\Utils\IpFilterResult;
@@ -411,6 +418,122 @@ class PocketPing
         }
 
         return new ReadResponse(updated: $updated);
+    }
+
+    /**
+     * Handle editing a visitor's message.
+     */
+    public function handleEditMessage(EditMessageRequest $request): EditMessageResponse
+    {
+        if (trim($request->content) === '') {
+            throw new \InvalidArgumentException('Content cannot be empty');
+        }
+
+        $session = $this->storage->getSession($request->sessionId);
+        if ($session === null) {
+            throw new \InvalidArgumentException('Session not found');
+        }
+
+        $message = $this->storage->getMessage($request->messageId);
+        if ($message === null) {
+            throw new \InvalidArgumentException('Message not found');
+        }
+
+        // Verify message belongs to this session
+        if ($message->sessionId !== $request->sessionId) {
+            throw new \InvalidArgumentException('Message not found');
+        }
+
+        // Only visitors can edit their own messages
+        if ($message->sender !== Sender::VISITOR) {
+            throw new \InvalidArgumentException('Unauthorized: can only edit own messages');
+        }
+
+        // Cannot edit deleted messages
+        if ($message->deletedAt !== null) {
+            throw new \InvalidArgumentException('Cannot edit deleted message');
+        }
+
+        $now = new \DateTimeImmutable();
+        $message->content = $request->content;
+        $message->editedAt = $now;
+
+        // Use updateMessage if available, otherwise saveMessage
+        if ($this->storage instanceof StorageWithBridgeIdsInterface) {
+            $this->storage->updateMessage($message);
+        } else {
+            $this->storage->saveMessage($message);
+        }
+
+        // Sync edit to bridges
+        $this->syncEditToBridges($request->sessionId, $request->messageId, $request->content, $now);
+
+        // Broadcast to WebSocket
+        $this->broadcastToSession(
+            $request->sessionId,
+            new WebSocketEvent('message_edited', [
+                'messageId' => $request->messageId,
+                'content' => $request->content,
+                'editedAt' => $now->format(\DateTimeInterface::ATOM),
+            ])
+        );
+
+        return new EditMessageResponse(
+            id: $message->id,
+            content: $message->content,
+            editedAt: $now,
+        );
+    }
+
+    /**
+     * Handle deleting a visitor's message.
+     */
+    public function handleDeleteMessage(DeleteMessageRequest $request): DeleteMessageResponse
+    {
+        $session = $this->storage->getSession($request->sessionId);
+        if ($session === null) {
+            throw new \InvalidArgumentException('Session not found');
+        }
+
+        $message = $this->storage->getMessage($request->messageId);
+        if ($message === null) {
+            throw new \InvalidArgumentException('Message not found');
+        }
+
+        // Verify message belongs to this session
+        if ($message->sessionId !== $request->sessionId) {
+            throw new \InvalidArgumentException('Message not found');
+        }
+
+        // Only visitors can delete their own messages
+        if ($message->sender !== Sender::VISITOR) {
+            throw new \InvalidArgumentException('Unauthorized: can only delete own messages');
+        }
+
+        // Sync delete to bridges BEFORE soft delete (we need bridge IDs)
+        $now = new \DateTimeImmutable();
+        $this->syncDeleteToBridges($request->sessionId, $request->messageId, $now);
+
+        // Soft delete the message
+        $message->deletedAt = $now;
+
+        // Use updateMessage if available, otherwise saveMessage
+        if ($this->storage instanceof StorageWithBridgeIdsInterface) {
+            $this->storage->updateMessage($message);
+        } else {
+            $this->storage->saveMessage($message);
+        }
+
+        // Broadcast to WebSocket
+        $this->broadcastToSession(
+            $request->sessionId,
+            new WebSocketEvent('message_deleted', [
+                'messageId' => $request->messageId,
+                'deletedAt' => $now->format(\DateTimeInterface::ATOM),
+            ])
+        );
+
+        return new DeleteMessageResponse(deleted: true);
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -866,6 +989,45 @@ class PocketPing
                     'bridge' => $bridge->getName(),
                     'error' => $e->getMessage(),
                 ]);
+            }
+        }
+    }
+
+    private function syncEditToBridges(
+        string $sessionId,
+        string $messageId,
+        string $content,
+        \DateTimeInterface $editedAt,
+    ): void {
+        foreach ($this->bridges as $bridge) {
+            if ($bridge instanceof BridgeWithEditDeleteInterface) {
+                try {
+                    $bridge->onMessageEdit($sessionId, $messageId, $content, $editedAt);
+                } catch (\Throwable $e) {
+                    $this->logger->error('Bridge edit sync error', [
+                        'bridge' => $bridge->getName(),
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+    }
+
+    private function syncDeleteToBridges(
+        string $sessionId,
+        string $messageId,
+        \DateTimeInterface $deletedAt,
+    ): void {
+        foreach ($this->bridges as $bridge) {
+            if ($bridge instanceof BridgeWithEditDeleteInterface) {
+                try {
+                    $bridge->onMessageDelete($sessionId, $messageId, $deletedAt);
+                } catch (\Throwable $e) {
+                    $this->logger->error('Bridge delete sync error', [
+                        'bridge' => $bridge->getName(),
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
         }
     }

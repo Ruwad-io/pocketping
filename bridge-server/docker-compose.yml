@@ -1,17 +1,43 @@
-version: '3.8'
-
 services:
   bridge-server:
-    image: ghcr.io/pocketping/pocketping-bridge:latest
-    # Uncomment to build locally instead of pulling from registry:
-    # build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "3001:3001"
     env_file:
       - .env
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+
+  # Development with hot reload
+  dev:
+    image: golang:1.21-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    command: go run ./cmd/server
+
+  # Build and lint
+  build:
+    image: golang:1.21-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+      - go-mod-cache:/go/pkg/mod
+    command: sh -c "go mod tidy && go build -o /dev/null ./cmd/server && echo '✅ Build successful'"
+
+  # Lint check
+  lint:
+    image: golangci/golangci-lint:v1.55-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+      - go-mod-cache:/go/pkg/mod
+    command: golangci-lint run ./...
+
+volumes:
+  go-mod-cache:

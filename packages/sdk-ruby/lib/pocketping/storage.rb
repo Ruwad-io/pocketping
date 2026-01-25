@@ -97,6 +97,34 @@ module PocketPing
       def get_session_by_visitor_id(visitor_id)
         nil
       end
+
+      # Update an existing message (for edit/delete)
+      # Optional: defaults to save_message
+      #
+      # @param message [Message] The message to update
+      # @return [void]
+      def update_message(message)
+        save_message(message)
+      end
+
+      # Save platform-specific message IDs for a message
+      # Optional: implement for edit/delete synchronization with bridges
+      #
+      # @param message_id [String] The message ID
+      # @param bridge_ids [BridgeMessageIds] The bridge message IDs
+      # @return [void]
+      def save_bridge_message_ids(message_id, bridge_ids)
+        nil
+      end
+
+      # Get platform-specific message IDs for a message
+      # Optional: implement for edit/delete synchronization with bridges
+      #
+      # @param message_id [String] The message ID
+      # @return [BridgeMessageIds, nil] The bridge message IDs or nil
+      def get_bridge_message_ids(message_id)
+        nil
+      end
     end
 
     # In-memory storage adapter
@@ -112,6 +140,7 @@ module PocketPing
         @sessions = {}
         @messages = {}
         @message_by_id = {}
+        @bridge_message_ids = {}
         @mutex = Mutex.new
       end
 
@@ -252,8 +281,46 @@ module PocketPing
           @sessions.clear
           @messages.clear
           @message_by_id.clear
+          @bridge_message_ids.clear
         end
         nil
+      end
+
+      # @see Base#update_message
+      def update_message(message)
+        @mutex.synchronize do
+          return unless @message_by_id.key?(message.id)
+
+          # Update in message_by_id
+          @message_by_id[message.id] = message
+
+          # Update in the session's messages array
+          if @messages[message.session_id]
+            existing_index = @messages[message.session_id].index { |m| m.id == message.id }
+            @messages[message.session_id][existing_index] = message if existing_index
+          end
+        end
+        nil
+      end
+
+      # @see Base#save_bridge_message_ids
+      def save_bridge_message_ids(message_id, bridge_ids)
+        @mutex.synchronize do
+          existing = @bridge_message_ids[message_id]
+          if existing
+            @bridge_message_ids[message_id] = existing.merge_with(bridge_ids)
+          else
+            @bridge_message_ids[message_id] = bridge_ids
+          end
+        end
+        nil
+      end
+
+      # @see Base#get_bridge_message_ids
+      def get_bridge_message_ids(message_id)
+        @mutex.synchronize do
+          @bridge_message_ids[message_id]
+        end
       end
     end
   end

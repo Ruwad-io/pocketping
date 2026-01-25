@@ -103,8 +103,11 @@ cd pocketping/bridge-server
 cp .env.example .env
 # Edit .env with your bot tokens
 
-# Run (requires Bun: https://bun.sh)
-bun install && bun run start
+# Run with Docker
+docker compose up -d
+
+# Or build from source (requires Go 1.21+)
+go build -o bridge-server ./cmd/server && ./bridge-server
 ```
 
 Then your backend just needs to call the Bridge Server API. See [Bridge Server docs](bridge-server/README.md).
@@ -346,7 +349,7 @@ Bridges run separately. Recommended for production.
 ```
 +-------------+   HTTP    +--------------+
 | YOUR BACKEND|<--------->|BRIDGE SERVER |
-| (any lang)  |           |    (Bun)     |
+| (any lang)  |           |     (Go)     |
 +-------------+           +------+-------+
                                  |
               +------------------+------------------+
@@ -384,6 +387,68 @@ Like WhatsApp:
 - ✓ Message sent
 - ✓✓ Delivered to Telegram/Discord/Slack
 - ✓✓ (blue) Operator saw it
+
+### Message Editing & Deletion
+
+Visitors can edit or delete their own messages:
+
+**Widget:**
+```javascript
+// Edit a message
+PocketPing.editMessage(messageId, 'Updated content');
+
+// Delete a message (soft delete)
+PocketPing.deleteMessage(messageId);
+```
+
+**What happens:**
+- Edits/deletes sync to all connected bridges (Telegram, Discord, Slack)
+- The actual message in the bridge is edited/deleted (not just a notification)
+- Deleted messages show "This message was deleted" in the chat
+
+**Backend (Python):**
+```python
+# Handle edit event
+@pp.on_message_edited
+async def handle_edit(session_id, message_id, new_content, edited_at):
+    print(f"Message {message_id} edited to: {new_content}")
+
+# Handle delete event
+@pp.on_message_deleted
+async def handle_delete(session_id, message_id, deleted_at):
+    print(f"Message {message_id} was deleted")
+```
+
+### File Attachments
+
+Share images, documents, and files in conversations:
+
+**Widget:**
+```javascript
+// Attachments are handled automatically via the file picker button
+// Or programmatically:
+const attachment = await PocketPing.uploadFile(file);
+PocketPing.sendMessage('Check this file!', { attachments: [attachment.id] });
+```
+
+**What happens:**
+- Files are uploaded via presigned URL (direct to your storage)
+- Images display inline in the widget and bridges
+- Other files show as downloadable links
+- Supports: images, PDFs, documents, audio, video
+
+**Attachment metadata:**
+```javascript
+{
+  id: 'att_abc123',
+  filename: 'document.pdf',
+  mimeType: 'application/pdf',
+  size: 102400,  // bytes
+  url: 'https://...',
+  thumbnailUrl: 'https://...',  // for images
+  status: 'ready'
+}
+```
 
 ### AI Fallback
 
@@ -527,7 +592,7 @@ Location: Paris, France
 | [pocketping-go](packages/sdk-go) | Go SDK (net/http, Gin, Echo) | Ready |
 | [pocketping-php](packages/sdk-php) | PHP SDK (Laravel, Symfony) | Ready |
 | [pocketping-ruby](packages/sdk-ruby) | Ruby SDK (Rails, Sinatra) | Ready |
-| [bridge-server](bridge-server) | Standalone bridge server (Bun) | Ready |
+| [bridge-server](bridge-server) | Standalone bridge server (Go) | Ready |
 
 ---
 
@@ -694,7 +759,7 @@ pocketping/
 │   ├── sdk-go/          # Go SDK
 │   ├── sdk-php/         # PHP SDK
 │   └── sdk-ruby/        # Ruby SDK
-├── bridge-server/       # Standalone bridge server (Bun)
+├── bridge-server/       # Standalone bridge server (Go)
 ├── docs-site/           # Documentation (Docusaurus)
 ├── docker/              # Docker configs for dev
 └── assets/              # Logo and branding

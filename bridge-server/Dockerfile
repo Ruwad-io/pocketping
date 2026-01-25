@@ -1,36 +1,27 @@
-# PocketPing Bridge Server Dockerfile
-# Pin to specific Bun version for reproducible builds
-# Use Debian-based image to match runtime libc (avoids musl/glibc incompatibility)
-FROM oven/bun:1.3.6-debian as builder
+# Build stage
+FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
-
-# Copy package files
-COPY package.json bun.lock* ./
 
 # Install dependencies
-RUN bun install --frozen-lockfile
+COPY go.mod go.sum* ./
+RUN go mod download
 
 # Copy source
-COPY src ./src
-COPY tsconfig.json ./
+COPY . .
 
-# Build (compile to single file)
-RUN bun build src/index.ts --compile --outfile bridge-server
+# Build
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /bridge-server ./cmd/server
 
-# Production image - pin to specific version
-FROM debian:bookworm-20250113-slim
+# Runtime stage
+FROM alpine:3.19
 
-# Install CA certificates and curl for healthcheck
-RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
+RUN apk --no-cache add ca-certificates
 
 WORKDIR /app
 
-# Copy the compiled binary
-COPY --from=builder /app/bridge-server ./bridge-server
+COPY --from=builder /bridge-server .
 
-# Expose port
 EXPOSE 3001
 
-# Run the server
 CMD ["./bridge-server"]

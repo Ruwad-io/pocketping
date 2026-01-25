@@ -275,9 +275,11 @@ Bridge Interface {
   name: string
   init(callbacks) -> void
   on_new_session(session) -> void
-  on_visitor_message(message, session) -> void
+  on_visitor_message(message, session) -> BridgeMessageId | null  // Returns bridge message ID
   on_operator_message(message, session) -> void
   on_message_read(messageIds, status, session) -> void
+  on_message_edit(messageId, newContent, bridgeMessageId) -> boolean  // Sync edit to bridge
+  on_message_delete(messageId, bridgeMessageId) -> boolean            // Sync delete to bridge
   on_custom_event(event, session) -> void
   on_identity_update(session) -> void
 }
@@ -333,6 +335,98 @@ The `customFilter` function allows dynamic IP filtering:
 - Return `false` to block
 - Return `null/undefined` to defer to list-based filtering
 
+### 12. Message Edit
+
+Visitors can edit their own messages. Edits are synced to connected bridges.
+
+```
+handle_edit_message(request: EditMessageRequest) -> EditMessageResponse
+
+EditMessageRequest {
+  sessionId: string
+  messageId: string
+  content: string (max 4000 chars)
+}
+
+EditMessageResponse {
+  messageId: string
+  content: string
+  editedAt: datetime
+}
+```
+
+#### Edit Behavior:
+- Only the message sender can edit their own messages
+- Edited messages get an `editedAt` timestamp
+- Edits are synced to bridges (Telegram `editMessageText`, Discord `PATCH`, Slack `chat.update`)
+- Bridge message IDs must be stored for sync to work (see Storage Interface)
+
+### 13. Message Delete
+
+Visitors can delete their own messages (soft delete). Deletes are synced to connected bridges.
+
+```
+handle_delete_message(request: DeleteMessageRequest) -> DeleteMessageResponse
+
+DeleteMessageRequest {
+  sessionId: string
+  messageId: string
+}
+
+DeleteMessageResponse {
+  deleted: boolean
+}
+```
+
+#### Delete Behavior:
+- Only the message sender can delete their own messages
+- Soft delete: set `deletedAt` timestamp (don't remove from storage)
+- Deletes are synced to bridges (Telegram `deleteMessage`, Discord `DELETE`, Slack `chat.delete`)
+- Bridge message IDs must be stored for sync to work
+
+### 14. File Attachments
+
+Messages can include file attachments (images, documents, etc.).
+
+```
+Attachment {
+  id: string
+  messageId?: string          // Linked after message creation
+  filename: string
+  mimeType: string
+  size: number                // Bytes
+  url: string                 // Public URL for download
+  thumbnailUrl?: string       // For images/videos
+  status: 'pending' | 'ready' | 'failed'
+  createdAt: datetime
+}
+
+// Upload flow (presigned URL pattern)
+handle_upload_request(request: UploadRequest) -> UploadResponse
+
+UploadRequest {
+  sessionId: string
+  filename: string
+  mimeType: string
+  size: number
+}
+
+UploadResponse {
+  attachmentId: string
+  uploadUrl: string           // Presigned URL for direct upload
+  expiresAt: datetime
+}
+
+// After upload completes
+handle_upload_complete(attachmentId: string) -> Attachment
+```
+
+#### Attachment Behavior:
+- Attachments are uploaded separately from messages (presigned URL pattern)
+- `attachmentIds` are passed with the message to link them
+- Bridges should display attachments inline (images) or as file links
+- Storage must support attachment metadata (see Storage Interface)
+
 ---
 
 ## Storage Interface (REQUIRED)
@@ -351,10 +445,27 @@ Storage Interface {
   save_message(message: Message) -> void
   get_messages(sessionId: string, after?: string, limit?: int) -> Message[]
   get_message(messageId: string) -> Message | null
+  update_message(message: Message) -> void       // For edit/delete
+
+  // Bridge message ID operations (for edit/delete sync)
+  save_bridge_message_ids(messageId: string, bridgeIds: BridgeMessageIds) -> void
+  get_bridge_message_ids(messageId: string) -> BridgeMessageIds | null
+
+  // Attachment operations (optional - can use external storage)
+  save_attachment(attachment: Attachment) -> void
+  get_attachment(attachmentId: string) -> Attachment | null
+  get_message_attachments(messageId: string) -> Attachment[]
+  update_attachment(attachment: Attachment) -> void
 
   // Optional
   cleanup_old_sessions(olderThan: datetime) -> int
   get_session_by_visitor_id(visitorId: string) -> Session | null
+}
+
+BridgeMessageIds {
+  telegramMessageId?: number
+  discordMessageId?: string
+  slackMessageTs?: string
 }
 ```
 
@@ -378,7 +489,9 @@ Each SDK MUST have tests for:
 | Identity | test_identity | 6+ |
 | Version | test_version | 15+ |
 | Storage | test_storage | 8+ |
-| **Total** | | **74+** |
+| Edit/Delete | test_edit_delete | 10+ |
+| Attachments | test_attachments | 8+ |
+| **Total** | | **92+** |
 
 ### Test Naming Convention
 
@@ -441,6 +554,32 @@ Examples:
 - [ ] Returns error for unsupported version
 - [ ] Handles missing version header
 - [ ] Parses semver correctly
+
+#### Edit Message Tests
+- [ ] Edits message content
+- [ ] Sets editedAt timestamp
+- [ ] Only sender can edit their message
+- [ ] Rejects edit of non-existent message
+- [ ] Rejects edit of deleted message
+- [ ] Syncs edit to bridges
+- [ ] Stores bridge message IDs on create
+
+#### Delete Message Tests
+- [ ] Soft deletes message (sets deletedAt)
+- [ ] Only sender can delete their message
+- [ ] Rejects delete of non-existent message
+- [ ] Rejects delete of already deleted message
+- [ ] Syncs delete to bridges
+
+#### Attachment Tests
+- [ ] Creates upload request with presigned URL
+- [ ] Marks attachment as ready after upload
+- [ ] Links attachments to message
+- [ ] Returns attachments with message
+- [ ] Rejects invalid mime types
+- [ ] Rejects files over size limit
+- [ ] Handles upload failure gracefully
+- [ ] Syncs attachments to bridges
 
 ---
 
@@ -508,6 +647,202 @@ Each SDK README must include:
 
 ---
 
+## Built-in Bridge Implementations
+
+All SDKs SHOULD provide ready-to-use bridge implementations using HTTP APIs. This ensures consistency across languages and removes the need for third-party messaging libraries.
+
+### Design Principles
+
+1. **HTTP-only**: Use native HTTP clients (no external messaging libraries)
+2. **Consistent API**: Same constructor parameters and behavior across languages
+3. **Minimal Dependencies**: Only standard HTTP client for each language
+4. **Edit/Delete Support**: All bridges must support message edit and delete sync
+
+### Required Bridges
+
+| Bridge | API Base URL | Auth Method |
+|--------|--------------|-------------|
+| Telegram | `https://api.telegram.org/bot{token}` | Bot Token in URL |
+| Discord | `https://discord.com/api/v10` | Bot Token header or Webhook URL |
+| Slack | `https://slack.com/api` | Bot Token header |
+
+---
+
+### 15. TelegramBridge
+
+Sends notifications to a Telegram chat/group via Bot API.
+
+```
+TelegramBridge {
+  constructor(botToken: string, chatId: string | number, options?: TelegramBridgeOptions)
+}
+
+TelegramBridgeOptions {
+  parseMode?: 'HTML' | 'Markdown' | 'MarkdownV2'  // Default: 'HTML'
+  disableNotification?: boolean                   // Default: false
+  messageTemplate?: (message, session) -> string  // Custom format
+  sessionTemplate?: (session) -> string           // New session format
+}
+```
+
+#### Telegram API Calls
+
+| Method | Telegram API | Purpose |
+|--------|--------------|---------|
+| `on_visitor_message` | `sendMessage` | Send visitor message to chat |
+| `on_new_session` | `sendMessage` | Announce new session |
+| `on_message_edit` | `editMessageText` | Sync edit to Telegram |
+| `on_message_delete` | `deleteMessage` | Sync delete to Telegram |
+| `on_typing` | `sendChatAction` | Show typing indicator |
+
+#### Message Format (Default)
+
+```
+New session:
+🆕 New chat session
+👤 Visitor: {visitorId}
+🌍 {country}, {city}
+📍 {url}
+
+Visitor message:
+💬 {visitorId}:
+{content}
+
+Edited message:
+✏️ {visitorId} (edited):
+{content}
+```
+
+---
+
+### 16. DiscordBridge
+
+Sends notifications to a Discord channel via Bot API or Webhook.
+
+```
+DiscordBridge {
+  // Option 1: Webhook (simple, no bot needed)
+  constructor(webhookUrl: string, options?: DiscordBridgeOptions)
+
+  // Option 2: Bot (for edit/delete support)
+  constructor(botToken: string, channelId: string, options?: DiscordBridgeOptions)
+}
+
+DiscordBridgeOptions {
+  username?: string                              // Webhook display name
+  avatarUrl?: string                             // Webhook avatar
+  embedColor?: number                            // Embed color (hex)
+  messageTemplate?: (message, session) -> DiscordEmbed
+}
+
+DiscordEmbed {
+  title?: string
+  description?: string
+  color?: number
+  fields?: { name: string, value: string, inline?: boolean }[]
+  footer?: { text: string }
+  timestamp?: string
+}
+```
+
+#### Discord API Calls
+
+| Method | Discord API | Purpose |
+|--------|-------------|---------|
+| `on_visitor_message` | `POST /webhooks/{id}/{token}` or `POST /channels/{id}/messages` | Send message |
+| `on_new_session` | Same as above | Announce session |
+| `on_message_edit` | `PATCH /channels/{id}/messages/{mid}` | Sync edit (bot only) |
+| `on_message_delete` | `DELETE /channels/{id}/messages/{mid}` | Sync delete (bot only) |
+
+#### Webhook vs Bot Mode
+
+| Feature | Webhook | Bot |
+|---------|---------|-----|
+| Send messages | ✅ | ✅ |
+| Edit messages | ❌ | ✅ |
+| Delete messages | ❌ | ✅ |
+| Setup complexity | Simple | Requires bot creation |
+
+---
+
+### 17. SlackBridge
+
+Sends notifications to a Slack channel via Bot API or Incoming Webhook.
+
+```
+SlackBridge {
+  // Option 1: Webhook (simple, no bot needed)
+  constructor(webhookUrl: string, options?: SlackBridgeOptions)
+
+  // Option 2: Bot (for edit/delete support)
+  constructor(botToken: string, channelId: string, options?: SlackBridgeOptions)
+}
+
+SlackBridgeOptions {
+  username?: string                              // Display name
+  iconEmoji?: string                             // e.g., ':speech_balloon:'
+  iconUrl?: string                               // Avatar URL
+  messageTemplate?: (message, session) -> SlackBlock[]
+}
+
+SlackBlock {
+  type: 'section' | 'divider' | 'context' | 'header'
+  text?: { type: 'mrkdwn' | 'plain_text', text: string }
+  fields?: { type: 'mrkdwn', text: string }[]
+}
+```
+
+#### Slack API Calls
+
+| Method | Slack API | Purpose |
+|--------|-----------|---------|
+| `on_visitor_message` | Webhook or `chat.postMessage` | Send message |
+| `on_new_session` | Same as above | Announce session |
+| `on_message_edit` | `chat.update` | Sync edit (bot only) |
+| `on_message_delete` | `chat.delete` | Sync delete (bot only) |
+
+#### Webhook vs Bot Mode
+
+| Feature | Webhook | Bot |
+|---------|---------|-----|
+| Send messages | ✅ | ✅ |
+| Edit messages | ❌ | ✅ |
+| Delete messages | ❌ | ✅ |
+| Get message ts | ❌ | ✅ |
+| Setup complexity | Simple | Requires app creation |
+
+---
+
+### Bridge Directory Structure
+
+```
+packages/sdk-{language}/
+├── src/
+│   ├── bridges/
+│   │   ├── types.{ext}       # Bridge interface (exists)
+│   │   ├── telegram.{ext}    # TelegramBridge implementation
+│   │   ├── discord.{ext}     # DiscordBridge implementation
+│   │   └── slack.{ext}       # SlackBridge implementation
+```
+
+### Bridge Test Requirements
+
+Each bridge implementation MUST have tests:
+
+| Test Category | Min Tests |
+|---------------|-----------|
+| Constructor validation | 3 |
+| on_visitor_message | 3 |
+| on_new_session | 2 |
+| on_message_edit | 3 |
+| on_message_delete | 3 |
+| Error handling | 3 |
+| **Total per bridge** | **17+** |
+
+Tests should mock HTTP calls (no real API calls in tests).
+
+---
+
 ## Error Handling
 
 All SDKs must:
@@ -520,6 +855,22 @@ All SDKs must:
 ---
 
 ## Changelog
+
+- **v1.2** (2025-01): Built-in Bridge Implementations
+  - Added TelegramBridge specification (section 15)
+  - Added DiscordBridge specification (section 16)
+  - Added SlackBridge specification (section 17)
+  - All bridges use HTTP APIs only (no third-party messaging libraries)
+  - Webhook mode (simple) and Bot mode (full edit/delete support)
+  - Added bridge test requirements
+
+- **v1.1** (2025-01): Edit/Delete/Attachments
+  - Added Message Edit (section 12)
+  - Added Message Delete (section 13)
+  - Added File Attachments (section 14)
+  - Updated Bridge Interface with `on_message_edit` and `on_message_delete`
+  - Updated Storage Interface with `update_message`, bridge ID storage, and attachment operations
+  - Added test requirements for edit/delete/attachments
 
 - **v1.0** (2025-01): Initial specification
   - Added TrackedElement support

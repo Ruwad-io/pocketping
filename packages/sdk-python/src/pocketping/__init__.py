@@ -1,8 +1,15 @@
 """PocketPing - Real-time customer chat with mobile notifications."""
 
-from pocketping.bridges import Bridge
+from pocketping.bridges import (
+    Bridge,
+    CompositeBridge,
+    DiscordBridge,
+    SlackBridge,
+    TelegramBridge,
+)
 from pocketping.core import PocketPing
 from pocketping.models import (
+    BridgeMessageResult,
     ConnectRequest,
     ConnectResponse,
     CustomEvent,
@@ -36,5 +43,10 @@ __all__ = [
     "Storage",
     "MemoryStorage",
     "Bridge",
+    "CompositeBridge",
+    "TelegramBridge",
+    "DiscordBridge",
+    "SlackBridge",
+    "BridgeMessageResult",
     "IpFilterConfig",
 ]

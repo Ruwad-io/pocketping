@@ -24,8 +24,6 @@ docker run -d \
 For production, use Docker Compose:
 
 ```yaml title="docker-compose.yml"
-version: '3.8'
-
 services:
   bridge:
     image: ghcr.io/pocketping/pocketping-bridge:latest
@@ -100,8 +98,6 @@ docker compose up -d
 ## With Traefik (HTTPS)
 
 ```yaml title="docker-compose.yml"
-version: '3.8'
-
 services:
   bridge:
     image: ghcr.io/pocketping/pocketping-bridge:latest

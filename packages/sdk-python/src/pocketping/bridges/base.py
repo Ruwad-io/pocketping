@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pocketping.core import PocketPing
-    from pocketping.models import CustomEvent, Message, Session
+    from pocketping.models import BridgeMessageResult, CustomEvent, Message, MessageStatus, Session
 
 
 class Bridge(ABC):
-    """Abstract base class for notification bridges."""
+    """Abstract base class for notification bridges (Telegram, Discord, Slack, etc.)."""
 
     @property
     @abstractmethod
@@ -25,8 +25,72 @@ class Bridge(ABC):
         """Called when a new chat session is created."""
         pass
 
-    async def on_message(self, message: "Message", session: "Session") -> None:
-        """Called when a visitor sends a message."""
+    async def on_visitor_message(
+        self, message: "Message", session: "Session"
+    ) -> "BridgeMessageResult | None":
+        """Called when a visitor sends a message.
+
+        Returns:
+            BridgeMessageResult with the platform message ID, or None on failure.
+        """
+        pass
+
+    async def on_operator_message(
+        self,
+        message: "Message",
+        session: "Session",
+        source_bridge: str | None = None,
+        operator_name: str | None = None,
+    ) -> None:
+        """Called when an operator sends a message (for cross-bridge sync)."""
+        pass
+
+    async def on_message_read(
+        self,
+        session_id: str,
+        message_ids: list[str],
+        status: "MessageStatus",
+        session: "Session",
+    ) -> None:
+        """Called when messages are marked as read/delivered."""
+        pass
+
+    async def on_message_edit(
+        self,
+        message: "Message",
+        session: "Session",
+        platform_message_id: str | int | None = None,
+    ) -> None:
+        """Called when a visitor edits their message.
+
+        Args:
+            message: The edited message with updated content
+            session: The session this message belongs to
+            platform_message_id: The platform-specific message ID to edit
+        """
+        pass
+
+    async def on_message_delete(
+        self,
+        message: "Message",
+        session: "Session",
+        platform_message_id: str | int | None = None,
+    ) -> None:
+        """Called when a visitor deletes their message.
+
+        Args:
+            message: The deleted message
+            session: The session this message belongs to
+            platform_message_id: The platform-specific message ID to delete
+        """
+        pass
+
+    async def on_custom_event(self, event: "CustomEvent", session: "Session") -> None:
+        """Called when a custom event is triggered."""
+        pass
+
+    async def on_identity_update(self, session: "Session") -> None:
+        """Called when user identity is updated."""
         pass
 
     async def on_typing(self, session_id: str, is_typing: bool) -> None:
@@ -35,35 +99,6 @@ class Bridge(ABC):
 
     async def on_ai_takeover(self, session: "Session", reason: str) -> None:
         """Called when AI takes over a conversation."""
-        pass
-
-    async def on_operator_message(
-        self,
-        message: "Message",
-        session: "Session",
-        source_bridge: str,
-        operator_name: str | None = None,
-    ) -> None:
-        """Called when an operator sends a message (from any bridge).
-
-        This enables cross-bridge synchronization - when someone responds
-        on Telegram, Discord and Slack can show that response too.
-
-        Args:
-            message: The operator's message
-            session: The session this message belongs to
-            source_bridge: Name of the bridge that originated the message
-            operator_name: Optional name of the operator who sent the message
-        """
-        pass
-
-    async def on_event(self, event: "CustomEvent", session: "Session") -> None:
-        """Called when a custom event is triggered from the widget.
-
-        Args:
-            event: The custom event with name, data, and timestamp
-            session: The session that triggered the event
-        """
         pass
 
     async def destroy(self) -> None:
@@ -92,10 +127,83 @@ class CompositeBridge(Bridge):
             except Exception as e:
                 print(f"[PocketPing] Bridge {bridge.name} error: {e}")
 
-    async def on_message(self, message: "Message", session: "Session") -> None:
+    async def on_visitor_message(
+        self, message: "Message", session: "Session"
+    ) -> "BridgeMessageResult | None":
+        from pocketping.models import BridgeMessageResult
+
+        results = []
         for bridge in self._bridges:
             try:
-                await bridge.on_message(message, session)
+                result = await bridge.on_visitor_message(message, session)
+                if result:
+                    results.append(result)
+            except Exception as e:
+                print(f"[PocketPing] Bridge {bridge.name} error: {e}")
+        # Return the first successful result
+        return results[0] if results else BridgeMessageResult()
+
+    async def on_operator_message(
+        self,
+        message: "Message",
+        session: "Session",
+        source_bridge: str | None = None,
+        operator_name: str | None = None,
+    ) -> None:
+        for bridge in self._bridges:
+            try:
+                await bridge.on_operator_message(message, session, source_bridge, operator_name)
+            except Exception as e:
+                print(f"[PocketPing] Bridge {bridge.name} error: {e}")
+
+    async def on_message_read(
+        self,
+        session_id: str,
+        message_ids: list[str],
+        status: "MessageStatus",
+        session: "Session",
+    ) -> None:
+        for bridge in self._bridges:
+            try:
+                await bridge.on_message_read(session_id, message_ids, status, session)
+            except Exception as e:
+                print(f"[PocketPing] Bridge {bridge.name} error: {e}")
+
+    async def on_message_edit(
+        self,
+        message: "Message",
+        session: "Session",
+        platform_message_id: str | int | None = None,
+    ) -> None:
+        for bridge in self._bridges:
+            try:
+                await bridge.on_message_edit(message, session, platform_message_id)
+            except Exception as e:
+                print(f"[PocketPing] Bridge {bridge.name} error: {e}")
+
+    async def on_message_delete(
+        self,
+        message: "Message",
+        session: "Session",
+        platform_message_id: str | int | None = None,
+    ) -> None:
+        for bridge in self._bridges:
+            try:
+                await bridge.on_message_delete(message, session, platform_message_id)
+            except Exception as e:
+                print(f"[PocketPing] Bridge {bridge.name} error: {e}")
+
+    async def on_custom_event(self, event: "CustomEvent", session: "Session") -> None:
+        for bridge in self._bridges:
+            try:
+                await bridge.on_custom_event(event, session)
+            except Exception as e:
+                print(f"[PocketPing] Bridge {bridge.name} error: {e}")
+
+    async def on_identity_update(self, session: "Session") -> None:
+        for bridge in self._bridges:
+            try:
+                await bridge.on_identity_update(session)
             except Exception as e:
                 print(f"[PocketPing] Bridge {bridge.name} error: {e}")
 
@@ -110,26 +218,6 @@ class CompositeBridge(Bridge):
         for bridge in self._bridges:
             try:
                 await bridge.on_ai_takeover(session, reason)
-            except Exception as e:
-                print(f"[PocketPing] Bridge {bridge.name} error: {e}")
-
-    async def on_operator_message(
-        self,
-        message: "Message",
-        session: "Session",
-        source_bridge: str,
-        operator_name: str | None = None,
-    ) -> None:
-        for bridge in self._bridges:
-            try:
-                await bridge.on_operator_message(message, session, source_bridge, operator_name)
-            except Exception as e:
-                print(f"[PocketPing] Bridge {bridge.name} error: {e}")
-
-    async def on_event(self, event: "CustomEvent", session: "Session") -> None:
-        for bridge in self._bridges:
-            try:
-                await bridge.on_event(event, session)
             except Exception as e:
                 print(f"[PocketPing] Bridge {bridge.name} error: {e}")
 

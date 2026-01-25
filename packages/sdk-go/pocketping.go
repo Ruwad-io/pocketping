@@ -17,9 +17,13 @@ import (
 
 // Common errors
 var (
-	ErrSessionNotFound    = errors.New("session not found")
-	ErrIdentityIDRequired = errors.New("identity.id is required")
-	ErrContentTooLong     = errors.New("message content exceeds maximum length")
+	ErrSessionNotFound     = errors.New("session not found")
+	ErrIdentityIDRequired  = errors.New("identity.id is required")
+	ErrContentTooLong      = errors.New("message content exceeds maximum length")
+	ErrMessageNotFound     = errors.New("message not found")
+	ErrUnauthorized        = errors.New("unauthorized: can only edit/delete own messages")
+	ErrMessageDeleted      = errors.New("cannot edit deleted message")
+	ErrNoContent           = errors.New("content cannot be empty")
 )
 
 // Config holds the configuration for PocketPing.
@@ -358,6 +362,147 @@ func (pp *PocketPing) HandlePresence(ctx context.Context) *PresenceResponse {
 		Online:    pp.operatorOnline,
 		AIEnabled: false, // AI not implemented in Go SDK yet
 	}
+}
+
+// HandleEditMessage handles editing a visitor's message.
+func (pp *PocketPing) HandleEditMessage(ctx context.Context, request EditMessageRequest) (*EditMessageResponse, error) {
+	if strings.TrimSpace(request.Content) == "" {
+		return nil, ErrNoContent
+	}
+
+	// Validate content length
+	if err := ValidateContent(request.Content); err != nil {
+		return nil, err
+	}
+
+	session, err := pp.storage.GetSession(ctx, request.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session == nil {
+		return nil, ErrSessionNotFound
+	}
+
+	message, err := pp.storage.GetMessage(ctx, request.MessageID)
+	if err != nil {
+		return nil, err
+	}
+	if message == nil {
+		return nil, ErrMessageNotFound
+	}
+
+	// Verify message belongs to this session
+	if message.SessionID != request.SessionID {
+		return nil, ErrMessageNotFound
+	}
+
+	// Only visitors can edit their own messages
+	if message.Sender != SenderVisitor {
+		return nil, ErrUnauthorized
+	}
+
+	// Cannot edit deleted messages
+	if message.DeletedAt != nil {
+		return nil, ErrMessageDeleted
+	}
+
+	now := time.Now()
+	message.Content = request.Content
+	message.EditedAt = &now
+
+	// Try to use StorageWithBridgeIDs if available
+	if storageWithBridge, ok := pp.storage.(StorageWithBridgeIDs); ok {
+		if err := storageWithBridge.UpdateMessage(ctx, message); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := pp.storage.SaveMessage(ctx, message); err != nil {
+			return nil, err
+		}
+	}
+
+	// Sync edit to bridges
+	pp.syncEditToBridges(ctx, request.SessionID, request.MessageID, request.Content, now)
+
+	// Broadcast to WebSocket
+	pp.BroadcastToSession(request.SessionID, WebSocketEvent{
+		Type: "message_edited",
+		Data: map[string]interface{}{
+			"messageId": request.MessageID,
+			"content":   request.Content,
+			"editedAt":  now.Format(time.RFC3339),
+		},
+	})
+
+	return &EditMessageResponse{
+		Message: struct {
+			ID       string    `json:"id"`
+			Content  string    `json:"content"`
+			EditedAt time.Time `json:"editedAt"`
+		}{
+			ID:       message.ID,
+			Content:  message.Content,
+			EditedAt: now,
+		},
+	}, nil
+}
+
+// HandleDeleteMessage handles deleting a visitor's message.
+func (pp *PocketPing) HandleDeleteMessage(ctx context.Context, request DeleteMessageRequest) (*DeleteMessageResponse, error) {
+	session, err := pp.storage.GetSession(ctx, request.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session == nil {
+		return nil, ErrSessionNotFound
+	}
+
+	message, err := pp.storage.GetMessage(ctx, request.MessageID)
+	if err != nil {
+		return nil, err
+	}
+	if message == nil {
+		return nil, ErrMessageNotFound
+	}
+
+	// Verify message belongs to this session
+	if message.SessionID != request.SessionID {
+		return nil, ErrMessageNotFound
+	}
+
+	// Only visitors can delete their own messages
+	if message.Sender != SenderVisitor {
+		return nil, ErrUnauthorized
+	}
+
+	// Sync delete to bridges BEFORE soft delete (we need bridge IDs)
+	now := time.Now()
+	pp.syncDeleteToBridges(ctx, request.SessionID, request.MessageID, now)
+
+	// Soft delete the message
+	message.DeletedAt = &now
+
+	// Try to use StorageWithBridgeIDs if available
+	if storageWithBridge, ok := pp.storage.(StorageWithBridgeIDs); ok {
+		if err := storageWithBridge.UpdateMessage(ctx, message); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := pp.storage.SaveMessage(ctx, message); err != nil {
+			return nil, err
+		}
+	}
+
+	// Broadcast to WebSocket
+	pp.BroadcastToSession(request.SessionID, WebSocketEvent{
+		Type: "message_deleted",
+		Data: map[string]interface{}{
+			"messageId": request.MessageID,
+			"deletedAt": now.Format(time.RFC3339),
+		},
+	})
+
+	return &DeleteMessageResponse{Deleted: true}, nil
 }
 
 // HandleRead handles message read/delivered status update.
@@ -772,6 +917,26 @@ func (pp *PocketPing) notifyBridgesIdentity(ctx context.Context, session *Sessio
 	for _, bridge := range pp.bridges {
 		go func(b Bridge) {
 			_ = b.OnIdentityUpdate(ctx, session)
+		}(bridge)
+	}
+}
+
+func (pp *PocketPing) syncEditToBridges(ctx context.Context, sessionID, messageID, content string, editedAt time.Time) {
+	for _, bridge := range pp.bridges {
+		go func(b Bridge) {
+			if bridgeWithEdit, ok := b.(BridgeWithEditDelete); ok {
+				_, _ = bridgeWithEdit.OnMessageEdit(ctx, sessionID, messageID, content, editedAt)
+			}
+		}(bridge)
+	}
+}
+
+func (pp *PocketPing) syncDeleteToBridges(ctx context.Context, sessionID, messageID string, deletedAt time.Time) {
+	for _, bridge := range pp.bridges {
+		go func(b Bridge) {
+			if bridgeWithDelete, ok := b.(BridgeWithEditDelete); ok {
+				_ = bridgeWithDelete.OnMessageDelete(ctx, sessionID, messageID, deletedAt)
+			}
 		}(bridge)
 	}
 }

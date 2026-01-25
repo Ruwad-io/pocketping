@@ -1,9 +1,9 @@
 import { render, h } from 'preact';
 import { ChatWidget } from './components/ChatWidget';
 import { PocketPingClient } from './client';
-import type { PocketPingConfig, ResolvedPocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning, UserIdentity, TriggerOptions, TrackedElement } from './types';
+import type { PocketPingConfig, ResolvedPocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning, UserIdentity, TriggerOptions, TrackedElement, Attachment } from './types';
 
-export type { PocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning, UserIdentity, TriggerOptions, TrackedElement };
+export type { PocketPingConfig, Message, CustomEvent, CustomEventHandler, VersionWarning, UserIdentity, TriggerOptions, TrackedElement, Attachment };
 
 let client: PocketPingClient | null = null;
 let container: HTMLElement | null = null;
@@ -72,11 +72,52 @@ export function toggle(): void {
   client?.toggleOpen();
 }
 
-export function sendMessage(content: string): Promise<Message> {
+export function sendMessage(content: string, attachmentIds?: string[]): Promise<Message> {
   if (!client) {
     throw new Error('[PocketPing] Not initialized');
   }
-  return client.sendMessage(content);
+  return client.sendMessage(content, attachmentIds);
+}
+
+/**
+ * Upload a file attachment
+ * Returns the attachment data after successful upload
+ * @param file - File object to upload
+ * @param onProgress - Optional callback for upload progress (0-100)
+ * @example
+ * const attachment = await PocketPing.uploadFile(file, (progress) => {
+ *   console.log(`Upload ${progress}% complete`)
+ * })
+ * await PocketPing.sendMessage('Check this file', [attachment.id])
+ */
+export async function uploadFile(
+  file: File,
+  onProgress?: (progress: number) => void
+): Promise<Attachment> {
+  if (!client) {
+    throw new Error('[PocketPing] Not initialized');
+  }
+  return client.uploadFile(file, onProgress);
+}
+
+/**
+ * Upload multiple files at once
+ * @param files - Array of File objects to upload
+ * @param onProgress - Optional callback for overall progress (0-100)
+ * @returns Array of uploaded attachments
+ * @example
+ * const attachments = await PocketPing.uploadFiles(files)
+ * const ids = attachments.map(a => a.id)
+ * await PocketPing.sendMessage('Here are the files', ids)
+ */
+export async function uploadFiles(
+  files: File[],
+  onProgress?: (progress: number) => void
+): Promise<Attachment[]> {
+  if (!client) {
+    throw new Error('[PocketPing] Not initialized');
+  }
+  return client.uploadFiles(files, onProgress);
 }
 
 /**
@@ -236,4 +277,4 @@ if (typeof document !== 'undefined') {
 }
 
 // Global export for IIFE build
-export default { init, destroy, open, close, toggle, sendMessage, trigger, onEvent, offEvent, on, identify, reset, getIdentity, setupTrackedElements, getTrackedElements };
+export default { init, destroy, open, close, toggle, sendMessage, uploadFile, uploadFiles, trigger, onEvent, offEvent, on, identify, reset, getIdentity, setupTrackedElements, getTrackedElements };

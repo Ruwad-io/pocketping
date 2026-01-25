@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace PocketPing\Storage;
 
+use PocketPing\Models\BridgeMessageIds;
 use PocketPing\Models\Message;
 use PocketPing\Models\Session;
 
 /**
  * In-memory storage adapter. Useful for development and testing.
  */
-final class MemoryStorage implements StorageInterface
+final class MemoryStorage implements StorageWithBridgeIdsInterface
 {
     /** @var array<string, Session> */
     private array $sessions = [];
@@ -20,6 +21,9 @@ final class MemoryStorage implements StorageInterface
 
     /** @var array<string, Message> */
     private array $messageById = [];
+
+    /** @var array<string, BridgeMessageIds> */
+    private array $bridgeMessageIds = [];
 
     /**
      * Create a new session.
@@ -187,5 +191,49 @@ final class MemoryStorage implements StorageInterface
     public function getSessionCount(): int
     {
         return count($this->sessions);
+    }
+
+    /**
+     * Update an existing message (for edit/delete).
+     */
+    public function updateMessage(Message $message): void
+    {
+        if (!isset($this->messageById[$message->id])) {
+            return;
+        }
+
+        // Update in messageById
+        $this->messageById[$message->id] = $message;
+
+        // Update in the session's messages array
+        if (isset($this->messages[$message->sessionId])) {
+            foreach ($this->messages[$message->sessionId] as $index => $existing) {
+                if ($existing->id === $message->id) {
+                    $this->messages[$message->sessionId][$index] = $message;
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Save platform-specific message IDs for a message.
+     */
+    public function saveBridgeMessageIds(string $messageId, BridgeMessageIds $bridgeIds): void
+    {
+        $existing = $this->bridgeMessageIds[$messageId] ?? null;
+        if ($existing !== null) {
+            $this->bridgeMessageIds[$messageId] = $existing->mergeWith($bridgeIds);
+        } else {
+            $this->bridgeMessageIds[$messageId] = $bridgeIds;
+        }
+    }
+
+    /**
+     * Get platform-specific message IDs for a message.
+     */
+    public function getBridgeMessageIds(string $messageId): ?BridgeMessageIds
+    {
+        return $this->bridgeMessageIds[$messageId] ?? null;
     }
 }

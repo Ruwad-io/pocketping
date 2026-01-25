@@ -143,26 +143,97 @@ const clientIp = pp.getClientIp(request.headers);
 // Checks: CF-Connecting-IP, X-Real-IP, X-Forwarded-For
 ```
 
-## Architecture Options
+## Built-in Bridges
 
-### 1. Embedded Mode (Simple)
+The SDK includes built-in bridges for Telegram, Discord, and Slack. No external libraries required - all communication uses HTTP APIs directly.
 
-SDK handles everything directly - best for single server deployments:
+### Telegram Bridge
 
 ```typescript
-import { PocketPing } from '@pocketping/sdk-node';
+import { PocketPing, TelegramBridge } from '@pocketping/sdk-node';
 
 const pp = new PocketPing({
   welcomeMessage: 'Hello!',
 });
 
+pp.addBridge(new TelegramBridge({
+  botToken: process.env.TELEGRAM_BOT_TOKEN!,
+  chatIds: process.env.TELEGRAM_CHAT_ID!,
+  showUrl: true,  // Show page URL in notifications
+}));
+```
+
+### Discord Bridge
+
+```typescript
+import { PocketPing, DiscordBridge } from '@pocketping/sdk-node';
+
+// Webhook mode (simple, send-only)
+pp.addBridge(DiscordBridge.withWebhook({
+  webhookUrl: process.env.DISCORD_WEBHOOK_URL!,
+}));
+
+// Or Bot mode (bidirectional)
+pp.addBridge(DiscordBridge.withBot({
+  botToken: process.env.DISCORD_BOT_TOKEN!,
+  channelId: process.env.DISCORD_CHANNEL_ID!,
+}));
+```
+
+### Slack Bridge
+
+```typescript
+import { PocketPing, SlackBridge } from '@pocketping/sdk-node';
+
+// Webhook mode (simple, send-only)
+pp.addBridge(SlackBridge.withWebhook({
+  webhookUrl: process.env.SLACK_WEBHOOK_URL!,
+}));
+
+// Or Bot mode (bidirectional)
+pp.addBridge(SlackBridge.withBot({
+  botToken: process.env.SLACK_BOT_TOKEN!,
+  channelId: process.env.SLACK_CHANNEL_ID!,
+}));
+```
+
+### Multiple Bridges
+
+You can add multiple bridges to receive notifications on all platforms simultaneously:
+
+```typescript
+const pp = new PocketPing({ welcomeMessage: 'Hello!' });
+
+pp.addBridge(new TelegramBridge({ ... }));
+pp.addBridge(DiscordBridge.withBot({ ... }));
+pp.addBridge(SlackBridge.withWebhook({ ... }));
+```
+
+## Architecture Options
+
+### 1. Embedded Mode with Built-in Bridges (Simple)
+
+SDK handles everything directly including notifications - best for single server deployments:
+
+```typescript
+import { PocketPing, TelegramBridge } from '@pocketping/sdk-node';
+
+const pp = new PocketPing({
+  welcomeMessage: 'Hello!',
+});
+
+pp.addBridge(new TelegramBridge({
+  botToken: process.env.TELEGRAM_BOT_TOKEN!,
+  chatIds: process.env.TELEGRAM_CHAT_ID!,
+}));
+
 app.use('/pocketping', pp.middleware());
 pp.attachWebSocket(server);
 ```
 
-### 2. Bridge Server Mode (Recommended)
+### 2. Bridge Server Mode (Production)
 
-SDK connects to a dedicated bridge server for notifications:
+SDK connects to a dedicated bridge server (written in Go) for notifications:
 
 ```typescript
 const pp = new PocketPing({
@@ -171,7 +242,7 @@ const pp = new PocketPing({
 });
 ```
 
-The bridge server handles Telegram, Discord, and Slack integrations, keeping your main server lightweight.
+The bridge server handles Telegram, Discord, and Slack integrations via HTTP APIs, keeping your main server lightweight.
 
 ## Custom Storage
 

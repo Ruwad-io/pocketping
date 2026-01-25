@@ -25,21 +25,38 @@ type Storage interface {
 	CleanupOldSessions(ctx context.Context, olderThan time.Time) (int, error)
 }
 
+// StorageWithBridgeIDs extends Storage with bridge message ID operations.
+// Implement this interface to support edit/delete synchronization with bridges.
+type StorageWithBridgeIDs interface {
+	Storage
+
+	// UpdateMessage updates an existing message (for edit/delete).
+	UpdateMessage(ctx context.Context, message *Message) error
+
+	// SaveBridgeMessageIDs saves platform-specific message IDs for a message.
+	SaveBridgeMessageIDs(ctx context.Context, messageID string, bridgeIDs BridgeMessageIds) error
+
+	// GetBridgeMessageIDs retrieves platform-specific message IDs for a message.
+	GetBridgeMessageIDs(ctx context.Context, messageID string) (*BridgeMessageIds, error)
+}
+
 // MemoryStorage is an in-memory storage adapter.
 // Useful for development and testing. Data is lost on restart.
 type MemoryStorage struct {
-	mu          sync.RWMutex
-	sessions    map[string]*Session
-	messages    map[string][]Message // sessionID -> messages
-	messageByID map[string]*Message  // messageID -> message
+	mu              sync.RWMutex
+	sessions        map[string]*Session
+	messages        map[string][]Message  // sessionID -> messages
+	messageByID     map[string]*Message   // messageID -> message
+	bridgeMessageIDs map[string]*BridgeMessageIds // messageID -> bridge IDs
 }
 
 // NewMemoryStorage creates a new in-memory storage adapter.
 func NewMemoryStorage() *MemoryStorage {
 	return &MemoryStorage{
-		sessions:    make(map[string]*Session),
-		messages:    make(map[string][]Message),
-		messageByID: make(map[string]*Message),
+		sessions:         make(map[string]*Session),
+		messages:         make(map[string][]Message),
+		messageByID:      make(map[string]*Message),
+		bridgeMessageIDs: make(map[string]*BridgeMessageIds),
 	}
 }
 
@@ -231,5 +248,64 @@ func (m *MemoryStorage) GetSessionCount(ctx context.Context) (int, error) {
 	return len(m.sessions), nil
 }
 
+// UpdateMessage updates an existing message (for edit/delete).
+func (m *MemoryStorage) UpdateMessage(ctx context.Context, message *Message) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.messageByID[message.ID]; !ok {
+		return nil // Message doesn't exist
+	}
+
+	// Update in messageByID
+	m.messageByID[message.ID] = message
+
+	// Update in the slice too
+	msgs := m.messages[message.SessionID]
+	for i := range msgs {
+		if msgs[i].ID == message.ID {
+			msgs[i] = *message
+			break
+		}
+	}
+
+	return nil
+}
+
+// SaveBridgeMessageIDs saves platform-specific message IDs for a message.
+func (m *MemoryStorage) SaveBridgeMessageIDs(ctx context.Context, messageID string, bridgeIDs BridgeMessageIds) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	existing := m.bridgeMessageIDs[messageID]
+	if existing != nil {
+		// Merge with existing
+		if bridgeIDs.TelegramMessageID != 0 {
+			existing.TelegramMessageID = bridgeIDs.TelegramMessageID
+		}
+		if bridgeIDs.DiscordMessageID != "" {
+			existing.DiscordMessageID = bridgeIDs.DiscordMessageID
+		}
+		if bridgeIDs.SlackMessageTS != "" {
+			existing.SlackMessageTS = bridgeIDs.SlackMessageTS
+		}
+	} else {
+		m.bridgeMessageIDs[messageID] = &bridgeIDs
+	}
+
+	return nil
+}
+
+// GetBridgeMessageIDs retrieves platform-specific message IDs for a message.
+func (m *MemoryStorage) GetBridgeMessageIDs(ctx context.Context, messageID string) (*BridgeMessageIds, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.bridgeMessageIDs[messageID], nil
+}
+
 // Ensure MemoryStorage implements Storage interface
 var _ Storage = (*MemoryStorage)(nil)
+
+// Ensure MemoryStorage implements StorageWithBridgeIDs interface
+var _ StorageWithBridgeIDs = (*MemoryStorage)(nil)

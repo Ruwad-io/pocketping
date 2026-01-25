@@ -2,16 +2,161 @@
 
 This document contains guidelines for Claude Code when working on this repository.
 
+---
+
+## What is PocketPing?
+
+PocketPing is an **open-source real-time chat widget** that connects website visitors to operators via messaging platforms (Telegram, Discord, Slack). It's designed to be lightweight (~15KB), privacy-respecting, and highly flexible.
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Real-time Chat** | WebSocket-based bidirectional messaging between visitors and operators |
+| **Bridge Notifications** | Forward messages to Telegram, Discord, and Slack |
+| **Read Receipts** | Delivery/read status with `delivered` and `read` timestamps |
+| **Message Edit/Delete** | Visitors can edit/delete their messages, synced to bridges |
+| **File Attachments** | Upload and share files in conversations |
+| **User Identity** | Track user info (email, name, custom fields) |
+| **Custom Events** | Emit and track custom events from widgets |
+| **AI Fallback** | Optional AI responses when operators are offline |
+| **IP Filtering** | Blocklist/allowlist with CIDR support |
+| **Version Management** | Widget version checking with deprecation warnings |
+
+### Architecture: Three Deployment Modes
+
+PocketPing est conçu pour être flexible. Tu peux utiliser le widget **sans le SaaS** de deux façons différentes:
+
+---
+
+#### MODE 1: SaaS (pocketping-app)
+
+Le mode le plus simple. Tu utilises notre service hébergé.
+
+```
+┌────────────┐     ┌─────────────────────┐     ┌──────────────┐
+│   Widget   │────▶│   PocketPing SaaS   │────▶│   Bridges    │
+│ (ton site) │     │  (pocketping.io)    │     │ (Tg/Dc/Sl)   │
+└────────────┘     └─────────────────────┘     └──────────────┘
+```
+
+**Quand utiliser:** Tu veux juste que ça marche, sans gérer d'infrastructure.
+
+---
+
+#### MODE 2: Self-Hosted avec SDK (Ton Backend + Ta DB)
+
+Tu gères tout toi-même. Le SDK s'intègre dans **ton** backend existant.
+
+```
+┌────────────┐     ┌─────────────────────────────────────┐     ┌──────────────┐
+│   Widget   │────▶│         TON BACKEND                 │────▶│   Bridges    │
+│ (ton site) │     │  ┌─────────────────────────────┐    │     │ (Tg/Dc/Sl)   │
+└────────────┘     │  │  SDK (Node/Python/Go/PHP/   │    │     └──────────────┘
+                   │  │       Ruby)                 │    │
+                   │  └─────────────────────────────┘    │
+                   │  ┌─────────────────────────────┐    │
+                   │  │    TA BASE DE DONNÉES       │    │
+                   │  │  (PostgreSQL/MySQL/Redis/   │    │
+                   │  │   MongoDB/ce que tu veux)   │    │
+                   │  └─────────────────────────────┘    │
+                   └─────────────────────────────────────┘
+```
+
+**Tu contrôles:**
+- Tes routes API (`/connect`, `/message`, `/edit`, `/delete`, etc.)
+- Ton stockage (sessions, messages, attachments)
+- Ta logique métier (authentication, rate limiting, etc.)
+- Tes bridges (Telegram, Discord, Slack)
+
+**Quand utiliser:**
+- Tu as déjà un backend (Node.js, Python, Go, PHP, Ruby)
+- Tu veux garder les données chez toi
+- Tu as besoin de personnalisation poussée
+
+---
+
+#### MODE 3: Self-Hosted avec Bridge-Server (Standalone)
+
+Le bridge-server est un serveur **autonome** qui fait exactement ce que fait le SaaS, mais que tu héberges toi-même.
+
+```
+┌────────────┐     ┌─────────────────────────────────────┐     ┌──────────────┐
+│   Widget   │────▶│        BRIDGE-SERVER (Go)           │────▶│   Bridges    │
+│ (ton site) │     │  ┌─────────────────────────────┐    │     │ (Tg/Dc/Sl)   │
+└────────────┘     │  │  Sessions + Messages        │    │     └──────────────┘
+                   │  │  (in-memory ou Redis)       │    │
+                   │  └─────────────────────────────┘    │
+                   │  ┌─────────────────────────────┐    │
+                   │  │  Telegram/Discord/Slack     │    │
+                   │  │  bridges HTTP-only          │    │
+                   │  └─────────────────────────────┘    │
+                   └─────────────────────────────────────┘
+```
+
+**C'est quoi le bridge-server?**
+- Un serveur Go standalone qui gère tout (sessions, messages, bridges)
+- Communication HTTP-only avec les APIs de messagerie (pas de libs externes)
+- Tu le déploies avec Docker, tu configures tes tokens, c'est parti
+- Pas besoin d'écrire du code backend
+
+**Quand utiliser:**
+- Tu n'as pas de backend existant
+- Tu veux du self-hosted sans coder
+- Tu veux la même expérience que le SaaS, mais hébergée chez toi
+
+---
+
+#### Comparaison des modes
+
+| | MODE 1: SaaS | MODE 2: SDK | MODE 3: Bridge-Server |
+|---|---|---|---|
+| **Hébergement** | Nous | Toi | Toi |
+| **Backend requis** | Non | Oui (le tien) | Non |
+| **Code à écrire** | Aucun | Routes API | Config seulement |
+| **Base de données** | Nous | La tienne | In-memory/Redis |
+| **Personnalisation** | Limitée | Totale | Moyenne |
+| **Setup time** | 5 min | 30+ min | 15 min |
+
+### Feature Parity Requirement
+
+**CRITICAL**: All three deployment modes MUST have the same features. When implementing a new feature:
+
+1. Implement in `pocketping-app` (SaaS) first
+2. Update `SDK_SPEC.md` with the specification
+3. Implement in all SDKs (Node, Python, Go, PHP, Ruby)
+4. Implement in `bridge-server`
+5. Update widget if needed
+6. Update documentation
+
+### Current Feature Status
+
+| Feature | SaaS (app) | SDKs | Bridge-Server | Documented |
+|---------|------------|------|---------------|------------|
+| Connect/Sessions | ✅ | ✅ | ✅ | ✅ |
+| Messages | ✅ | ✅ | ✅ | ✅ |
+| Read Receipts | ✅ | ✅ | ✅ | ✅ |
+| Custom Events | ✅ | ✅ | ✅ | ✅ |
+| User Identity | ✅ | ✅ | ✅ | ✅ |
+| AI Fallback | ✅ | ✅ | ✅ | ✅ |
+| IP Filtering | ✅ | ✅ | ✅ | ✅ |
+| Message Edit | ✅ | ✅ | ✅ | ✅ |
+| Message Delete | ✅ | ✅ | ✅ | ✅ |
+| File Attachments | ✅ | ✅ | ✅ | ✅ |
+
+---
+
 ## Project Structure
 
 This monorepo contains:
-- `packages/widget/` - Browser widget (~15KB)
-- `packages/sdk-node/` - Node.js SDK
-- `packages/sdk-python/` - Python SDK
-- `packages/sdk-go/` - Go SDK
-- `packages/sdk-php/` - PHP SDK
-- `packages/sdk-ruby/` - Ruby SDK
+- `packages/widget/` - Browser widget (~15KB) - embeds on customer websites
+- `packages/sdk-node/` - Node.js SDK for self-hosted backends
+- `packages/sdk-python/` - Python SDK for self-hosted backends
+- `packages/sdk-go/` - Go SDK for self-hosted backends
+- `packages/sdk-php/` - PHP SDK for self-hosted backends
+- `packages/sdk-ruby/` - Ruby SDK for self-hosted backends
 - `packages/website/` - Documentation site
+- `bridge-server/` - Standalone Go server with HTTP-only bridges (alternative to SDK + custom backend)
 
 ## PR Workflow
 
@@ -125,8 +270,20 @@ mutation {
 
 ### Testing
 - Add tests for new functionality
-- Run `pnpm test` (or language-specific test command) before pushing
+- **IMPORTANT**: Tests MUST be run via Docker using `make` commands (not directly)
 - Ensure CI passes before merging
+
+```bash
+# Run all SDK tests via Docker
+make test
+
+# Run specific SDK tests
+make test-node      # Node.js SDK tests
+make test-python    # Python SDK tests
+make test-go        # Go SDK tests
+make test-php       # PHP SDK tests
+make test-ruby      # Ruby SDK tests
+```
 
 ## SDK Consistency
 

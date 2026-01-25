@@ -118,6 +118,18 @@ export interface PocketPingConfig {
 
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
 
+export type AttachmentStatus = 'pending' | 'uploading' | 'ready' | 'failed';
+
+export interface Attachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  url: string;
+  thumbnailUrl?: string;
+  status: AttachmentStatus;
+}
+
 export interface Message {
   id: string;
   sessionId: string;
@@ -126,11 +138,16 @@ export interface Message {
   timestamp: string;
   replyTo?: string;
   metadata?: Record<string, unknown>;
+  attachments?: Attachment[];
 
   // Read receipt fields
   status?: MessageStatus;
   deliveredAt?: string;
   readAt?: string;
+
+  // Edit/delete fields
+  editedAt?: string;
+  deletedAt?: string;
 }
 
 export interface Session {
@@ -166,6 +183,35 @@ export interface ConnectResponse {
 export interface SendMessageResponse {
   messageId: string;
   timestamp: string;
+  attachments?: Attachment[];
+}
+
+export interface EditMessageResponse {
+  message: {
+    id: string;
+    content: string;
+    editedAt: string;
+  };
+}
+
+export interface DeleteMessageResponse {
+  deleted: boolean;
+}
+
+export interface InitiateUploadResponse {
+  attachmentId: string;
+  uploadUrl: string;
+  expiresAt: string;
+}
+
+export interface CompleteUploadResponse {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  url: string;
+  thumbnailUrl?: string;
+  status: AttachmentStatus;
 }
 
 export interface PresenceResponse {

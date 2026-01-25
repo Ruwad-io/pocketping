@@ -25,6 +25,58 @@ class MessageStatus(str, Enum):
     READ = "read"
 
 
+class AttachmentStatus(str, Enum):
+    """Upload status of an attachment."""
+
+    PENDING = "pending"
+    UPLOADING = "uploading"
+    READY = "ready"
+    FAILED = "failed"
+
+
+class UploadSource(str, Enum):
+    """Source of an attachment upload."""
+
+    WIDGET = "widget"
+    TELEGRAM = "telegram"
+    DISCORD = "discord"
+    SLACK = "slack"
+    API = "api"
+
+
+class Attachment(BaseModel):
+    """File attachment in a message."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    """Unique attachment identifier."""
+
+    filename: str
+    """Original filename."""
+
+    mime_type: str = Field(alias="mimeType")
+    """MIME type (e.g., 'image/jpeg', 'application/pdf')."""
+
+    size: int
+    """File size in bytes."""
+
+    url: str
+    """URL to access the file."""
+
+    thumbnail_url: Optional[str] = Field(None, alias="thumbnailUrl")
+    """Thumbnail URL (for images/videos)."""
+
+    status: AttachmentStatus = AttachmentStatus.READY
+    """Upload status."""
+
+    uploaded_from: Optional[UploadSource] = Field(None, alias="uploadedFrom")
+    """Source of the upload."""
+
+    bridge_file_id: Optional[str] = Field(None, alias="bridgeFileId")
+    """External file ID (from Telegram/Discord/Slack)."""
+
+
 class UserIdentity(BaseModel):
     """User identity data from PocketPing.identify().
 
@@ -93,11 +145,19 @@ class Message(BaseModel):
     timestamp: datetime = Field(default_factory=_utc_now)
     reply_to: Optional[str] = Field(None, alias="replyTo")
     metadata: Optional[dict[str, Any]] = None
+    attachments: Optional[list[Attachment]] = None
+    """File attachments in this message."""
 
     # Read receipt fields
     status: MessageStatus = Field(MessageStatus.SENT)
     delivered_at: Optional[datetime] = Field(None, alias="deliveredAt")
     read_at: Optional[datetime] = Field(None, alias="readAt")
+
+    # Edit/delete fields
+    edited_at: Optional[datetime] = Field(None, alias="editedAt")
+    """When the message was last edited."""
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt")
+    """When the message was soft-deleted (content hidden)."""
 
 
 # Request/Response models
@@ -172,6 +232,10 @@ class SendMessageRequest(BaseModel):
     content: str = Field(max_length=4000)
     sender: Sender
     reply_to: Optional[str] = Field(None, alias="replyTo")
+    attachment_ids: Optional[list[str]] = Field(None, alias="attachmentIds")
+    """IDs of attachments to include with the message."""
+    attachments: Optional[list[Attachment]] = None
+    """Inline attachments (for operator messages from bridges)."""
 
 
 class SendMessageResponse(BaseModel):
@@ -209,6 +273,51 @@ class ReadResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     updated: int  # Number of messages updated
+
+
+class EditMessageRequest(BaseModel):
+    """Request to edit a message."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    session_id: str = Field(alias="sessionId")
+    message_id: str = Field(alias="messageId")
+    content: str = Field(max_length=4000)
+
+
+class EditedMessageData(BaseModel):
+    """Edited message data in response."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    content: str
+    edited_at: datetime = Field(alias="editedAt")
+
+
+class EditMessageResponse(BaseModel):
+    """Response after editing a message."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    message: EditedMessageData
+
+
+class DeleteMessageRequest(BaseModel):
+    """Request to delete a message."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    session_id: str = Field(alias="sessionId")
+    message_id: str = Field(alias="messageId")
+
+
+class DeleteMessageResponse(BaseModel):
+    """Response after deleting a message."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    deleted: bool
 
 
 class IdentifyRequest(BaseModel):
@@ -297,3 +406,17 @@ class VersionWarning(BaseModel):
     latest_version: Optional[str] = Field(None, alias="latestVersion")
     can_continue: bool = Field(True, alias="canContinue")
     upgrade_url: Optional[str] = Field(None, alias="upgradeUrl")
+
+
+# ─────────────────────────────────────────────────────────────────
+# Bridge Models
+# ─────────────────────────────────────────────────────────────────
+
+
+class BridgeMessageResult(BaseModel):
+    """Result from sending a message via a bridge."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    message_id: Optional[str | int] = Field(None, alias="messageId")
+    """Platform-specific message ID (e.g., Telegram message_id, Discord message ID)."""

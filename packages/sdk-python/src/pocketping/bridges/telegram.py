@@ -1,575 +1,389 @@
-"""Telegram bridge for PocketPing with Forum Topics support."""
+"""Telegram bridge for PocketPing using httpx."""
 
-import asyncio
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
+
+import httpx
 
 from pocketping.bridges.base import Bridge
-from pocketping.models import Message, Sender, Session
+from pocketping.models import BridgeMessageResult, Message, MessageStatus, Sender, Session
 
 if TYPE_CHECKING:
     from pocketping.core import PocketPing
 
 
 class TelegramBridge(Bridge):
-    """Telegram notification bridge with Forum Topics support.
+    """Telegram notification bridge using httpx.
 
-    Supports two modes:
-    1. Legacy mode: All notifications in a single chat (reply-based)
-    2. Forum mode: Each conversation gets its own topic (recommended for teams)
+    Sends notifications to Telegram via the Bot API using httpx.
+    This is a lightweight implementation that only sends messages
+    (no polling/webhooks for receiving operator replies).
 
-    Usage (Forum mode - recommended for multiple operators):
+    For bidirectional communication, use the full python-telegram-bot
+    package or handle incoming webhooks separately.
+
+    Usage:
         from pocketping import PocketPing
-        from pocketping.bridges.telegram import TelegramBridge
+        from pocketping.bridges import TelegramBridge
 
         pp = PocketPing(
             bridges=[
                 TelegramBridge(
                     bot_token="your_bot_token",
-                    forum_chat_id="your_supergroup_id",  # Supergroup with topics enabled
+                    chat_id="your_chat_id",  # Can be user ID, group ID, or channel
                 )
             ]
         )
 
-    Usage (Legacy mode - single operator):
-        pp = PocketPing(
-            bridges=[
-                TelegramBridge(
-                    bot_token="your_bot_token",
-                    chat_ids=["your_chat_id"],
-                )
-            ]
-        )
-
-    Setup for Forum mode:
-        1. Create a Telegram group
-        2. Convert to Supergroup (Settings > Group Type)
-        3. Enable Topics (Settings > Topics > Enable)
-        4. Add your bot as admin with "Manage Topics" permission
-        5. Get the chat_id (starts with -100)
+    Setup:
+        1. Create a bot with @BotFather on Telegram
+        2. Get your chat_id (send a message to @userinfobot)
+        3. For groups: add the bot to the group and get the group ID
     """
 
     def __init__(
         self,
         bot_token: str,
-        chat_ids: str | list[str] | None = None,
-        forum_chat_id: str | None = None,
-        show_url: bool = True,
-        show_metadata: bool = True,
+        chat_id: str | int,
+        *,
+        parse_mode: str = "HTML",
+        disable_notification: bool = False,
     ):
         """Initialize Telegram bridge.
 
         Args:
             bot_token: Telegram bot token from @BotFather
-            chat_ids: Chat ID(s) for legacy mode (single chat, reply-based)
-            forum_chat_id: Supergroup ID for forum mode (one topic per conversation)
-            show_url: Show page URL in notifications
-            show_metadata: Show visitor metadata (referrer, timezone, etc.)
+            chat_id: Chat ID to send notifications to (user, group, or channel)
+            parse_mode: Message parse mode ("HTML", "Markdown", "MarkdownV2")
+            disable_notification: Send messages silently
         """
         self.bot_token = bot_token
-        self.forum_chat_id = forum_chat_id
-        self.show_url = show_url
-        self.show_metadata = show_metadata
+        self.chat_id = str(chat_id)
+        self.parse_mode = parse_mode
+        self.disable_notification = disable_notification
 
-        # Legacy mode support
-        if chat_ids:
-            self.chat_ids = [chat_ids] if isinstance(chat_ids, str) else chat_ids
-        else:
-            self.chat_ids = []
-
-        # Determine mode
-        self.use_forum = forum_chat_id is not None
-
-        if not self.use_forum and not self.chat_ids:
-            raise ValueError("Either forum_chat_id or chat_ids must be provided")
-
-        self._pocketping: Optional["PocketPing"] = None
-        self._app = None
-
-        # Forum mode: session_id -> topic_id (message_thread_id)
-        self._session_topic_map: dict[str, int] = {}
-        # Forum mode: topic_id -> session_id (reverse lookup)
-        self._topic_session_map: dict[int, str] = {}
-
-        # Legacy mode: message mappings (kept for backward compatibility)
-        self._session_message_map: dict[str, int] = {}
-        self._message_session_map: dict[int, str] = {}
-
-        # Read receipts: track operator message reactions
-        # pocketping_message_id -> (chat_id, telegram_message_id)
-        self._operator_message_map: dict[str, tuple[int, int]] = {}
+        self._base_url = f"https://api.telegram.org/bot{bot_token}"
+        self._client: httpx.AsyncClient | None = None
+        self._pocketping: "PocketPing | None" = None
 
     @property
     def name(self) -> str:
         return "telegram"
 
     async def init(self, pocketping: "PocketPing") -> None:
+        """Initialize the bridge with an httpx client."""
         self._pocketping = pocketping
+        self._client = httpx.AsyncClient(timeout=30.0)
+
+    async def _request(
+        self,
+        method: str,
+        **params,
+    ) -> dict | None:
+        """Make a request to the Telegram Bot API.
+
+        Args:
+            method: API method name (e.g., "sendMessage")
+            **params: Parameters to send with the request
+
+        Returns:
+            API response as dict, or None on error
+        """
+        if not self._client:
+            print("[PocketPing] Telegram bridge not initialized")
+            return None
+
+        url = f"{self._base_url}/{method}"
 
         try:
-            from telegram.ext import (
-                Application,
-                CommandHandler,
-                MessageHandler,
-                filters,
-            )
-        except ImportError:
-            raise ImportError("python-telegram-bot required. Install with: pip install pocketping[telegram]")
+            response = await self._client.post(url, json=params)
+            data = response.json()
 
-        # Create bot application
-        self._app = Application.builder().token(self.bot_token).build()
+            if not data.get("ok"):
+                error_desc = data.get("description", "Unknown error")
+                print(f"[PocketPing] Telegram API error: {error_desc}")
+                return None
 
-        # Add command handlers
-        self._app.add_handler(CommandHandler("online", self._cmd_online))
-        self._app.add_handler(CommandHandler("offline", self._cmd_offline))
-        self._app.add_handler(CommandHandler("status", self._cmd_status))
-        self._app.add_handler(CommandHandler("close", self._cmd_close))
-
-        # Message handler - different behavior for forum vs legacy
-        if self.use_forum:
-            # Forum mode: handle all text messages in topics
-            self._app.add_handler(
-                MessageHandler(
-                    filters.TEXT & ~filters.COMMAND & filters.ChatType.SUPERGROUP, self._handle_forum_message
-                )
-            )
-        else:
-            # Legacy mode: only handle replies
-            self._app.add_handler(MessageHandler(filters.TEXT & filters.REPLY, self._handle_reply))
-
-        # Start polling in background
-        await self._app.initialize()
-        await self._app.start()
-        asyncio.create_task(self._app.updater.start_polling())
-
-        # Send startup message
-        await self._send_startup_message()
-
-    async def _send_startup_message(self) -> None:
-        """Send startup notification."""
-        if self.use_forum:
-            text = (
-                "🔔 *PocketPing Connected*\n\n"
-                "Mode: *Forum Topics* 🗂️\n\n"
-                "Each new visitor will get their own topic.\n"
-                "Just type in a topic to reply - no need to swipe-reply!\n\n"
-                "Commands:\n"
-                "/online - Mark yourself as available\n"
-                "/offline - Mark yourself as away\n"
-                "/status - View current status\n"
-                "/close - Close current conversation (in topic)"
-            )
-            await self._app.bot.send_message(
-                chat_id=self.forum_chat_id,
-                text=text,
-                parse_mode="Markdown",
-            )
-        else:
-            text = (
-                "🔔 *PocketPing Connected*\n\n"
-                "Commands:\n"
-                "/online - Mark yourself as available\n"
-                "/offline - Mark yourself as away\n"
-                "/status - View current status\n\n"
-                "Reply to any message to respond to users."
-            )
-            for chat_id in self.chat_ids:
-                await self._app.bot.send_message(
-                    chat_id=chat_id,
-                    text=text,
-                    parse_mode="Markdown",
-                )
-
-    # ============ Command Handlers ============
-
-    async def _cmd_online(self, update, context):
-        if self._pocketping:
-            self._pocketping.set_operator_online(True)
-        await update.message.reply_text("✅ You're now online. Users will see you as available.")
-
-    async def _cmd_offline(self, update, context):
-        if self._pocketping:
-            self._pocketping.set_operator_online(False)
-        await update.message.reply_text("🌙 You're now offline. AI will handle conversations if configured.")
-
-    async def _cmd_status(self, update, context):
-        status = "online" if self._pocketping and self._pocketping.is_operator_online() else "offline"
-
-        if self.use_forum:
-            active_topics = len(self._session_topic_map)
-            await update.message.reply_text(
-                f"📊 *Status*: {status}\n💬 Active conversations: {active_topics}", parse_mode="Markdown"
-            )
-        else:
-            await update.message.reply_text(f"📊 *Status*: {status}", parse_mode="Markdown")
-
-    async def _cmd_close(self, update, context):
-        """Close a conversation (forum mode only)."""
-        if not self.use_forum:
-            await update.message.reply_text("❌ This command only works in forum mode.")
-            return
-
-        thread_id = update.message.message_thread_id
-        if not thread_id:
-            await update.message.reply_text("❌ Use this command inside a conversation topic.")
-            return
-
-        session_id = self._topic_session_map.get(thread_id)
-        if not session_id:
-            await update.message.reply_text("❌ No active conversation in this topic.")
-            return
-
-        # Send closing message
-        await update.message.reply_text("✅ Conversation marked as closed.\nThe topic will remain for reference.")
-
-        # Optionally close the topic (edit name to show closed)
-        try:
-            await self._app.bot.edit_forum_topic(
-                chat_id=self.forum_chat_id,
-                message_thread_id=thread_id,
-                name=f"🔴 Closed - {session_id[:8]}",
-            )
-        except Exception:
-            pass  # May fail if bot doesn't have permission
-
-    # ============ Message Handlers ============
-
-    async def _handle_forum_message(self, update, context):
-        """Handle messages in forum topics - send to visitor."""
-        if not self._pocketping or not update.message:
-            return
-
-        thread_id = update.message.message_thread_id
-        if not thread_id:
-            # Message in general topic, ignore
-            return
-
-        session_id = self._topic_session_map.get(thread_id)
-        if not session_id:
-            # Unknown topic, ignore
-            return
-
-        text = update.message.text
-        if not text:
-            return
-
-        # Get operator name
-        user = update.message.from_user
-        operator_name = user.first_name if user else "Operator"
-
-        try:
-            message = await self._pocketping.send_operator_message(
-                session_id,
-                text,
-                source_bridge=self.name,
-                operator_name=operator_name,
-            )
-            self._pocketping.set_operator_online(True)
-
-            # Track message for read receipts
-            chat_id = int(self.forum_chat_id)
-            telegram_msg_id = update.message.message_id
-            self._operator_message_map[message.id] = (chat_id, telegram_msg_id)
-
-            # React with single checkmark (sent)
-            try:
-                await update.message.set_reaction("✅")
-            except Exception:
-                pass  # Reaction may fail on older clients
-
+            return data.get("result")
+        except httpx.HTTPError as e:
+            print(f"[PocketPing] Telegram HTTP error: {e}")
+            return None
         except Exception as e:
-            await update.message.reply_text(f"❌ Failed to send: {e}")
+            print(f"[PocketPing] Telegram error: {e}")
+            return None
 
-    async def _handle_reply(self, update, context):
-        """Handle replies to notification messages (legacy mode)."""
-        if not update.message.reply_to_message or not self._pocketping:
-            return
+    async def _send_message(
+        self,
+        text: str,
+        *,
+        reply_to_message_id: int | None = None,
+    ) -> dict | None:
+        """Send a message to the configured chat.
 
-        reply_to_id = update.message.reply_to_message.message_id
-        session_id = self._message_session_map.get(reply_to_id)
+        Args:
+            text: Message text
+            reply_to_message_id: Optional message ID to reply to
 
-        if session_id and update.message.text:
-            user = update.message.from_user
-            operator_name = user.first_name if user else "Operator"
+        Returns:
+            API response with message details, or None on error
+        """
+        params = {
+            "chat_id": self.chat_id,
+            "text": text,
+            "parse_mode": self.parse_mode,
+            "disable_notification": self.disable_notification,
+        }
 
-            try:
-                message = await self._pocketping.send_operator_message(
-                    session_id,
-                    update.message.text,
-                    source_bridge=self.name,
-                    operator_name=operator_name,
-                )
-                self._pocketping.set_operator_online(True)
+        if reply_to_message_id:
+            params["reply_to_message_id"] = reply_to_message_id
 
-                # Track message for read receipts
-                chat_id = int(self.chat_ids[0]) if self.chat_ids else 0
-                telegram_msg_id = update.message.message_id
-                if chat_id:
-                    self._operator_message_map[message.id] = (chat_id, telegram_msg_id)
+        return await self._request("sendMessage", **params)
 
-                await update.message.reply_text("✅ Sent")
-            except Exception as e:
-                await update.message.reply_text(f"❌ Failed: {e}")
+    async def _edit_message(
+        self,
+        message_id: int,
+        text: str,
+    ) -> dict | None:
+        """Edit a message.
 
-    # ============ Bridge Events ============
+        Args:
+            message_id: ID of the message to edit
+            text: New message text
 
-    async def on_new_session(self, session: Session) -> None:
-        if not self._app:
-            return
-
-        if self.use_forum:
-            await self._create_forum_topic(session)
-        else:
-            await self._send_legacy_notification(session)
-
-    async def _create_forum_topic(self, session: Session) -> None:
-        """Create a new forum topic for this session."""
-        # Build topic name
-        page_info = ""
-        if session.metadata and session.metadata.url:
-            # Extract page name from URL
-            url = session.metadata.url
-            if "/" in url:
-                page_info = url.split("/")[-1] or "home"
-                page_info = page_info.split("?")[0][:20]  # Trim query params and limit length
-
-        topic_name = f"🟢 {session.id[:8]}"
-        if page_info:
-            topic_name += f" • {page_info}"
-
-        try:
-            # Create the topic
-            topic = await self._app.bot.create_forum_topic(
-                chat_id=self.forum_chat_id,
-                name=topic_name,
-            )
-
-            thread_id = topic.message_thread_id
-
-            # Store mappings
-            self._session_topic_map[session.id] = thread_id
-            self._topic_session_map[thread_id] = session.id
-
-            # Send welcome message in the topic
-            text = "🆕 *New Conversation*\n\n"
-
-            if self.show_url and session.metadata and session.metadata.url:
-                text += f"📍 Page: {session.metadata.url}\n"
-
-            if self.show_metadata and session.metadata:
-                meta = session.metadata
-                if meta.referrer:
-                    text += f"↩️ From: {meta.referrer}\n"
-                if meta.ip:
-                    text += f"🌐 IP: `{meta.ip}`\n"
-                if meta.device_type or meta.browser or meta.os:
-                    device_icon = "📱" if meta.device_type in ("mobile", "tablet") else "💻"
-                    device_parts = [p for p in [meta.device_type, meta.browser, meta.os] if p]
-                    device_str = " • ".join(
-                        p.title() if p == meta.device_type else p for p in device_parts
-                    )
-                    text += f"{device_icon} Device: {device_str}\n"
-                if meta.language:
-                    text += f"🌍 Language: {meta.language}\n"
-                if meta.timezone:
-                    text += f"🕐 Timezone: {meta.timezone}\n"
-                if meta.screen_resolution:
-                    text += f"🖥️ Screen: {meta.screen_resolution}\n"
-
-            text += f"\n_Session ID: `{session.id}`_\n"
-            text += "\n💡 *Just type here to reply - no need to swipe-reply!*"
-
-            await self._app.bot.send_message(
-                chat_id=self.forum_chat_id,
-                message_thread_id=thread_id,
-                text=text,
-                parse_mode="Markdown",
-            )
-
-        except Exception as e:
-            # Fallback: send to general if topic creation fails
-            await self._app.bot.send_message(
-                chat_id=self.forum_chat_id,
-                text=f"⚠️ Failed to create topic for session {session.id[:8]}: {e}",
-            )
-
-    async def _send_legacy_notification(self, session: Session) -> None:
-        """Send notification in legacy mode (no topics)."""
-        text = f"🆕 *New Visitor*\n\nSession: `{session.id[:8]}...`"
-
-        if self.show_url and session.metadata and session.metadata.url:
-            text += f"\n📍 Page: {session.metadata.url}"
-
-        if self.show_metadata and session.metadata:
-            meta = session.metadata
-            if meta.referrer:
-                text += f"\n↩️ From: {meta.referrer}"
-            if meta.ip:
-                text += f"\n🌐 IP: `{meta.ip}`"
-            if meta.device_type or meta.browser or meta.os:
-                device_parts = [p for p in [meta.device_type, meta.browser, meta.os] if p]
-                text += f"\n💻 Device: {' • '.join(p.title() if p == meta.device_type else p for p in device_parts)}"
-
-        text += "\n\n_Reply to any message from this user to respond._"
-
-        for chat_id in self.chat_ids:
-            msg = await self._app.bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
-            self._session_message_map[session.id] = msg.message_id
-            self._message_session_map[msg.message_id] = session.id
-
-    async def on_message(self, message: Message, session: Session) -> None:
-        if message.sender != Sender.VISITOR or not self._app:
-            return
-
-        if self.use_forum:
-            await self._send_forum_message(message, session)
-        else:
-            await self._send_legacy_message(message, session)
-
-    async def _send_forum_message(self, message: Message, session: Session) -> None:
-        """Send visitor message to the forum topic."""
-        thread_id = self._session_topic_map.get(session.id)
-
-        if not thread_id:
-            # Topic doesn't exist yet, create it
-            await self._create_forum_topic(session)
-            thread_id = self._session_topic_map.get(session.id)
-
-        if not thread_id:
-            return
-
-        text = f"👤 *Visitor*:\n{message.content}"
-
-        await self._app.bot.send_message(
-            chat_id=self.forum_chat_id,
-            message_thread_id=thread_id,
+        Returns:
+            API response, or None on error
+        """
+        return await self._request(
+            "editMessageText",
+            chat_id=self.chat_id,
+            message_id=message_id,
             text=text,
-            parse_mode="Markdown",
+            parse_mode=self.parse_mode,
         )
 
-    async def _send_legacy_message(self, message: Message, session: Session) -> None:
-        """Send visitor message in legacy mode."""
-        text = f"💬 *Message*\n\n{message.content}"
-        text += f"\n\n_Session: `{session.id[:8]}...`_"
+    async def _delete_message(self, message_id: int) -> bool:
+        """Delete a message.
 
-        if self.show_url and session.metadata and session.metadata.url:
-            text += f"\n_Page: {session.metadata.url}_"
+        Args:
+            message_id: ID of the message to delete
 
-        for chat_id in self.chat_ids:
-            msg = await self._app.bot.send_message(
-                chat_id=chat_id,
-                text=text,
-                parse_mode="Markdown",
-                reply_markup={"force_reply": True, "selective": True},
-            )
-            self._session_message_map[session.id] = msg.message_id
-            self._message_session_map[msg.message_id] = session.id
+        Returns:
+            True if successful, False otherwise
+        """
+        result = await self._request(
+            "deleteMessage",
+            chat_id=self.chat_id,
+            message_id=message_id,
+        )
+        return result is True
 
-    async def on_ai_takeover(self, session: Session, reason: str) -> None:
-        if not self._app:
+    async def _send_chat_action(self, action: str = "typing") -> None:
+        """Send a chat action (typing indicator).
+
+        Args:
+            action: Action to send (typing, upload_photo, etc.)
+        """
+        await self._request(
+            "sendChatAction",
+            chat_id=self.chat_id,
+            action=action,
+        )
+
+    def _format_session_text(self, session: Session) -> str:
+        """Format session information for the new session notification."""
+        visitor_display = session.visitor_id[:8]
+        if session.identity:
+            if session.identity.name:
+                visitor_display = session.identity.name
+            elif session.identity.email:
+                visitor_display = session.identity.email
+
+        parts = [
+            "<b>New chat session</b>",
+            f"<b>Visitor:</b> {self._escape_html(visitor_display)}",
+        ]
+
+        if session.metadata:
+            if session.metadata.url:
+                parts.append(f"<b>Page:</b> {self._escape_html(session.metadata.url)}")
+            if session.metadata.ip:
+                parts.append(f"<b>IP:</b> <code>{session.metadata.ip}</code>")
+            if session.metadata.country:
+                location = session.metadata.country
+                if session.metadata.city:
+                    location = f"{session.metadata.city}, {location}"
+                parts.append(f"<b>Location:</b> {self._escape_html(location)}")
+
+        return "\n".join(parts)
+
+    def _format_message_text(self, message: Message, session: Session) -> str:
+        """Format a visitor message for Telegram."""
+        visitor_display = session.visitor_id[:8]
+        if session.identity:
+            if session.identity.name:
+                visitor_display = session.identity.name
+            elif session.identity.email:
+                visitor_display = session.identity.email
+
+        content = self._escape_html(message.content)
+        return f"<b>{self._escape_html(visitor_display)}:</b>\n{content}"
+
+    def _escape_html(self, text: str) -> str:
+        """Escape HTML special characters."""
+        return (
+            text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+
+    async def on_new_session(self, session: Session) -> None:
+        """Send notification for new chat session."""
+        visitor_display = session.visitor_id[:8]
+        if session.identity:
+            if session.identity.name:
+                visitor_display = session.identity.name
+            elif session.identity.email:
+                visitor_display = session.identity.email
+
+        url_part = ""
+        if session.metadata and session.metadata.url:
+            url_part = f"\n<b>Page:</b> {self._escape_html(session.metadata.url)}"
+
+        text = (
+            f"<b>New chat session</b>\n"
+            f"<b>Visitor:</b> {self._escape_html(visitor_display)}"
+            f"{url_part}"
+        )
+
+        await self._send_message(text)
+
+    async def on_visitor_message(
+        self, message: Message, session: Session
+    ) -> BridgeMessageResult | None:
+        """Send visitor message to Telegram.
+
+        Returns:
+            BridgeMessageResult with the Telegram message ID
+        """
+        if message.sender != Sender.VISITOR:
+            return None
+
+        text = self._format_message_text(message, session)
+        result = await self._send_message(text)
+
+        if result and "message_id" in result:
+            return BridgeMessageResult(message_id=result["message_id"])
+
+        return BridgeMessageResult()
+
+    async def on_message_edit(
+        self,
+        message: Message,
+        session: Session,
+        platform_message_id: str | int | None = None,
+    ) -> None:
+        """Edit a message on Telegram."""
+        if not platform_message_id:
+            print("[PocketPing] Telegram: Cannot edit message without platform_message_id")
             return
 
-        text = f"🤖 *AI Takeover*\n\nSession `{session.id[:8]}...`\nReason: {reason}"
+        visitor_display = session.visitor_id[:8]
+        if session.identity:
+            if session.identity.name:
+                visitor_display = session.identity.name
+            elif session.identity.email:
+                visitor_display = session.identity.email
 
-        if self.use_forum:
-            thread_id = self._session_topic_map.get(session.id)
-            if thread_id:
-                await self._app.bot.send_message(
-                    chat_id=self.forum_chat_id,
-                    message_thread_id=thread_id,
-                    text=text,
-                    parse_mode="Markdown",
-                )
-        else:
-            for chat_id in self.chat_ids:
-                await self._app.bot.send_message(
-                    chat_id=chat_id,
-                    text=text,
-                    parse_mode="Markdown",
-                )
+        content = self._escape_html(message.content)
+        text = f"<b>{self._escape_html(visitor_display)}:</b>\n{content}\n<i>(edited)</i>"
+
+        await self._edit_message(int(platform_message_id), text)
+
+    async def on_message_delete(
+        self,
+        message: Message,
+        session: Session,
+        platform_message_id: str | int | None = None,
+    ) -> None:
+        """Delete a message on Telegram."""
+        if not platform_message_id:
+            print("[PocketPing] Telegram: Cannot delete message without platform_message_id")
+            return
+
+        await self._delete_message(int(platform_message_id))
+
+    async def on_typing(self, session_id: str, is_typing: bool) -> None:
+        """Send typing indicator to Telegram."""
+        if is_typing:
+            await self._send_chat_action("typing")
+
+    async def on_ai_takeover(self, session: Session, reason: str) -> None:
+        """Notify when AI takes over a conversation."""
+        text = (
+            f"<b>AI Takeover</b>\n"
+            f"Session: <code>{session.id[:8]}</code>\n"
+            f"Reason: {self._escape_html(reason)}"
+        )
+        await self._send_message(text)
 
     async def on_operator_message(
         self,
         message: Message,
         session: Session,
-        source_bridge: str,
+        source_bridge: str | None = None,
         operator_name: str | None = None,
     ) -> None:
         """Show operator messages from other bridges (cross-bridge sync)."""
-        # Skip if message is from this bridge (we already showed it)
-        if source_bridge == self.name or not self._app:
+        # Skip if message is from this bridge
+        if source_bridge == self.name:
             return
 
-        # Format the synced message
-        bridge_emoji = {"discord": "🎮", "slack": "💬", "api": "🔌"}.get(source_bridge, "📨")
         name = operator_name or "Operator"
-        text = f"{bridge_emoji} *{name}* _via {source_bridge}_:\n{message.content}"
+        source_text = f" via {source_bridge}" if source_bridge else ""
 
-        if self.use_forum:
-            thread_id = self._session_topic_map.get(session.id)
-            if thread_id:
-                await self._app.bot.send_message(
-                    chat_id=self.forum_chat_id,
-                    message_thread_id=thread_id,
-                    text=text,
-                    parse_mode="Markdown",
-                )
-        else:
-            for chat_id in self.chat_ids:
-                await self._app.bot.send_message(
-                    chat_id=chat_id,
-                    text=text,
-                    parse_mode="Markdown",
-                )
+        content = self._escape_html(message.content)
+        text = f"<b>{self._escape_html(name)}</b>{source_text}:\n{content}"
+
+        await self._send_message(text)
 
     async def on_message_read(
         self,
         session_id: str,
         message_ids: list[str],
-        status: str,
+        status: MessageStatus,
         session: Session,
     ) -> None:
-        """Update message reactions based on read receipt status.
+        """Handle read receipts (no-op for Telegram in this implementation)."""
+        # Telegram doesn't have a built-in way to show read receipts
+        # This could be extended to use reactions if needed
+        pass
 
-        Status indicators:
-        - ✅ = sent (default)
-        - ☑️ = delivered to widget
-        - 👁️ = read by visitor
-        """
-        if not self._app:
+    async def on_custom_event(self, event, session: Session) -> None:
+        """Handle custom events."""
+        text = (
+            f"<b>Event:</b> {self._escape_html(event.name)}\n"
+            f"Session: <code>{session.id[:8]}</code>"
+        )
+        if event.data:
+            text += f"\nData: <code>{event.data}</code>"
+
+        await self._send_message(text)
+
+    async def on_identity_update(self, session: Session) -> None:
+        """Handle identity updates."""
+        if not session.identity:
             return
 
-        # Map status to reaction emoji
-        status_reactions = {
-            "delivered": "☑️",  # Double check
-            "read": "👁️",  # Eye = seen
-        }
+        parts = ["<b>Identity Updated</b>"]
+        if session.identity.name:
+            parts.append(f"Name: {self._escape_html(session.identity.name)}")
+        if session.identity.email:
+            parts.append(f"Email: {self._escape_html(session.identity.email)}")
+        parts.append(f"Session: <code>{session.id[:8]}</code>")
 
-        reaction = status_reactions.get(status)
-        if not reaction:
-            return
-
-        for message_id in message_ids:
-            mapping = self._operator_message_map.get(message_id)
-            if not mapping:
-                continue
-
-            chat_id, telegram_msg_id = mapping
-
-            try:
-                await self._app.bot.set_message_reaction(
-                    chat_id=chat_id,
-                    message_id=telegram_msg_id,
-                    reaction=[{"type": "emoji", "emoji": reaction}],
-                )
-            except Exception:
-                # Reaction update may fail (old messages, permissions, etc.)
-                pass
-
-            # Clean up read messages from tracking (optional memory optimization)
-            if status == "read":
-                self._operator_message_map.pop(message_id, None)
+        await self._send_message("\n".join(parts))
 
     async def destroy(self) -> None:
-        if self._app:
-            await self._app.stop()
-            await self._app.shutdown()
+        """Close the httpx client."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None

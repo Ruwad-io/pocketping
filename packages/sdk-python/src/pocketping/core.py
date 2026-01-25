@@ -17,6 +17,11 @@ from pocketping.models import (
     ConnectRequest,
     ConnectResponse,
     CustomEvent,
+    DeleteMessageRequest,
+    DeleteMessageResponse,
+    EditedMessageData,
+    EditMessageRequest,
+    EditMessageResponse,
     IdentifyRequest,
     IdentifyResponse,
     Message,
@@ -410,6 +415,182 @@ class PocketPing:
     async def get_session(self, session_id: str) -> Optional[Session]:
         """Get a session by ID."""
         return await self.storage.get_session(session_id)
+
+    # ─────────────────────────────────────────────────────────────────
+    # Message Edit/Delete
+    # ─────────────────────────────────────────────────────────────────
+
+    async def handle_edit_message(self, request: EditMessageRequest) -> EditMessageResponse:
+        """Handle message edit from widget.
+
+        Only the message sender can edit their own messages.
+
+        Args:
+            request: The edit request with session_id, message_id, and new content
+
+        Returns:
+            EditMessageResponse with the edited message data
+
+        Raises:
+            ValueError: If session/message not found or validation fails
+        """
+        session = await self.storage.get_session(request.session_id)
+        if not session:
+            raise ValueError("Session not found")
+
+        message = await self.storage.get_message(request.message_id)
+        if not message:
+            raise ValueError("Message not found")
+
+        if message.session_id != request.session_id:
+            raise ValueError("Message does not belong to this session")
+
+        if message.deleted_at:
+            raise ValueError("Cannot edit deleted message")
+
+        # Only visitor messages can be edited from widget
+        if message.sender != Sender.VISITOR:
+            raise ValueError("Cannot edit this message")
+
+        # Validate content
+        if not request.content or not request.content.strip():
+            raise ValueError("Content is required")
+
+        if len(request.content) > 4000:
+            raise ValueError("Content exceeds maximum length")
+
+        # Update message
+        message.content = request.content.strip()
+        message.edited_at = datetime.now(timezone.utc)
+
+        await self.storage.update_message(message)
+
+        # Sync edit to bridges
+        await self._sync_edit_to_bridges(message.id, message.content)
+
+        # Broadcast to WebSocket clients
+        await self._broadcast_to_session(
+            request.session_id,
+            WebSocketEvent(
+                type="message_edited",
+                data={
+                    "messageId": message.id,
+                    "content": message.content,
+                    "editedAt": message.edited_at.isoformat(),
+                },
+            ),
+        )
+
+        return EditMessageResponse(
+            message=EditedMessageData(
+                id=message.id,
+                content=message.content,
+                edited_at=message.edited_at,
+            )
+        )
+
+    async def handle_delete_message(self, request: DeleteMessageRequest) -> DeleteMessageResponse:
+        """Handle message delete from widget.
+
+        Only the message sender can delete their own messages (soft delete).
+
+        Args:
+            request: The delete request with session_id and message_id
+
+        Returns:
+            DeleteMessageResponse with deleted=True
+
+        Raises:
+            ValueError: If session/message not found or validation fails
+        """
+        session = await self.storage.get_session(request.session_id)
+        if not session:
+            raise ValueError("Session not found")
+
+        message = await self.storage.get_message(request.message_id)
+        if not message:
+            raise ValueError("Message not found")
+
+        if message.session_id != request.session_id:
+            raise ValueError("Message does not belong to this session")
+
+        if message.deleted_at:
+            raise ValueError("Message already deleted")
+
+        # Only visitor messages can be deleted from widget
+        if message.sender != Sender.VISITOR:
+            raise ValueError("Cannot delete this message")
+
+        # Sync delete to bridges BEFORE soft delete (need bridge IDs)
+        await self._sync_delete_to_bridges(message.id)
+
+        # Soft delete message
+        message.deleted_at = datetime.now(timezone.utc)
+        await self.storage.update_message(message)
+
+        # Broadcast to WebSocket clients
+        await self._broadcast_to_session(
+            request.session_id,
+            WebSocketEvent(
+                type="message_deleted",
+                data={
+                    "messageId": message.id,
+                    "deletedAt": message.deleted_at.isoformat(),
+                },
+            ),
+        )
+
+        return DeleteMessageResponse(deleted=True)
+
+    async def _sync_edit_to_bridges(self, message_id: str, new_content: str) -> None:
+        """Sync message edit to all bridges that support it."""
+        bridge_ids = await self.storage.get_bridge_message_ids(message_id)
+        if not bridge_ids:
+            return
+
+        for bridge in self.bridges:
+            if not hasattr(bridge, "on_message_edit"):
+                continue
+
+            try:
+                bridge_message_id: Optional[str | int] = None
+
+                if bridge.name == "telegram" and bridge_ids.telegram_message_id:
+                    bridge_message_id = bridge_ids.telegram_message_id
+                elif bridge.name == "discord" and bridge_ids.discord_message_id:
+                    bridge_message_id = bridge_ids.discord_message_id
+                elif bridge.name == "slack" and bridge_ids.slack_message_ts:
+                    bridge_message_id = bridge_ids.slack_message_ts
+
+                if bridge_message_id is not None:
+                    await bridge.on_message_edit(message_id, new_content, bridge_message_id)
+            except Exception as e:
+                print(f"[PocketPing] Bridge {bridge.name} edit sync error: {e}")
+
+    async def _sync_delete_to_bridges(self, message_id: str) -> None:
+        """Sync message delete to all bridges that support it."""
+        bridge_ids = await self.storage.get_bridge_message_ids(message_id)
+        if not bridge_ids:
+            return
+
+        for bridge in self.bridges:
+            if not hasattr(bridge, "on_message_delete"):
+                continue
+
+            try:
+                bridge_message_id: Optional[str | int] = None
+
+                if bridge.name == "telegram" and bridge_ids.telegram_message_id:
+                    bridge_message_id = bridge_ids.telegram_message_id
+                elif bridge.name == "discord" and bridge_ids.discord_message_id:
+                    bridge_message_id = bridge_ids.discord_message_id
+                elif bridge.name == "slack" and bridge_ids.slack_message_ts:
+                    bridge_message_id = bridge_ids.slack_message_ts
+
+                if bridge_message_id is not None:
+                    await bridge.on_message_delete(message_id, bridge_message_id)
+            except Exception as e:
+                print(f"[PocketPing] Bridge {bridge.name} delete sync error: {e}")
 
     # ─────────────────────────────────────────────────────────────────
     # Operator Actions

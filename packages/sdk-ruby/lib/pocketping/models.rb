@@ -31,6 +31,35 @@ module PocketPing
     end
   end
 
+  # Attachment upload status types
+  module AttachmentStatus
+    PENDING = "pending"
+    UPLOADING = "uploading"
+    READY = "ready"
+    FAILED = "failed"
+
+    ALL = [PENDING, UPLOADING, READY, FAILED].freeze
+
+    def self.valid?(value)
+      ALL.include?(value)
+    end
+  end
+
+  # Upload source types
+  module UploadSource
+    WIDGET = "widget"
+    TELEGRAM = "telegram"
+    DISCORD = "discord"
+    SLACK = "slack"
+    API = "api"
+
+    ALL = [WIDGET, TELEGRAM, DISCORD, SLACK, API].freeze
+
+    def self.valid?(value)
+      ALL.include?(value)
+    end
+  end
+
   # Version check status types
   module VersionStatus
     OK = "ok"
@@ -182,6 +211,19 @@ module PocketPing
     attribute :identity, type: UserIdentity
   end
 
+  # File attachment in a message
+  class Attachment < Model
+    attribute :id, type: String
+    attribute :filename, type: String
+    attribute :mime_type, type: String, alias_name: :mimeType
+    attribute :size, type: Integer
+    attribute :url, type: String
+    attribute :thumbnail_url, type: String, alias_name: :thumbnailUrl
+    attribute :status, type: String, default: AttachmentStatus::READY
+    attribute :uploaded_from, type: String, alias_name: :uploadedFrom
+    attribute :bridge_file_id, type: String, alias_name: :bridgeFileId
+  end
+
   # A chat message
   class Message < Model
     attribute :id, type: String
@@ -191,11 +233,16 @@ module PocketPing
     attribute :timestamp, type: Time, default: -> { Time.now.utc }
     attribute :reply_to, type: String, alias_name: :replyTo
     attribute :metadata, type: Hash
+    attribute :attachments, type: Array
 
     # Read receipt fields
     attribute :status, type: String, default: MessageStatus::SENT
     attribute :delivered_at, type: Time, alias_name: :deliveredAt
     attribute :read_at, type: Time, alias_name: :readAt
+
+    # Edit/delete fields
+    attribute :edited_at, type: Time, alias_name: :editedAt
+    attribute :deleted_at, type: Time, alias_name: :deletedAt
   end
 
   # Tracked element configuration (for SaaS auto-tracking)
@@ -252,6 +299,8 @@ module PocketPing
     attribute :content, type: String
     attribute :sender, type: String
     attribute :reply_to, type: String, alias_name: :replyTo
+    attribute :attachment_ids, type: Array, alias_name: :attachmentIds
+    attribute :attachments, type: Array
 
     MAX_CONTENT_LENGTH = 4000
 
@@ -287,6 +336,37 @@ module PocketPing
   # Response after marking messages as read
   class ReadResponse < Model
     attribute :updated, type: Integer
+  end
+
+  # Request to edit a message
+  class EditMessageRequest < Model
+    attribute :session_id, type: String, alias_name: :sessionId
+    attribute :message_id, type: String, alias_name: :messageId
+    attribute :content, type: String
+
+    MAX_CONTENT_LENGTH = 4000
+
+    def validate!
+      raise ValidationError, "content is required" if content.nil? || content.empty?
+      raise ValidationError, "content exceeds maximum length of #{MAX_CONTENT_LENGTH}" if content.length > MAX_CONTENT_LENGTH
+      true
+    end
+  end
+
+  # Response after editing a message
+  class EditMessageResponse < Model
+    attribute :message, type: Hash
+  end
+
+  # Request to delete a message
+  class DeleteMessageRequest < Model
+    attribute :session_id, type: String, alias_name: :sessionId
+    attribute :message_id, type: String, alias_name: :messageId
+  end
+
+  # Response after deleting a message
+  class DeleteMessageResponse < Model
+    attribute :deleted, type: :boolean
   end
 
   # Request to identify a user
@@ -340,5 +420,27 @@ module PocketPing
     attribute :event, type: CustomEvent
     attribute :session, type: Hash
     attribute :sent_at, type: Time, alias_name: :sentAt
+  end
+
+  # Result returned from bridge on_visitor_message
+  # Contains the platform-specific message ID for edit/delete operations
+  class BridgeMessageResult < Model
+    attribute :message_id
+  end
+
+  # Bridge message IDs for edit/delete synchronization
+  class BridgeMessageIds < Model
+    attribute :telegram_message_id, type: Integer, alias_name: :telegramMessageId
+    attribute :discord_message_id, type: String, alias_name: :discordMessageId
+    attribute :slack_message_ts, type: String, alias_name: :slackMessageTs
+
+    # Merge with another BridgeMessageIds (for partial updates)
+    def merge_with(other)
+      BridgeMessageIds.new(
+        telegram_message_id: other.telegram_message_id || telegram_message_id,
+        discord_message_id: other.discord_message_id || discord_message_id,
+        slack_message_ts: other.slack_message_ts || slack_message_ts
+      )
+    end
   end
 end

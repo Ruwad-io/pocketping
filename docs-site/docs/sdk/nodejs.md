@@ -116,11 +116,44 @@ export default pp.nextPagesHandler();
 
 ---
 
+## Built-in Bridges
+
+The SDK includes built-in bridges for Telegram, Discord, and Slack. No external libraries required - all communication uses HTTP APIs directly.
+
+```javascript
+import { PocketPing, TelegramBridge, DiscordBridge, SlackBridge } from '@pocketping/sdk-node';
+
+const pp = new PocketPing({ /* ... */ });
+
+// Add Telegram bridge
+pp.addBridge(new TelegramBridge({
+  botToken: process.env.TELEGRAM_BOT_TOKEN,
+  chatIds: process.env.TELEGRAM_CHAT_ID,
+}));
+
+// Add Discord bridge (bot mode for bidirectional)
+pp.addBridge(DiscordBridge.withBot({
+  botToken: process.env.DISCORD_BOT_TOKEN,
+  channelId: process.env.DISCORD_CHANNEL_ID,
+}));
+
+// Add Slack bridge (webhook mode for simple notifications)
+pp.addBridge(SlackBridge.withWebhook({
+  webhookUrl: process.env.SLACK_WEBHOOK_URL,
+}));
+```
+
+:::tip Multiple bridges
+You can add multiple bridges simultaneously. Messages sync across all platforms.
+:::
+
+---
+
 ## Configuration
 
 ```javascript
 const pp = new PocketPing({
-  // Required: URL of your bridge server
+  // Optional: URL of external bridge server (alternative to built-in bridges)
   bridgeUrl: 'http://localhost:3001',
 
   // Optional: API key for authentication
@@ -140,7 +173,7 @@ const pp = new PocketPing({
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `bridgeUrl` | string | Yes | URL of your bridge server |
+| `bridgeUrl` | string | No | URL of external bridge server (alternative to built-in bridges) |
 | `apiKey` | string | No | API key for authentication |
 | `storage` | Storage | No | Custom session/message storage |
 | `onSessionStart` | function | No | Called when new session starts |

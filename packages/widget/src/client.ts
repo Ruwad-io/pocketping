@@ -5,6 +5,8 @@ import type {
   Session,
   ConnectResponse,
   SendMessageResponse,
+  EditMessageResponse,
+  DeleteMessageResponse,
   PresenceResponse,
   WebSocketEvent,
   CustomEvent,
@@ -13,6 +15,9 @@ import type {
   UserIdentity,
   TriggerOptions,
   TrackedElement,
+  Attachment,
+  InitiateUploadResponse,
+  CompleteUploadResponse,
 } from './types';
 import { VERSION } from './version';
 
@@ -157,7 +162,7 @@ export class PocketPingClient {
     this.disableInspectorMode();
   }
 
-  async sendMessage(content: string): Promise<Message> {
+  async sendMessage(content: string, attachmentIds?: string[], replyTo?: string): Promise<Message> {
     if (!this.session) {
       throw new Error('Not connected');
     }
@@ -171,6 +176,7 @@ export class PocketPingClient {
       sender: 'visitor',
       timestamp: new Date().toISOString(),
       status: 'sending',
+      replyTo,
     };
 
     // Add to local state immediately for instant UI feedback
@@ -184,15 +190,21 @@ export class PocketPingClient {
           sessionId: this.session.sessionId,
           content,
           sender: 'visitor',
+          attachmentIds: attachmentIds || [],
+          replyTo,
         }),
       });
 
-      // Update the temporary message with real ID and 'sent' status
+      // Update the temporary message with real ID, 'sent' status, and attachments
       const messageIndex = this.session.messages.findIndex((m) => m.id === tempId);
       if (messageIndex >= 0) {
         this.session.messages[messageIndex].id = response.messageId;
         this.session.messages[messageIndex].timestamp = response.timestamp;
         this.session.messages[messageIndex].status = 'sent';
+        // Add attachments from server response
+        if (response.attachments && response.attachments.length > 0) {
+          this.session.messages[messageIndex].attachments = response.attachments;
+        }
 
         // Emit to trigger re-render with updated status
         this.emit('message', this.session.messages[messageIndex]);
@@ -205,6 +217,7 @@ export class PocketPingClient {
         sender: 'visitor',
         timestamp: response.timestamp,
         status: 'sent',
+        attachments: response.attachments,
       };
 
       this.config.onMessage?.(message);
@@ -218,6 +231,145 @@ export class PocketPingClient {
       }
       throw error;
     }
+  }
+
+  /**
+   * Upload a file attachment
+   * Returns the attachment data after successful upload
+   * @param file - File object to upload
+   * @param onProgress - Optional callback for upload progress (0-100)
+   * @example
+   * const attachment = await PocketPing.uploadFile(file, (progress) => {
+   *   console.log(`Upload ${progress}% complete`)
+   * })
+   * await PocketPing.sendMessage('Check this file', [attachment.id])
+   */
+  async uploadFile(
+    file: File,
+    onProgress?: (progress: number) => void
+  ): Promise<Attachment> {
+    if (!this.session) {
+      throw new Error('Not connected');
+    }
+
+    // Emit upload start event
+    this.emit('uploadStart', { filename: file.name, size: file.size });
+
+    try {
+      // Step 1: Initiate upload to get presigned URL
+      const initResponse = await this.fetch<InitiateUploadResponse>('/upload', {
+        method: 'POST',
+        body: JSON.stringify({
+          sessionId: this.session.sessionId,
+          filename: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          size: file.size,
+        }),
+      });
+
+      // Emit progress for initiation
+      onProgress?.(10);
+      this.emit('uploadProgress', { filename: file.name, progress: 10 });
+
+      // Step 2: Upload file to presigned URL
+      await this.uploadToPresignedUrl(initResponse.uploadUrl, file, (progress) => {
+        // Map upload progress from 10-90%
+        const mappedProgress = 10 + (progress * 0.8);
+        onProgress?.(mappedProgress);
+        this.emit('uploadProgress', { filename: file.name, progress: mappedProgress });
+      });
+
+      // Step 3: Complete the upload
+      const completeResponse = await this.fetch<CompleteUploadResponse>('/upload/complete', {
+        method: 'POST',
+        body: JSON.stringify({
+          sessionId: this.session.sessionId,
+          attachmentId: initResponse.attachmentId,
+        }),
+      });
+
+      // Emit completion
+      onProgress?.(100);
+      this.emit('uploadComplete', completeResponse);
+
+      return {
+        id: completeResponse.id,
+        filename: completeResponse.filename,
+        mimeType: completeResponse.mimeType,
+        size: completeResponse.size,
+        url: completeResponse.url,
+        thumbnailUrl: completeResponse.thumbnailUrl,
+        status: completeResponse.status,
+      };
+    } catch (error) {
+      this.emit('uploadError', { filename: file.name, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Upload multiple files at once
+   * @param files - Array of File objects to upload
+   * @param onProgress - Optional callback for overall progress (0-100)
+   * @returns Array of uploaded attachments
+   */
+  async uploadFiles(
+    files: File[],
+    onProgress?: (progress: number) => void
+  ): Promise<Attachment[]> {
+    const attachments: Attachment[] = [];
+    const totalFiles = files.length;
+
+    for (let i = 0; i < totalFiles; i++) {
+      const file = files[i];
+      const baseProgress = (i / totalFiles) * 100;
+      const fileProgress = 100 / totalFiles;
+
+      const attachment = await this.uploadFile(file, (progress) => {
+        const totalProgress = baseProgress + (progress / 100) * fileProgress;
+        onProgress?.(totalProgress);
+      });
+
+      attachments.push(attachment);
+    }
+
+    return attachments;
+  }
+
+  /**
+   * Upload file to presigned URL with progress tracking
+   */
+  private uploadToPresignedUrl(
+    url: string,
+    file: File,
+    onProgress?: (progress: number) => void
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          const progress = (event.loaded / event.total) * 100;
+          onProgress?.(progress);
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          reject(new Error(`Upload failed with status ${xhr.status}`));
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        reject(new Error('Upload failed'));
+      });
+
+      xhr.open('PUT', url);
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+      xhr.send(file);
+    });
   }
 
   async fetchMessages(after?: string): Promise<Message[]> {
@@ -282,6 +434,64 @@ export class PocketPingClient {
     } catch (err) {
       console.error('[PocketPing] Failed to send read status:', err);
     }
+  }
+
+  /**
+   * Edit a message (visitor can only edit their own messages)
+   * @param messageId - ID of the message to edit
+   * @param content - New content for the message
+   */
+  async editMessage(messageId: string, content: string): Promise<Message> {
+    if (!this.session) {
+      throw new Error('Not connected');
+    }
+
+    const response = await this.fetch<EditMessageResponse>(`/message/${messageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        sessionId: this.session.sessionId,
+        content,
+      }),
+    });
+
+    // Update local message
+    const messageIndex = this.session.messages.findIndex((m) => m.id === messageId);
+    if (messageIndex >= 0) {
+      this.session.messages[messageIndex].content = response.message.content;
+      this.session.messages[messageIndex].editedAt = response.message.editedAt;
+      this.emit('messageEdited', this.session.messages[messageIndex]);
+    }
+
+    return this.session.messages[messageIndex];
+  }
+
+  /**
+   * Delete a message (soft delete - visitor can only delete their own messages)
+   * @param messageId - ID of the message to delete
+   */
+  async deleteMessage(messageId: string): Promise<boolean> {
+    if (!this.session) {
+      throw new Error('Not connected');
+    }
+
+    const response = await this.fetch<DeleteMessageResponse>(`/message/${messageId}`, {
+      method: 'DELETE',
+      body: JSON.stringify({
+        sessionId: this.session.sessionId,
+      }),
+    });
+
+    if (response.deleted) {
+      // Update local message
+      const messageIndex = this.session.messages.findIndex((m) => m.id === messageId);
+      if (messageIndex >= 0) {
+        this.session.messages[messageIndex].deletedAt = new Date().toISOString();
+        this.session.messages[messageIndex].content = ''; // Clear content
+        this.emit('messageDeleted', this.session.messages[messageIndex]);
+      }
+    }
+
+    return response.deleted;
   }
 
   async getPresence(): Promise<PresenceResponse> {

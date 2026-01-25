@@ -134,6 +134,36 @@ export interface SessionMetadata {
 
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
 
+// ─────────────────────────────────────────────────────────────────
+// File Attachments
+// ─────────────────────────────────────────────────────────────────
+
+export type AttachmentStatus = 'pending' | 'uploading' | 'ready' | 'failed';
+
+export type UploadSource = 'widget' | 'telegram' | 'discord' | 'slack' | 'api';
+
+/** File attachment in a message */
+export interface Attachment {
+  /** Unique attachment ID */
+  id: string;
+  /** Original filename */
+  filename: string;
+  /** MIME type (e.g., 'image/jpeg', 'application/pdf') */
+  mimeType: string;
+  /** File size in bytes */
+  size: number;
+  /** URL to access the file */
+  url: string;
+  /** Thumbnail URL (for images/videos) */
+  thumbnailUrl?: string;
+  /** Upload status */
+  status: AttachmentStatus;
+  /** Source of the upload */
+  uploadedFrom?: UploadSource;
+  /** External file ID (from Telegram/Discord/Slack) */
+  bridgeFileId?: string;
+}
+
 export interface Message {
   id: string;
   sessionId: string;
@@ -142,11 +172,50 @@ export interface Message {
   timestamp: Date;
   replyTo?: string;
   metadata?: Record<string, unknown>;
+  /** File attachments in this message */
+  attachments?: Attachment[];
 
   // Read receipt fields
   status?: MessageStatus;
   deliveredAt?: Date;
   readAt?: Date;
+
+  // Edit/Delete fields
+  /** Timestamp when message was edited */
+  editedAt?: Date;
+  /** Timestamp when message was soft-deleted */
+  deletedAt?: Date;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Edit/Delete Message Types
+// ─────────────────────────────────────────────────────────────────
+
+/** Request to edit a message */
+export interface EditMessageRequest {
+  sessionId: string;
+  messageId: string;
+  content: string;
+}
+
+/** Response after editing a message */
+export interface EditMessageResponse {
+  message: {
+    id: string;
+    content: string;
+    editedAt: string;
+  };
+}
+
+/** Request to delete a message */
+export interface DeleteMessageRequest {
+  sessionId: string;
+  messageId: string;
+}
+
+/** Response after deleting a message */
+export interface DeleteMessageResponse {
+  deleted: boolean;
 }
 
 // Request/Response types
@@ -198,6 +267,10 @@ export interface SendMessageRequest {
   content: string;
   sender: 'visitor' | 'operator';
   replyTo?: string;
+  /** Attachment IDs to include with the message */
+  attachmentIds?: string[];
+  /** Inline attachments (for operator messages from bridges) */
+  attachments?: Attachment[];
 }
 
 export interface SendMessageResponse {

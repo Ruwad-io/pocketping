@@ -1,10 +1,20 @@
 """Storage adapters for PocketPing."""
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
 from pocketping.models import Message, Session
+
+
+@dataclass
+class BridgeMessageIds:
+    """Bridge message IDs for edit/delete sync."""
+
+    telegram_message_id: Optional[int] = None
+    discord_message_id: Optional[str] = None
+    slack_message_ts: Optional[str] = None
 
 
 class Storage(ABC):
@@ -45,6 +55,18 @@ class Storage(ABC):
         """Get a message by ID."""
         pass
 
+    async def update_message(self, message: Message) -> None:
+        """Update an existing message (for edit/delete). Optional to implement."""
+        await self.save_message(message)
+
+    async def save_bridge_message_ids(self, message_id: str, bridge_ids: BridgeMessageIds) -> None:
+        """Save bridge message IDs for a message. Optional to implement."""
+        pass
+
+    async def get_bridge_message_ids(self, message_id: str) -> Optional[BridgeMessageIds]:
+        """Get bridge message IDs for a message. Optional to implement."""
+        return None
+
     async def cleanup_old_sessions(self, older_than: datetime) -> int:
         """Clean up old sessions. Optional to implement."""
         return 0
@@ -61,6 +83,7 @@ class MemoryStorage(Storage):
         self._sessions: dict[str, Session] = {}
         self._messages: dict[str, list[Message]] = {}
         self._message_by_id: dict[str, Message] = {}
+        self._bridge_message_ids: dict[str, BridgeMessageIds] = {}
 
     async def create_session(self, session: Session) -> None:
         self._sessions[session.id] = session
@@ -97,6 +120,31 @@ class MemoryStorage(Storage):
 
     async def get_message(self, message_id: str) -> Optional[Message]:
         return self._message_by_id.get(message_id)
+
+    async def update_message(self, message: Message) -> None:
+        self._message_by_id[message.id] = message
+        # Also update in the session's messages array
+        if message.session_id in self._messages:
+            for i, m in enumerate(self._messages[message.session_id]):
+                if m.id == message.id:
+                    self._messages[message.session_id][i] = message
+                    break
+
+    async def save_bridge_message_ids(self, message_id: str, bridge_ids: BridgeMessageIds) -> None:
+        existing = self._bridge_message_ids.get(message_id)
+        if existing:
+            # Merge with existing
+            if bridge_ids.telegram_message_id is not None:
+                existing.telegram_message_id = bridge_ids.telegram_message_id
+            if bridge_ids.discord_message_id is not None:
+                existing.discord_message_id = bridge_ids.discord_message_id
+            if bridge_ids.slack_message_ts is not None:
+                existing.slack_message_ts = bridge_ids.slack_message_ts
+        else:
+            self._bridge_message_ids[message_id] = bridge_ids
+
+    async def get_bridge_message_ids(self, message_id: str) -> Optional[BridgeMessageIds]:
+        return self._bridge_message_ids.get(message_id)
 
     async def cleanup_old_sessions(self, older_than: datetime) -> int:
         count = 0
