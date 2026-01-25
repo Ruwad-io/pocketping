@@ -226,6 +226,22 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       font-size: 13px;
     }
 
+    .pp-date-separator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 16px 0 12px;
+    }
+
+    .pp-date-separator span {
+      background: ${colors.bgSecondary};
+      color: ${colors.textSecondary};
+      font-size: 11px;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-weight: 500;
+    }
+
     .pp-message {
       max-width: 85%;
       padding: 6px 10px;
@@ -349,16 +365,18 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-message-content {
-      margin-bottom: 2px;
+      display: inline;
     }
 
     .pp-message-time {
       font-size: 10px;
       opacity: 0.6;
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 3px;
-      justify-content: flex-end;
+      float: right;
+      margin-left: 8px;
+      margin-top: 4px;
     }
 
     .pp-ai-badge {
@@ -417,22 +435,27 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
 
     .pp-input-form {
       display: flex;
-      padding: 8px 12px;
+      padding: 10px 12px;
       gap: 8px;
       border-top: 1px solid ${colors.border};
-      align-items: flex-end;
+      align-items: center;
     }
 
     .pp-input {
       flex: 1;
-      padding: 8px 14px;
+      min-width: 0;
+      height: 40px;
+      line-height: 40px;
+      padding: 0 16px;
       border: 1px solid ${colors.border};
-      border-radius: 18px;
+      border-radius: 20px;
       background: ${colors.bg};
       color: ${colors.text};
       font-size: 14px;
       outline: none;
       transition: border-color 0.2s;
+      box-sizing: border-box;
+      margin: 0;
     }
 
     .pp-input:focus {
@@ -444,8 +467,9 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-send-btn {
-      width: 36px;
-      height: 36px;
+      width: 40px;
+      height: 40px;
+      min-width: 40px;
       border-radius: 50%;
       background: ${primaryColor};
       color: white;
@@ -456,6 +480,8 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       justify-content: center;
       transition: opacity 0.2s, transform 0.1s;
       flex-shrink: 0;
+      margin: 0;
+      padding: 0;
     }
 
     .pp-send-btn:not(:disabled):hover {
@@ -472,17 +498,17 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-send-btn svg {
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
     }
 
     .pp-footer {
       text-align: center;
-      padding: 6px;
-      font-size: 10px;
+      padding: 8px;
+      font-size: 11px;
       color: ${colors.textSecondary};
       border-top: 1px solid ${colors.border};
-      opacity: 0.8;
+      opacity: 0.7;
     }
 
     .pp-footer a {
@@ -511,6 +537,7 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     .pp-attach-btn {
       width: 40px;
       height: 40px;
+      min-width: 40px;
       border-radius: 50%;
       background: transparent;
       color: ${colors.textSecondary};
@@ -519,6 +546,8 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       display: flex;
       align-items: center;
       justify-content: center;
+      margin: 0;
+      padding: 0;
       transition: color 0.2s, border-color 0.2s;
       flex-shrink: 0;
     }

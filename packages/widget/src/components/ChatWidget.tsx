@@ -4,6 +4,34 @@ import type { PocketPingClient } from '../client';
 import type { PocketPingConfig, Message, MessageStatus, Attachment, ReplyToData } from '../types';
 import { styles } from './styles';
 
+// Format date for message separators (Today, Yesterday, or date)
+function formatDateSeparator(date: Date): string {
+  const now = new Date();
+  const messageDate = new Date(date);
+
+  // Reset time for comparison
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDay = new Date(messageDate.getFullYear(), messageDate.getMonth(), messageDate.getDate());
+
+  const diffDays = Math.floor((today.getTime() - msgDay.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+
+  // Format as "Jan 15, 2024"
+  return messageDate.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: messageDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+  });
+}
+
+// Get date string for comparison (YYYY-MM-DD)
+function getDateKey(date: Date): string {
+  const d = new Date(date);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
 interface Props {
   client: PocketPingClient;
   config: PocketPingConfig;
@@ -563,9 +591,14 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
               </div>
             )}
 
-            {messages.map((msg) => {
+            {messages.map((msg, index) => {
               const isDeleted = !!msg.deletedAt;
               const isEdited = !!msg.editedAt;
+
+              // Check if we need a date separator
+              const msgDate = new Date(msg.timestamp);
+              const prevMsg = index > 0 ? messages[index - 1] : null;
+              const showDateSeparator = !prevMsg || getDateKey(new Date(prevMsg.timestamp)) !== getDateKey(msgDate);
 
               // Handle replyTo - can be string ID or embedded object from SSE
               let replyData: ReplyToData | null = null;
@@ -594,17 +627,22 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
               const showActions = isHovered && !isDeleted;
 
               return (
-                <div
-                  key={msg.id}
-                  id={`pp-msg-${msg.id}`}
-                  class={`pp-message pp-message-${msg.sender} ${isDeleted ? 'pp-message-deleted' : ''}`}
-                  onContextMenu={(e) => handleMessageContextMenu(e, msg)}
-                  onMouseEnter={() => setHoveredMessageId(msg.id)}
-                  onMouseLeave={() => setHoveredMessageId(null)}
-                  onTouchStart={() => handleTouchStart(msg)}
-                  onTouchEnd={handleTouchEnd}
-                  onTouchCancel={handleTouchEnd}
-                >
+                <Fragment key={msg.id}>
+                  {showDateSeparator && (
+                    <div class="pp-date-separator">
+                      <span>{formatDateSeparator(msgDate)}</span>
+                    </div>
+                  )}
+                  <div
+                    id={`pp-msg-${msg.id}`}
+                    class={`pp-message pp-message-${msg.sender} ${isDeleted ? 'pp-message-deleted' : ''}`}
+                    onContextMenu={(e) => handleMessageContextMenu(e, msg)}
+                    onMouseEnter={() => setHoveredMessageId(msg.id)}
+                    onMouseLeave={() => setHoveredMessageId(null)}
+                    onTouchStart={() => handleTouchStart(msg)}
+                    onTouchEnd={handleTouchEnd}
+                    onTouchCancel={handleTouchEnd}
+                  >
                   {/* Hover actions (desktop) */}
                   {showActions && (
                     <div class={`pp-message-actions ${msg.sender === 'visitor' ? 'pp-actions-left' : 'pp-actions-right'}`}>
@@ -690,6 +728,7 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
                     )}
                   </div>
                 </div>
+                </Fragment>
               );
             })}
 
