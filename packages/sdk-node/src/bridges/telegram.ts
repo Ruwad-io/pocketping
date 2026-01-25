@@ -102,12 +102,13 @@ export class TelegramBridge implements Bridge {
     const text = this.formatVisitorMessage(session.visitorId, message.content);
     let replyToMessageId: number | undefined;
 
-    if (message.replyTo && this.pocketping?.getStorage().getBridgeMessageIds) {
-      const ids = await this.pocketping
-        .getStorage()
-        .getBridgeMessageIds(message.replyTo);
-      if (ids?.telegramMessageId) {
-        replyToMessageId = ids.telegramMessageId;
+    if (message.replyTo) {
+      const storage = this.pocketping?.getStorage();
+      if (storage?.getBridgeMessageIds) {
+        const ids = await storage.getBridgeMessageIds(message.replyTo);
+        if (ids?.telegramMessageId) {
+          replyToMessageId = ids.telegramMessageId;
+        }
       }
     }
 

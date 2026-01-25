@@ -172,12 +172,13 @@ export class DiscordBridge implements Bridge {
     };
     let replyToMessageId: string | undefined;
 
-    if (message.replyTo && this.pocketping?.getStorage().getBridgeMessageIds) {
-      const ids = await this.pocketping
-        .getStorage()
-        .getBridgeMessageIds(message.replyTo);
-      if (ids?.discordMessageId) {
-        replyToMessageId = ids.discordMessageId;
+    if (message.replyTo) {
+      const storage = this.pocketping?.getStorage();
+      if (storage?.getBridgeMessageIds) {
+        const ids = await storage.getBridgeMessageIds(message.replyTo);
+        if (ids?.discordMessageId) {
+          replyToMessageId = ids.discordMessageId;
+        }
       }
     }
 

@@ -828,8 +828,14 @@ func TestServer_MultipleBridges(t *testing.T) {
 
 func TestServer_EventsWebhook(t *testing.T) {
 	var receivedBody map[string]interface{}
+	var mu sync.Mutex
+	var webhookCalled sync.WaitGroup
+	webhookCalled.Add(1)
+
 	webhookServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		json.NewDecoder(r.Body).Decode(&receivedBody)
+		mu.Unlock()
 
 		// Check signature header if secret is set
 		sig := r.Header.Get("X-PocketPing-Signature")
@@ -838,6 +844,7 @@ func TestServer_EventsWebhook(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
+		webhookCalled.Done()
 	}))
 	defer webhookServer.Close()
 
@@ -860,9 +867,23 @@ func TestServer_EventsWebhook(t *testing.T) {
 
 	mux.ServeHTTP(w, req)
 
-	// Wait for async webhook
-	time.Sleep(100 * time.Millisecond)
+	// Wait for async webhook with timeout
+	done := make(chan struct{})
+	go func() {
+		webhookCalled.Wait()
+		close(done)
+	}()
 
+	select {
+	case <-done:
+		// Webhook was called
+	case <-time.After(2 * time.Second):
+		t.Error("timeout waiting for webhook")
+		return
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
 	if receivedBody == nil {
 		t.Error("webhook should have received the event")
 	}
