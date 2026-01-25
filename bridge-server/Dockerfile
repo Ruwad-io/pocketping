@@ -1,14 +1,21 @@
 # Build stage
 FROM golang:1.22-alpine AS builder
 
-WORKDIR /app
+WORKDIR /build
 
-# Install dependencies
-COPY go.mod go.sum* ./
+# Copy sdk-go first (dependency)
+COPY packages/sdk-go ./packages/sdk-go
+
+# Copy bridge-server
+COPY bridge-server/go.mod bridge-server/go.sum* ./bridge-server/
+
+WORKDIR /build/bridge-server
+
+# Download dependencies
 RUN go mod download
 
 # Copy source
-COPY . .
+COPY bridge-server/ .
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /bridge-server ./cmd/server

@@ -7,5 +7,5 @@ require (
 	github.com/joho/godotenv v1.5.1
 )
 
-// Use local sdk-go package (../packages/sdk-go for local, /packages/sdk-go for Docker)
-replace github.com/Ruwad-io/pocketping/sdk-go => /packages/sdk-go
+// Use local sdk-go package
+replace github.com/Ruwad-io/pocketping/sdk-go => ../packages/sdk-go

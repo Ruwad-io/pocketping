@@ -49,8 +49,8 @@ services:
   # ─────────────────────────────────────────────────────────────────
   bridge:
     build:
-      context: ./bridge-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: bridge-server/Dockerfile
     ports:
       - "3001:3001"
     environment:
