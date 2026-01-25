@@ -104,6 +104,7 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       flex-direction: column;
       overflow: hidden;
       z-index: 9998;
+      transition: max-height 0.2s ease, bottom 0.2s ease;
     }
 
     .pp-window.pp-bottom-right {
@@ -120,12 +121,20 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       .pp-window {
         width: calc(100vw - 20px);
         height: auto;
+        min-height: 300px;
         max-height: calc(100vh - 100px);
-        max-height: calc(100dvh - 100px);
+        max-height: calc(100svh - 100px); /* svh = small viewport, excludes keyboard */
         bottom: 80px;
         right: 10px;
         left: 10px;
         border-radius: 12px;
+      }
+
+      /* When keyboard is likely open (input focused), reduce height */
+      .pp-window:has(.pp-input:focus) {
+        max-height: calc(50vh - 20px);
+        max-height: calc(50svh - 20px);
+        bottom: 10px;
       }
     }
 
