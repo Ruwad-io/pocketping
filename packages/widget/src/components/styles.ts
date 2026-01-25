@@ -886,17 +886,29 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-reply-cancel {
-      background: transparent;
+      background: ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'};
       border: none;
+      border-radius: 50%;
       color: ${colors.textSecondary};
       cursor: pointer;
-      padding: 4px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      min-width: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       flex-shrink: 0;
+      transition: background 0.15s;
+    }
+
+    .pp-reply-cancel:hover {
+      background: ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)'};
     }
 
     .pp-reply-cancel svg {
-      width: 16px;
-      height: 16px;
+      width: 14px;
+      height: 14px;
     }
 
     /* Reply Quote in Message */
