@@ -27,6 +27,7 @@ services:
     working_dir: /app
     volumes:
       - .:/app
+      - ../packages/sdk-go:/packages/sdk-go
       - go-mod-cache:/go/pkg/mod
     command: sh -c "go mod tidy && go build -o /dev/null ./cmd/server && echo '✅ Build successful'"
 

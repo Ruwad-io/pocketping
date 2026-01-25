@@ -1,15 +1,28 @@
 # PocketPing Bridge Server (Go)
 
-A standalone HTTP server that forwards chat notifications to Telegram, Discord, and Slack using pure HTTP APIs (no external messaging libraries).
+A **standalone server** for PocketPing that handles bidirectional messaging with Telegram, Discord, and Slack.
+Deploy with Docker, configure your tokens, and you're done - no code to write.
+
+## Architecture
+
+The bridge-server is one of three ways to run PocketPing:
+
+```
+Widget  ◀──────────────▶  bridge-server  ◀──────────────▶  Telegram/Discord/Slack
+              (SSE)        (this server)       (HTTP)
+```
+
+**Uses sdk-go internally** for the core logic (WebhookHandler, message handling, etc.).
 
 ## Features
 
-- **HTTP-only**: Uses native HTTP calls to platform APIs
+- **Bidirectional messaging**: Visitors send messages, operators reply from Telegram/Discord/Slack
+- **File attachments**: Share images and files in both directions
+- **Message edit/delete sync**: Syncs modifications across all platforms
+- **SSE streaming**: Real-time updates to widgets
 - **Multi-bridge**: Supports Telegram, Discord, and Slack simultaneously
-- **Edit/Delete sync**: Syncs message edits and deletes across platforms
-- **SSE streaming**: Real-time event stream for backends
-- **Webhook support**: Forward events to external systems (Zapier, Make, n8n)
-- **Single binary**: Easy deployment with Go
+- **Zero code**: Just configuration, no backend code needed
+- **Single binary**: Easy deployment with Go or Docker
 
 ## Quick Start
 

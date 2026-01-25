@@ -320,62 +320,75 @@ SLACK_CHANNEL_ID=C0123456789
 
 ---
 
-## Architecture Options
+## Three Deployment Options
 
-### Option 1: Embedded Mode (Simple)
-
-Everything runs in your backend. Perfect for getting started.
-
-```
-+---------------------------------------------------+
-|               YOUR BACKEND (Python)               |
-|                                                   |
-|  +---------+   +---------+   +---------+         |
-|  | Widget  |   |Telegram |   |   AI    |         |
-|  | Handler |-->| Bridge  |-->|Provider |         |
-|  +---------+   +----+----+   +---------+         |
-+----------------------|----------------------------+
-                       v
-                   Telegram
-```
-
-**Pros:** One deployment, simple setup
-**Cons:** Restarting your backend = restarting bridges
-
-### Option 2: Bridge Server Mode (Production)
-
-Bridges run separately. Recommended for production.
+The widget can connect to **3 different servers**. All three provide the **same features**:
+bidirectional messaging, file attachments, message edit/delete, read receipts, and more.
 
 ```
-+-------------+   HTTP    +--------------+
-| YOUR BACKEND|<--------->|BRIDGE SERVER |
-| (any lang)  |           |     (Go)     |
-+-------------+           +------+-------+
-                                 |
-              +------------------+------------------+
-              v                  v                  v
-          Telegram           Discord             Slack
+┌────────────┐
+│   Widget   │──────► Option 1: pocketping.io (SaaS)
+│ (your site)│──────► Option 2: bridge-server (Self-hosted standalone)
+└────────────┘──────► Option 3: your backend + SDK (Self-hosted custom)
 ```
 
-**Pros:**
-- Deploy/update bridges without touching your backend
-- Works with any language (Node, Go, PHP, Ruby...)
-- Multiple operators on different platforms
-- Cross-platform sync (reply on Telegram, Discord sees it)
+### Option 1: SaaS (pocketping.io)
 
-**Cons:** Extra service to manage
+The simplest option. We host everything.
 
-### Which should I use?
+```
+Widget  ◀──────────────▶  pocketping.io  ◀──────────────▶  Telegram/Discord/Slack
+        (WebSocket/SSE)                        (HTTP)
+```
 
-| Situation | Recommendation |
-|-----------|----------------|
-| Just testing / learning | Embedded Mode |
-| Solo founder | Embedded Mode |
-| Team with multiple operators | Bridge Server |
-| Production deployment | Bridge Server |
-| Python backend | Embedded (SDK) or Bridge Server |
-| Node.js backend | Embedded (SDK) or Bridge Server |
-| Go/PHP/Ruby backend | Bridge Server |
+**When to use:** You just want it to work, no infrastructure to manage.
+
+### Option 2: Bridge-Server (Self-Hosted Standalone)
+
+A ready-to-use Go server. Deploy with Docker, configure your tokens, done.
+Zero code to write.
+
+```
+Widget  ◀──────────────▶  bridge-server  ◀──────────────▶  Telegram/Discord/Slack
+              (SSE)        (Go, Docker)        (HTTP)
+```
+
+```bash
+docker run -d -p 3001:3001 \
+  -e TELEGRAM_BOT_TOKEN=your-token \
+  -e TELEGRAM_FORUM_CHAT_ID=-100123456789 \
+  pocketping/bridge-server
+```
+
+**When to use:** Self-hosted without writing code.
+
+### Option 3: SDK Integration (Self-Hosted Custom)
+
+Full control. The **SDK is a library** you integrate into your existing backend.
+You write the routes, you control the database.
+
+```
+Widget  ◀──────────────▶  YOUR BACKEND + SDK  ◀──────────────▶  Telegram/Discord/Slack
+              (SSE)       (Express/FastAPI/      (HTTP)
+                           Gin/Laravel/Rails)
+```
+
+The SDK provides:
+- Handlers: `handleConnect()`, `handleMessage()`, `handleEdit()`, `handleDelete()`
+- **WebhookHandler**: Receive operator replies from Telegram/Discord/Slack
+- Bridges: Send notifications to messaging platforms
+
+**When to use:** You have an existing backend and want full customization.
+
+### Quick Comparison
+
+| | pocketping.io | bridge-server | SDK |
+|---|---|---|---|
+| Widget connects to | pocketping.io | Your bridge-server | Your backend |
+| Hosting | Us | You | You |
+| Code to write | None | Config only | Routes + handlers |
+| Database | Managed | In-memory/Redis | Your choice |
+| Customization | Limited | Medium | Full |
 
 ---
 

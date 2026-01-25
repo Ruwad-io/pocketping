@@ -26,20 +26,43 @@ This document defines the standard architecture, features, and test requirements
 ## SDK vs Bridge Server
 
 ```
-┌─────────────────┐     ┌─────────────────────┐     ┌──────────────────┐
-│   Widget (JS)   │────▶│  Your Backend + SDK │────▶│   Bridge Server  │
-│   (Frontend)    │     │  (Node/Python/Go/   │     │   (Standalone)   │
-└─────────────────┘     │   PHP/Ruby)         │     └────────┬─────────┘
-                        └─────────────────────┘              │
-                                                    ┌────────┴─────────┐
-                                                    ▼        ▼         ▼
-                                              Telegram  Discord    Slack
+                        ┌─────────────────────────────────────────────────────┐
+                        │                  Bidirectional Flow                 │
+                        │                                                     │
+┌─────────────────┐     │  ┌─────────────────────┐     ┌──────────────────┐  │
+│   Widget (JS)   │◀───▶│  │  Your Backend + SDK │◀───▶│  Bridges         │  │
+│   (Frontend)    │     │  │  (Node/Python/Go/   │     │  (Telegram/      │  │
+└─────────────────┘     │  │   PHP/Ruby)         │     │   Discord/Slack) │  │
+                        │  └─────────────────────┘     └──────────────────┘  │
+                        │                                                     │
+                        │  OR (Standalone mode)                               │
+                        │                                                     │
+                        │  ┌─────────────────────┐     ┌──────────────────┐  │
+                        │  │   Bridge Server     │◀───▶│  Bridges         │  │
+                        │  │   (uses sdk-go)     │     │  (Telegram/      │  │
+                        │  └─────────────────────┘     │   Discord/Slack) │  │
+                        │                              └──────────────────┘  │
+                        └─────────────────────────────────────────────────────┘
 ```
 
-- **SDKs** (sdk-node, sdk-python, sdk-go, sdk-php, sdk-ruby): Libraries for YOUR backend
-- **Bridge Server**: Standalone Bun server that handles notifications to messaging platforms
+### Three Deployment Options
 
-The bridge-server does NOT use any SDK - it's a separate service.
+| Option | Description | When to use |
+|--------|-------------|-------------|
+| **SDKs** | Libraries for YOUR backend (Node/Python/Go/PHP/Ruby) | You have an existing backend |
+| **Bridge Server** | Standalone Go server using sdk-go internally | No backend, just want it to work |
+| **SaaS** | Hosted service (pocketping.io) | Zero infrastructure management |
+
+### Feature Parity
+
+**All three options provide the same features:**
+- Outgoing: Messages from widget → Bridges (Telegram/Discord/Slack)
+- **Incoming: Messages from Bridges → Widget** (NEW: via WebhookHandler)
+- File attachments in both directions
+- Message edit/delete sync
+- Read receipts
+
+The bridge-server now uses sdk-go internally for code reuse.
 
 ---
 
@@ -823,6 +846,113 @@ packages/sdk-{language}/
 │   │   ├── telegram.{ext}    # TelegramBridge implementation
 │   │   ├── discord.{ext}     # DiscordBridge implementation
 │   │   └── slack.{ext}       # SlackBridge implementation
+│   ├── webhooks.{ext}        # WebhookHandler for incoming messages
+```
+
+---
+
+### 18. WebhookHandler (Incoming Operator Messages)
+
+All SDKs MUST provide a `WebhookHandler` class for receiving messages FROM bridges (Telegram, Discord, Slack) TO the widget. This enables bidirectional communication.
+
+```
+WebhookHandler {
+  constructor(config: WebhookConfig)
+
+  // HTTP handlers for webhook endpoints
+  handleTelegramWebhook(payload) -> Response
+  handleSlackWebhook(payload) -> Response
+  handleDiscordWebhook(payload) -> Response
+}
+
+WebhookConfig {
+  telegramBotToken?: string     // For downloading files from Telegram
+  slackBotToken?: string        // For downloading files and getting user info
+  discordBotToken?: string      // For future use
+  onOperatorMessage: (sessionId, content, operatorName, sourceBridge, attachments) -> void
+}
+
+OperatorAttachment {
+  filename: string
+  mimeType: string
+  size: number
+  data: bytes                   // Raw file data
+  bridgeFileId?: string         // Original ID from bridge
+}
+```
+
+#### Telegram Webhook
+
+Receives updates from Telegram Bot API via webhook.
+
+| Field | How to extract |
+|-------|----------------|
+| `sessionId` | `message.message_thread_id` (topic ID) |
+| `content` | `message.text` or `message.caption` |
+| `operatorName` | `message.from.first_name` |
+| `attachments` | `message.photo`, `message.document`, `message.audio`, `message.video`, `message.voice` |
+
+File download: `GET /bot{token}/getFile?file_id={id}` → `GET /file/bot{token}/{file_path}`
+
+#### Slack Webhook
+
+Receives events via Slack Events API.
+
+| Field | How to extract |
+|-------|----------------|
+| `sessionId` | `event.thread_ts` (thread timestamp) |
+| `content` | `event.text` |
+| `operatorName` | Fetch via `users.info` API |
+| `attachments` | `event.files[]` (download with auth header) |
+
+Must handle `url_verification` challenge: return `{ challenge: payload.challenge }`.
+
+#### Discord Webhook
+
+Receives interactions via Discord Interactions endpoint.
+
+| Field | How to extract |
+|-------|----------------|
+| `sessionId` | `channel_id` (thread ID) |
+| `content` | From slash command option `message` |
+| `operatorName` | `member.user.username` or `user.username` |
+| `attachments` | Discord Gateway `attachments[]` (direct download) |
+
+Must handle PING verification: return `{ type: 1 }`.
+
+#### WebhookHandler Usage Example
+
+```javascript
+// Node.js/Express
+const { WebhookHandler } = require('@pocketping/sdk-node');
+
+const handler = new WebhookHandler({
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
+  slackBotToken: process.env.SLACK_BOT_TOKEN,
+  onOperatorMessage: async (sessionId, content, operatorName, sourceBridge, attachments) => {
+    // Save message to database
+    await db.messages.create({
+      sessionId,
+      content,
+      sender: 'operator',
+      operatorName,
+      sourceBridge,
+    });
+
+    // Upload attachments
+    for (const att of attachments) {
+      await storage.upload(att.filename, att.data, att.mimeType);
+    }
+
+    // Notify widget via WebSocket/SSE
+    broadcastToSession(sessionId, { type: 'message', ... });
+  },
+});
+
+app.post('/webhooks/telegram', (req, res) => {
+  const response = await handler.handleTelegramWebhook(req.body);
+  res.json(response);
+});
 ```
 
 ### Bridge Test Requirements
@@ -855,6 +985,14 @@ All SDKs must:
 ---
 
 ## Changelog
+
+- **v1.3** (2025-01): Bidirectional Messaging (WebhookHandler)
+  - Added WebhookHandler specification (section 18)
+  - Incoming operator messages from Telegram/Discord/Slack → Widget
+  - File attachment support in incoming messages
+  - Bridge-server now uses sdk-go internally for code reuse
+  - Updated architecture diagram to show bidirectional flow
+  - Feature parity across SaaS, SDKs, and Bridge-Server
 
 - **v1.2** (2025-01): Built-in Bridge Implementations
   - Added TelegramBridge specification (section 15)

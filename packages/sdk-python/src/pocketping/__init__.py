@@ -24,6 +24,7 @@ from pocketping.models import (
 )
 from pocketping.storage import MemoryStorage, Storage
 from pocketping.utils.ip_filter import IpFilterConfig
+from pocketping.webhooks import OperatorAttachment, WebhookConfig, WebhookHandler
 
 __version__ = "0.1.0"
 
@@ -49,4 +50,7 @@ __all__ = [
     "SlackBridge",
     "BridgeMessageResult",
     "IpFilterConfig",
+    "WebhookHandler",
+    "WebhookConfig",
+    "OperatorAttachment",
 ]

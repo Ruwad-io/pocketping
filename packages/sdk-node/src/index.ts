@@ -4,6 +4,10 @@ export type { Storage, BridgeMessageIds } from './storage/types';
 export type { Bridge, BridgeMessageResult } from './bridges/types';
 export type { AIProvider } from './ai/types';
 
+// Webhook handlers for incoming operator messages
+export { WebhookHandler } from './webhooks';
+export type { WebhookConfig, OperatorMessageCallback, OperatorAttachment } from './webhooks';
+
 // Bridge implementations
 export { TelegramBridge } from './bridges/telegram';
 export type { TelegramBridgeOptions } from './bridges/telegram';

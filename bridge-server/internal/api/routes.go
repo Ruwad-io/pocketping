@@ -40,7 +40,7 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	// Health check
 	mux.HandleFunc("GET /health", s.handleHealth)
 
-	// Main event endpoint
+	// Main event endpoint (incoming from app/SDK)
 	mux.HandleFunc("POST /api/events", s.authMiddleware(s.handleEvents))
 
 	// Convenience endpoints
@@ -49,8 +49,14 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/operator/status", s.authMiddleware(s.handleOperatorStatus))
 	mux.HandleFunc("POST /api/custom-events", s.authMiddleware(s.handleCustomEvent))
 
-	// SSE stream
+	// SSE stream (outgoing to app/SDK)
 	mux.HandleFunc("GET /api/events/stream", s.authMiddleware(s.handleSSEStream))
+
+	// Bridge webhooks (incoming from Telegram/Slack/Discord)
+	// These receive operator messages and forward them via SSE/webhook
+	mux.HandleFunc("POST /webhooks/telegram", s.handleTelegramWebhook)
+	mux.HandleFunc("POST /webhooks/slack", s.handleSlackWebhook)
+	mux.HandleFunc("POST /webhooks/discord", s.handleDiscordWebhook)
 }
 
 // authMiddleware checks API key if configured

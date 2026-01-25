@@ -184,6 +184,12 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       border-radius: 4px;
       opacity: 0.8;
       transition: opacity 0.2s;
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .pp-close-btn:hover {
@@ -191,8 +197,8 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-close-btn svg {
-      width: 20px;
-      height: 20px;
+      width: 16px;
+      height: 16px;
     }
 
     .pp-messages {

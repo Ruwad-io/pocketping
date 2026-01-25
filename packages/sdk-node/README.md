@@ -244,6 +244,53 @@ const pp = new PocketPing({
 
 The bridge server handles Telegram, Discord, and Slack integrations via HTTP APIs, keeping your main server lightweight.
 
+## Receiving Operator Messages (WebhookHandler)
+
+To receive replies from operators via Telegram, Discord, or Slack, use the `WebhookHandler`:
+
+```typescript
+import { WebhookHandler } from '@pocketping/sdk-node';
+
+const webhookHandler = new WebhookHandler({
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
+  slackBotToken: process.env.SLACK_BOT_TOKEN,
+  discordBotToken: process.env.DISCORD_BOT_TOKEN,
+  onOperatorMessage: async (sessionId, content, operatorName, source, attachments) => {
+    console.log(`Message from ${operatorName} via ${source}: ${content}`);
+
+    // Forward to widget
+    await pp.sendOperatorMessage(sessionId, content, source, operatorName);
+
+    // Handle attachments
+    for (const att of attachments) {
+      console.log(`Attachment: ${att.filename} (${att.size} bytes)`);
+      // att.data contains the file bytes
+    }
+  },
+});
+
+// Mount webhook routes
+app.post('/webhooks/telegram', async (req, res) => {
+  const result = await webhookHandler.handleTelegramWebhook(req.body);
+  res.json(result);
+});
+
+app.post('/webhooks/slack', async (req, res) => {
+  const result = await webhookHandler.handleSlackWebhook(req.body);
+  res.json(result);
+});
+
+app.post('/webhooks/discord', async (req, res) => {
+  const result = await webhookHandler.handleDiscordWebhook(req.body);
+  res.json(result);
+});
+```
+
+Configure webhooks on each platform to point to your server:
+- **Telegram**: Use `setWebhook` API
+- **Slack**: Configure Event Subscriptions
+- **Discord**: Set up Interactions Endpoint
+
 ## Custom Storage
 
 Implement the `Storage` interface for persistence:

@@ -14,9 +14,10 @@ PocketPing is an **open-source real-time chat widget** that connects website vis
 |---------|-------------|
 | **Real-time Chat** | WebSocket-based bidirectional messaging between visitors and operators |
 | **Bridge Notifications** | Forward messages to Telegram, Discord, and Slack |
+| **Incoming Messages** | Receive operator messages from bridges (WebhookHandler) |
 | **Read Receipts** | Delivery/read status with `delivered` and `read` timestamps |
 | **Message Edit/Delete** | Visitors can edit/delete their messages, synced to bridges |
-| **File Attachments** | Upload and share files in conversations |
+| **File Attachments** | Upload and share files in both directions |
 | **User Identity** | Track user info (email, name, custom fields) |
 | **Custom Events** | Emit and track custom events from widgets |
 | **AI Fallback** | Optional AI responses when operators are offline |
@@ -25,7 +26,16 @@ PocketPing is an **open-source real-time chat widget** that connects website vis
 
 ### Architecture: Three Deployment Modes
 
-PocketPing est conçu pour être flexible. Tu peux utiliser le widget **sans le SaaS** de deux façons différentes:
+Le widget peut se connecter à **3 types de serveurs** différents:
+
+```
+┌────────────┐
+│   Widget   │──────► Option 1: pocketping.io (SaaS)
+│ (ton site) │──────► Option 2: bridge-server (Self-hosted standalone)
+└────────────┘──────► Option 3: ton backend + SDK (Self-hosted custom)
+```
+
+Chaque option offre les **mêmes fonctionnalités** (messages bidirectionnels, attachments, edit/delete, etc.).
 
 ---
 
@@ -34,10 +44,8 @@ PocketPing est conçu pour être flexible. Tu peux utiliser le widget **sans le 
 Le mode le plus simple. Tu utilises notre service hébergé.
 
 ```
-┌────────────┐     ┌─────────────────────┐     ┌──────────────┐
-│   Widget   │────▶│   PocketPing SaaS   │────▶│   Bridges    │
-│ (ton site) │     │  (pocketping.io)    │     │ (Tg/Dc/Sl)   │
-└────────────┘     └─────────────────────┘     └──────────────┘
+Widget  ◀──────────────▶  pocketping.io  ◀──────────────▶  Telegram/Discord/Slack
+        (WebSocket/SSE)                        (HTTP)
 ```
 
 **Quand utiliser:** Tu veux juste que ça marche, sans gérer d'infrastructure.
@@ -46,31 +54,26 @@ Le mode le plus simple. Tu utilises notre service hébergé.
 
 #### MODE 2: Self-Hosted avec SDK (Ton Backend + Ta DB)
 
-Tu gères tout toi-même. Le SDK s'intègre dans **ton** backend existant.
+Tu gères tout toi-même. Le **SDK est une librairie** que tu intègres dans ton backend existant.
 
 ```
-┌────────────┐     ┌─────────────────────────────────────┐     ┌──────────────┐
-│   Widget   │────▶│         TON BACKEND                 │────▶│   Bridges    │
-│ (ton site) │     │  ┌─────────────────────────────┐    │     │ (Tg/Dc/Sl)   │
-└────────────┘     │  │  SDK (Node/Python/Go/PHP/   │    │     └──────────────┘
-                   │  │       Ruby)                 │    │
-                   │  └─────────────────────────────┘    │
-                   │  ┌─────────────────────────────┐    │
-                   │  │    TA BASE DE DONNÉES       │    │
-                   │  │  (PostgreSQL/MySQL/Redis/   │    │
-                   │  │   MongoDB/ce que tu veux)   │    │
-                   │  └─────────────────────────────┘    │
-                   └─────────────────────────────────────┘
+Widget  ◀──────────────▶  TON BACKEND + SDK  ◀──────────────▶  Telegram/Discord/Slack
+              (SSE)       (Express/FastAPI/    (HTTP)
+                           Gin/Laravel/Rails)
 ```
+
+Le SDK fournit:
+- Les handlers: `handleConnect()`, `handleMessage()`, `handleEdit()`, `handleDelete()`
+- Le `WebhookHandler` pour recevoir les réponses des opérateurs depuis Telegram/Discord/Slack
+- Les bridges pour envoyer les notifications
 
 **Tu contrôles:**
-- Tes routes API (`/connect`, `/message`, `/edit`, `/delete`, etc.)
-- Ton stockage (sessions, messages, attachments)
-- Ta logique métier (authentication, rate limiting, etc.)
-- Tes bridges (Telegram, Discord, Slack)
+- Tes routes API (tu appelles les handlers du SDK dans tes routes)
+- Ton stockage (PostgreSQL, MySQL, Redis, MongoDB...)
+- Ta logique métier (auth, rate limiting, etc.)
 
 **Quand utiliser:**
-- Tu as déjà un backend (Node.js, Python, Go, PHP, Ruby)
+- Tu as déjà un backend
 - Tu veux garder les données chez toi
 - Tu as besoin de personnalisation poussée
 
@@ -78,27 +81,18 @@ Tu gères tout toi-même. Le SDK s'intègre dans **ton** backend existant.
 
 #### MODE 3: Self-Hosted avec Bridge-Server (Standalone)
 
-Le bridge-server est un serveur **autonome** qui fait exactement ce que fait le SaaS, mais que tu héberges toi-même.
+Le bridge-server est un serveur **Go prêt à l'emploi**. Tu le déploies avec Docker, tu configures tes tokens, c'est parti.
 
 ```
-┌────────────┐     ┌─────────────────────────────────────┐     ┌──────────────┐
-│   Widget   │────▶│        BRIDGE-SERVER (Go)           │────▶│   Bridges    │
-│ (ton site) │     │  ┌─────────────────────────────┐    │     │ (Tg/Dc/Sl)   │
-└────────────┘     │  │  Sessions + Messages        │    │     └──────────────┘
-                   │  │  (in-memory ou Redis)       │    │
-                   │  └─────────────────────────────┘    │
-                   │  ┌─────────────────────────────┐    │
-                   │  │  Telegram/Discord/Slack     │    │
-                   │  │  bridges HTTP-only          │    │
-                   │  └─────────────────────────────┘    │
-                   └─────────────────────────────────────┘
+Widget  ◀──────────────▶  BRIDGE-SERVER  ◀──────────────▶  Telegram/Discord/Slack
+              (SSE)        (Go, Docker)        (HTTP)
 ```
 
 **C'est quoi le bridge-server?**
-- Un serveur Go standalone qui gère tout (sessions, messages, bridges)
-- Communication HTTP-only avec les APIs de messagerie (pas de libs externes)
-- Tu le déploies avec Docker, tu configures tes tokens, c'est parti
-- Pas besoin d'écrire du code backend
+- Un serveur Go standalone (utilise sdk-go en interne)
+- Zéro code à écrire, juste de la configuration
+- WebhookHandler intégré pour les réponses des opérateurs
+- Sessions en mémoire ou Redis
 
 **Quand utiliser:**
 - Tu n'as pas de backend existant
@@ -109,14 +103,13 @@ Le bridge-server est un serveur **autonome** qui fait exactement ce que fait le 
 
 #### Comparaison des modes
 
-| | MODE 1: SaaS | MODE 2: SDK | MODE 3: Bridge-Server |
+| | pocketping.io | ton backend + SDK | bridge-server |
 |---|---|---|---|
+| **Widget se connecte à** | pocketping.io | Ton serveur | bridge-server |
 | **Hébergement** | Nous | Toi | Toi |
-| **Backend requis** | Non | Oui (le tien) | Non |
-| **Code à écrire** | Aucun | Routes API | Config seulement |
+| **Code à écrire** | Aucun | Routes + handlers | Config seulement |
 | **Base de données** | Nous | La tienne | In-memory/Redis |
 | **Personnalisation** | Limitée | Totale | Moyenne |
-| **Setup time** | 5 min | 30+ min | 15 min |
 
 ### Feature Parity Requirement
 
@@ -134,7 +127,8 @@ Le bridge-server est un serveur **autonome** qui fait exactement ce que fait le 
 | Feature | SaaS (app) | SDKs | Bridge-Server | Documented |
 |---------|------------|------|---------------|------------|
 | Connect/Sessions | ✅ | ✅ | ✅ | ✅ |
-| Messages | ✅ | ✅ | ✅ | ✅ |
+| Messages (outgoing) | ✅ | ✅ | ✅ | ✅ |
+| **Messages (incoming)** | ✅ | ✅ | ✅ | ✅ |
 | Read Receipts | ✅ | ✅ | ✅ | ✅ |
 | Custom Events | ✅ | ✅ | ✅ | ✅ |
 | User Identity | ✅ | ✅ | ✅ | ✅ |
@@ -143,6 +137,7 @@ Le bridge-server est un serveur **autonome** qui fait exactement ce que fait le 
 | Message Edit | ✅ | ✅ | ✅ | ✅ |
 | Message Delete | ✅ | ✅ | ✅ | ✅ |
 | File Attachments | ✅ | ✅ | ✅ | ✅ |
+| **Attachments (incoming)** | ✅ | ✅ | ✅ | ✅ |
 
 ---
 

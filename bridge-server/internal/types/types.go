@@ -70,6 +70,7 @@ type Attachment struct {
 	Status       string `json:"status"`
 	UploadedFrom string `json:"uploadedFrom,omitempty"`
 	BridgeFileID string `json:"bridgeFileId,omitempty"`
+	Data         []byte `json:"-"` // Raw file data (not serialized to JSON)
 }
 
 // Message represents a chat message

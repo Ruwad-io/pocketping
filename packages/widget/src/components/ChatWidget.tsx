@@ -354,18 +354,36 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
   // Drag & Drop handlers
   // ─────────────────────────────────────────────────────────────────
 
+  // Track drag enter/leave with a counter to handle nested elements
+  const dragCounterRef = useRef(0);
+
+  const handleDragEnter = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (dragCounterRef.current === 1) {
+      setIsDragging(true);
+    }
+  };
+
   const handleDragOver = (e: DragEvent) => {
     e.preventDefault();
-    setIsDragging(true);
+    e.stopPropagation();
   };
 
   const handleDragLeave = (e: DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
   };
 
   const handleDrop = async (e: DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
     setIsDragging(false);
 
     const files = e.dataTransfer?.files;
@@ -458,6 +476,7 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
       {isOpen && (
         <div
           class={`pp-window pp-${position} pp-theme-${theme} ${isDragging ? 'pp-dragging' : ''}`}
+          onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}

@@ -66,6 +66,8 @@ type Attachment struct {
 	UploadedFrom UploadSource `json:"uploadedFrom,omitempty"`
 	// BridgeFileID is the external file ID (from Telegram/Discord/Slack).
 	BridgeFileID string `json:"bridgeFileId,omitempty"`
+	// Data is the raw file bytes (not serialized to JSON, used for incoming files).
+	Data []byte `json:"-"`
 }
 
 // VersionStatus represents the result of a version check.
