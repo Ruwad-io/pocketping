@@ -142,7 +142,7 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px;
+      padding: 12px 14px;
       background: ${primaryColor};
       color: white;
     }
@@ -150,24 +150,24 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     .pp-header-info {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
     .pp-avatar {
-      width: 40px;
-      height: 40px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       object-fit: cover;
     }
 
     .pp-header-title {
       font-weight: 600;
-      font-size: 16px;
+      font-size: 15px;
     }
 
     .pp-header-status {
-      font-size: 12px;
-      opacity: 0.9;
+      font-size: 11px;
+      opacity: 0.85;
       display: flex;
       align-items: center;
       gap: 4px;
@@ -213,10 +213,10 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     .pp-messages {
       flex: 1;
       overflow-y: auto;
-      padding: 16px;
+      padding: 12px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 3px;
     }
 
     .pp-welcome {
@@ -227,13 +227,15 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-message {
-      max-width: 80%;
-      padding: 10px 14px;
-      border-radius: 16px;
+      max-width: 85%;
+      padding: 6px 10px;
+      border-radius: 12px;
       word-wrap: break-word;
       position: relative;
       user-select: text;
       -webkit-user-select: text;
+      font-size: 14px;
+      line-height: 1.35;
     }
 
     /* Hover actions container - positioned above message (Slack style) */
@@ -325,7 +327,8 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       align-self: flex-end;
       background: ${primaryColor};
       color: white;
-      border-bottom-right-radius: 4px;
+      border-bottom-right-radius: 3px;
+      margin-left: 32px;
     }
 
     .pp-message-operator,
@@ -333,19 +336,29 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       align-self: flex-start;
       background: ${colors.messageBg};
       color: ${colors.text};
-      border-bottom-left-radius: 4px;
+      border-bottom-left-radius: 3px;
+      margin-right: 32px;
+    }
+
+    /* Add spacing between different senders */
+    .pp-message-visitor + .pp-message-operator,
+    .pp-message-visitor + .pp-message-ai,
+    .pp-message-operator + .pp-message-visitor,
+    .pp-message-ai + .pp-message-visitor {
+      margin-top: 8px;
     }
 
     .pp-message-content {
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
 
     .pp-message-time {
-      font-size: 11px;
-      opacity: 0.7;
+      font-size: 10px;
+      opacity: 0.6;
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
+      justify-content: flex-end;
     }
 
     .pp-ai-badge {
@@ -382,13 +395,13 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
 
     .pp-typing {
       display: flex;
-      gap: 4px;
-      padding: 14px 18px;
+      gap: 3px;
+      padding: 8px 12px;
     }
 
     .pp-typing span {
-      width: 8px;
-      height: 8px;
+      width: 6px;
+      height: 6px;
       background: ${colors.textSecondary};
       border-radius: 50%;
       animation: pp-bounce 1.4s infinite ease-in-out both;
@@ -404,16 +417,17 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
 
     .pp-input-form {
       display: flex;
-      padding: 12px;
+      padding: 8px 12px;
       gap: 8px;
       border-top: 1px solid ${colors.border};
+      align-items: flex-end;
     }
 
     .pp-input {
       flex: 1;
-      padding: 10px 14px;
+      padding: 8px 14px;
       border: 1px solid ${colors.border};
-      border-radius: 20px;
+      border-radius: 18px;
       background: ${colors.bg};
       color: ${colors.text};
       font-size: 14px;
@@ -430,8 +444,8 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-send-btn {
-      width: 40px;
-      height: 40px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       background: ${primaryColor};
       color: white;
@@ -440,7 +454,16 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: opacity 0.2s;
+      transition: opacity 0.2s, transform 0.1s;
+      flex-shrink: 0;
+    }
+
+    .pp-send-btn:not(:disabled):hover {
+      transform: scale(1.05);
+    }
+
+    .pp-send-btn:not(:disabled):active {
+      transform: scale(0.95);
     }
 
     .pp-send-btn:disabled {
@@ -449,16 +472,17 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-send-btn svg {
-      width: 18px;
-      height: 18px;
+      width: 16px;
+      height: 16px;
     }
 
     .pp-footer {
       text-align: center;
-      padding: 8px;
-      font-size: 11px;
+      padding: 6px;
+      font-size: 10px;
       color: ${colors.textSecondary};
       border-top: 1px solid ${colors.border};
+      opacity: 0.8;
     }
 
     .pp-footer a {
