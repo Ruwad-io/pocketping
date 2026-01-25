@@ -1,7 +1,7 @@
 """Webhook handlers for receiving operator messages from bridges."""
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Literal, Optional
 
 import httpx
