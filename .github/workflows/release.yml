@@ -164,7 +164,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: ./bridge-server
+          context: .
+          file: ./bridge-server/Dockerfile
           push: true
           tags: |
             ghcr.io/${{ steps.version.outputs.repo_owner }}/pocketping-bridge:latest
