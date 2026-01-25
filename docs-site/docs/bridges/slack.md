@@ -85,6 +85,7 @@ Add the necessary OAuth scopes.
 │      ├─────────────────────────────────────────────┤           │
 │      │ ✅ channels:history    (read messages)      │           │
 │      │ ✅ channels:read       (list channels)      │           │
+│      │ ✅ channels:join       (auto-join channels) │           │
 │      │ ✅ groups:history      (private channels)   │           │
 │      │ ✅ groups:read         (list private)       │           │
 │      │ ✅ chat:write          (post messages)      │           │
@@ -176,12 +177,16 @@ Find the ID of your support channel.
 
 ## Step 5: Add Bot to Channel
 
-Invite the bot to your support channel.
+For **public channels**, the bot will auto-join when you select the channel in PocketPing.
+
+For **private channels**, invite the bot manually:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Step 5: Invite Bot to Channel                                   │
+│ Step 5: Invite Bot to Private Channel (if needed)               │
 ├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   For PRIVATE channels only:                                    │
 │                                                                 │
 │   1. Open your support channel                                  │
 │                                                                 │
@@ -191,7 +196,7 @@ Invite the bot to your support channel.
 │   3. Press Enter                                                │
 │                                                                 │
 │   ┌─────────────────────────────────────────────────┐          │
-│   │ #support                                        │          │
+│   │ 🔒 support                                      │          │
 │   │                                                 │          │
 │   │ Slackbot:                                       │          │
 │   │ @PocketPing was added to #support               │          │
@@ -200,8 +205,8 @@ Invite the bot to your support channel.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-:::warning Don't forget this step!
-The bot won't receive messages until it's invited to the channel.
+:::tip Auto-join for public channels
+Public channels will be automatically joined when you select them in the PocketPing dashboard - no manual invite needed!
 :::
 
 ---
