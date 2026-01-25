@@ -125,10 +125,28 @@ jobs:
           cd bridge-server
           go mod download
 
-      - name: Run tests
+      - name: Run tests with coverage
         run: |
           cd bridge-server
-          go test -v ./...
+          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Check coverage threshold
+        run: |
+          cd bridge-server
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Coverage: ${COVERAGE}%"
+          if (( $(echo "$COVERAGE < 30" | bc -l) )); then
+            echo "::error::Coverage ${COVERAGE}% is below minimum threshold of 30%"
+            exit 1
+          fi
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        if: always()
+        with:
+          flags: bridge-server
+          files: bridge-server/coverage.out
+        continue-on-error: true
 
   # ─────────────────────────────────────────────────────────────────
   # Python SDK Unit Tests

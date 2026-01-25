@@ -40,5 +40,25 @@ services:
       - go-mod-cache:/go/pkg/mod
     command: golangci-lint run ./...
 
+  # Run tests
+  test:
+    image: golang:1.22
+    working_dir: /app
+    volumes:
+      - .:/app
+      - ../packages/sdk-go:/packages/sdk-go
+      - go-mod-cache:/go/pkg/mod
+    command: sh -c "go test -v -race -coverprofile=coverage.out ./... && go tool cover -func=coverage.out"
+
+  # Run tests with coverage report
+  test-coverage:
+    image: golang:1.22
+    working_dir: /app
+    volumes:
+      - .:/app
+      - ../packages/sdk-go:/packages/sdk-go
+      - go-mod-cache:/go/pkg/mod
+    command: sh -c "go test -v -race -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html && echo '✅ Coverage report generated at coverage.html'"
+
 volumes:
   go-mod-cache:
