@@ -133,29 +133,6 @@ module PocketPing
         "> *#{escape_slack(sender_label)}* — #{escape_slack(preview)}"
       end
 
-      def build_reply_quote(message)
-        return nil unless message.reply_to && pocketping&.storage&.respond_to?(:get_message)
-
-        reply_target = pocketping.storage.get_message(message.reply_to)
-        return nil unless reply_target
-
-        sender_label =
-          case reply_target.sender
-          when "operator" then "Support"
-          when "ai" then "AI"
-          else "Visitor"
-          end
-
-        preview = if reply_target.deleted_at
-                    "Message deleted"
-                  else
-                    reply_target.content.to_s.empty? ? "Message" : reply_target.content
-                  end
-        preview = preview[0, 140] + "..." if preview.length > 140
-
-        "> *#{escape_slack(sender_label)}* — #{escape_slack(preview)}"
-      end
-
       def escape_slack(text)
         return "" if text.nil?
 
@@ -319,6 +296,29 @@ module PocketPing
             .gsub("&", "&amp;")
             .gsub("<", "&lt;")
             .gsub(">", "&gt;")
+      end
+
+      def build_reply_quote(message)
+        return nil unless message.reply_to && pocketping&.storage&.respond_to?(:get_message)
+
+        reply_target = pocketping.storage.get_message(message.reply_to)
+        return nil unless reply_target
+
+        sender_label =
+          case reply_target.sender
+          when "operator" then "Support"
+          when "ai" then "AI"
+          else "Visitor"
+          end
+
+        preview = if reply_target.deleted_at
+                    "Message deleted"
+                  else
+                    reply_target.content.to_s.empty? ? "Message" : reply_target.content
+                  end
+        preview = preview[0, 140] + "..." if preview.length > 140
+
+        "> *#{escape_slack(sender_label)}* — #{escape_slack(preview)}"
       end
 
       def post_message(text)
