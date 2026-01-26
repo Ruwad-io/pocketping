@@ -617,23 +617,27 @@ function adjustBrightness(hex: string, percent: number): string {
       padding: 8px 10px;
       gap: 8px;
       background: ${resolvedFooterColor};
-      align-items: center;
+      align-items: flex-end;
     }
 
     .pp-input {
       flex: 1;
       min-width: 0;
-      height: 42px;
-      line-height: 42px;
-      padding: 0 14px;
+      min-height: 42px;
+      max-height: 120px;
+      padding: 10px 14px;
       border: none;
       border-radius: 8px;
       background: ${isDark ? '#2a3942' : '#ffffff'};
       color: ${isDark ? '#e9edef' : '#111b21'};
       font-size: 15px;
+      line-height: 1.4;
       outline: none;
       box-sizing: border-box;
       margin: 0;
+      resize: none;
+      font-family: inherit;
+      overflow-y: auto;
     }
 
     .pp-input:focus {

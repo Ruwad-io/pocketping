@@ -75,7 +75,7 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
   const [preChatForm, setPreChatForm] = useState<PreChatFormConfig | undefined>(undefined);
   const [preChatSkipped, setPreChatSkipped] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -232,6 +232,10 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
     setInputValue('');
     setPendingAttachments([]);
     setReplyingTo(null);
+    // Reset textarea height
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
 
     try {
       await client.sendMessage(content, attachmentIds, replyToId);
@@ -242,10 +246,21 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
   };
 
   const handleInputChange = (e: Event) => {
-    const target = e.target as HTMLInputElement;
+    const target = e.target as HTMLTextAreaElement;
     setInputValue(target.value);
+    // Auto-resize textarea
+    target.style.height = 'auto';
+    target.style.height = Math.min(target.scrollHeight, 120) + 'px';
     // Debounce typing indicator
     client.sendTyping(true);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const form = (e.target as HTMLTextAreaElement).closest('form');
+      if (form) form.requestSubmit();
+    }
   };
 
   const handleFileSelect = async (e: Event) => {
@@ -961,14 +976,15 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
             >
               <AttachIcon />
             </button>
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
               class="pp-input"
               placeholder={config.placeholder ?? 'Type a message...'}
               value={inputValue}
               onInput={handleInputChange}
+              onKeyDown={handleKeyDown}
               disabled={!isConnected}
+              rows={1}
             />
             <button
               type="submit"
