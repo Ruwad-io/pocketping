@@ -1,3 +1,12 @@
+/**
+ * Theme-aware color value
+ * Allows setting different colors for light and dark themes
+ */
+export interface ThemeColor {
+  light: string;
+  dark: string;
+}
+
 export interface PocketPingConfig {
   // ─────────────────────────────────────────────────────────────────
   // Required (one of endpoint or projectId)
@@ -46,6 +55,37 @@ export interface PocketPingConfig {
 
   /** Text color on primary background (defaults to white) */
   primaryTextColor?: string;
+
+  /**
+   * Header background color
+   * Can be a string (same for both themes) or object with light/dark values
+   * @example "#008069" or { light: "#008069", dark: "#202c33" }
+   */
+  headerColor?: string | ThemeColor;
+
+  /**
+   * Footer/input area background color
+   * Can be a string (same for both themes) or object with light/dark values
+   * @example "#f0f2f5" or { light: "#f0f2f5", dark: "#202c33" }
+   */
+  footerColor?: string | ThemeColor;
+
+  /**
+   * Chat background style:
+   * - 'whatsapp' (default) - WhatsApp-style pattern
+   * - 'dots' - Subtle dot pattern
+   * - 'plain' - Solid color only
+   * - URL string - Custom image URL
+   * Can also be theme-aware with { light: '...', dark: '...' }
+   */
+  chatBackground?: 'whatsapp' | 'dots' | 'plain' | string | ThemeColor;
+
+  /**
+   * Toggle button background color
+   * Can be a string (same for both themes) or object with light/dark values
+   * @example "#25d366" or { light: "#25d366", dark: "#00a884" }
+   */
+  toggleColor?: string | ThemeColor;
 
   /** Widget position */
   position?: 'bottom-right' | 'bottom-left';
@@ -217,6 +257,14 @@ export interface ConnectResponse {
   operatorAvatar?: string;
   /** Primary color from server */
   primaryColor?: string;
+  /** Header background color from server (string or theme-aware) */
+  headerColor?: string | ThemeColor;
+  /** Footer/input area background color from server (string or theme-aware) */
+  footerColor?: string | ThemeColor;
+  /** Chat background style from server (string or theme-aware) */
+  chatBackground?: 'whatsapp' | 'dots' | 'plain' | string | ThemeColor;
+  /** Toggle button color from server (string or theme-aware) */
+  toggleColor?: string | ThemeColor;
   /** Pre-chat form configuration */
   preChatForm?: PreChatFormConfig;
 }

@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -393,15 +394,50 @@ func (s *Server) buildReplyQuote(messageID string) string {
 		senderLabel = "AI"
 	}
 
+	// Build attachment summary
+	attachmentSummary := ""
+	if len(msg.Attachments) > 0 {
+		imageCount := 0
+		fileCount := 0
+		for _, att := range msg.Attachments {
+			if strings.HasPrefix(att.MimeType, "image/") {
+				imageCount++
+			} else {
+				fileCount++
+			}
+		}
+		var parts []string
+		if imageCount > 0 {
+			if imageCount == 1 {
+				parts = append(parts, "🖼️ 1 image")
+			} else {
+				parts = append(parts, fmt.Sprintf("🖼️ %d images", imageCount))
+			}
+		}
+		if fileCount > 0 {
+			if fileCount == 1 {
+				parts = append(parts, "📎 1 file")
+			} else {
+				parts = append(parts, fmt.Sprintf("📎 %d files", fileCount))
+			}
+		}
+		if len(parts) > 0 {
+			attachmentSummary = " [" + strings.Join(parts, ", ") + "]"
+		}
+	}
+
 	preview := msg.Content
 	if msg.DeletedAt != nil {
 		preview = "Message deleted"
+	} else if preview == "" && len(msg.Attachments) > 0 {
+		// Empty content but has attachments
+		preview = "(attachment)"
 	}
 	if len(preview) > 140 {
 		preview = preview[:140] + "..."
 	}
 
-	return fmt.Sprintf("> *%s* — %s", senderLabel, preview)
+	return fmt.Sprintf("> *%s*%s — %s", senderLabel, attachmentSummary, preview)
 }
 
 // ─────────────────────────────────────────────────────────────────

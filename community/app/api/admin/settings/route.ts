@@ -26,6 +26,11 @@ export async function GET(request: NextRequest) {
       operatorAvatar: true,
       primaryColor: true,
       welcomeMessage: true,
+      // Theme-aware colors
+      headerColor: true,
+      footerColor: true,
+      chatBackground: true,
+      toggleColor: true,
       // Telegram
       telegramBotToken: true,
       telegramChatId: true,
@@ -78,6 +83,11 @@ export async function PATCH(request: NextRequest) {
       'operatorAvatar',
       'primaryColor',
       'welcomeMessage',
+      // Theme-aware colors
+      'headerColor',
+      'footerColor',
+      'chatBackground',
+      'toggleColor',
       // Telegram
       'telegramBotToken',
       'telegramChatId',

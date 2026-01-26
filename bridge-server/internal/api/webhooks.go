@@ -4,8 +4,10 @@ package api
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	pocketping "github.com/Ruwad-io/pocketping/sdk-go"
@@ -70,13 +72,14 @@ func (s *Server) getAllowedBotIDs() []string {
 }
 
 func (s *Server) RecordOperatorMessage(sessionID, content, operatorName, sourceBridge string, attachments []pocketping.Attachment, replyToBridgeMessageID *int, bridgeMessageID string) {
-	// Convert attachments
+	// Convert attachments and collect URLs for cross-bridge sync
 	var bridgeAttachments []*types.Attachment
 	for _, att := range attachments {
 		bridgeAttachments = append(bridgeAttachments, &types.Attachment{
 			Filename: att.Filename,
 			MimeType: att.MimeType,
 			Size:     att.Size,
+			URL:      att.URL,
 			Data:     att.Data,
 		})
 	}
@@ -84,13 +87,15 @@ func (s *Server) RecordOperatorMessage(sessionID, content, operatorName, sourceB
 	messageID := buildOperatorMessageID(sourceBridge, bridgeMessageID)
 
 	// Save operator message for reply previews
-	s.saveMessage(&types.Message{
-		ID:        messageID,
-		SessionID: sessionID,
-		Content:   content,
-		Sender:    types.SenderOperator,
-		Timestamp: time.Now(),
-	})
+	message := &types.Message{
+		ID:          messageID,
+		SessionID:   sessionID,
+		Content:     content,
+		Sender:      types.SenderOperator,
+		Timestamp:   time.Now(),
+		Attachments: bridgeAttachments,
+	}
+	s.saveMessage(message)
 
 	// Store bridge message IDs for reply/edit/delete
 	bridgeIDs := &types.BridgeMessageIDs{}
@@ -118,6 +123,70 @@ func (s *Server) RecordOperatorMessage(sessionID, content, operatorName, sourceB
 		ReplyToBridgeMessageID: replyToBridgeMessageID,
 	}
 	s.EmitEvent(event)
+
+	// Sync to other bridges (cross-bridge sync)
+	s.syncOperatorMessageToBridges(message, sessionID, sourceBridge, operatorName, bridgeAttachments)
+}
+
+// syncOperatorMessageToBridges sends operator messages to all bridges except the source
+func (s *Server) syncOperatorMessageToBridges(message *types.Message, sessionID, sourceBridge, operatorName string, attachments []*types.Attachment) {
+	// Build content with attachment links for cross-bridge sync
+	contentWithAttachments := message.Content
+	if len(attachments) > 0 {
+		attachmentLinks := formatAttachmentLinks(attachments)
+		if attachmentLinks != "" {
+			contentWithAttachments += attachmentLinks
+		}
+	}
+
+	// Create a minimal session for the bridge call
+	session := &types.Session{
+		ID: sessionID,
+	}
+
+	// Create message with attachment links included
+	syncMessage := &types.Message{
+		ID:        message.ID,
+		SessionID: sessionID,
+		Content:   contentWithAttachments,
+		Sender:    types.SenderOperator,
+		Timestamp: message.Timestamp,
+	}
+
+	// Call OnOperatorMessage on all bridges except the source
+	for _, bridge := range s.bridges {
+		if bridge.Name() == sourceBridge {
+			continue
+		}
+		if err := bridge.OnOperatorMessage(syncMessage, session, sourceBridge, operatorName); err != nil {
+			log.Printf("[%s] OnOperatorMessage sync error: %v", bridge.Name(), err)
+		}
+	}
+}
+
+// formatAttachmentLinks formats attachment URLs for display in bridges
+func formatAttachmentLinks(attachments []*types.Attachment) string {
+	if len(attachments) == 0 {
+		return ""
+	}
+
+	var links []string
+	for _, att := range attachments {
+		if att.URL == "" {
+			continue
+		}
+		emoji := "📎"
+		if strings.HasPrefix(att.MimeType, "image/") {
+			emoji = "🖼️"
+		}
+		// Use simple format that works across all bridges
+		links = append(links, fmt.Sprintf("%s %s: %s", emoji, att.Filename, att.URL))
+	}
+
+	if len(links) == 0 {
+		return ""
+	}
+	return "\n\n" + strings.Join(links, "\n")
 }
 
 func (s *Server) RecordOperatorMessageEdit(sessionID, bridgeMessageID, content, sourceBridge string, editedAt time.Time) {
