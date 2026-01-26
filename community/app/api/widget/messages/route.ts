@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { extractApiKey, validatePublicKey } from '@/lib/auth'
-import { sendVisitorMessageToBridges } from '@/lib/bridges'
+import { sendVisitorMessageToBridges, sendAIMessageToBridges } from '@/lib/bridges'
+import { generateAIResponse, type Message as AIMessage, type AIProvider } from '@/lib/ai'
 
 /**
  * POST /api/widget/messages
@@ -79,6 +80,82 @@ export async function POST(request: NextRequest) {
     sendVisitorMessageToBridges(message, session).catch((err) => {
       console.error('[Widget] Failed to send to bridges:', err)
     })
+
+    // AI Response Generation (fire and forget)
+    if (auth.project.aiEnabled && auth.project.aiProvider && auth.project.aiApiKey) {
+      const shouldAIRespond = async (): Promise<boolean> => {
+        if (auth.project.aiTakeoverDelay === 0) {
+          return true
+        }
+
+        const lastOperatorMessage = await prisma.message.findFirst({
+          where: {
+            sessionId: session.id,
+            sender: 'OPERATOR',
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true },
+        })
+
+        if (!lastOperatorMessage) {
+          return true
+        }
+
+        const inactiveMs = Date.now() - lastOperatorMessage.createdAt.getTime()
+        const delayMs = auth.project.aiTakeoverDelay * 1000
+        return inactiveMs >= delayMs
+      }
+
+      shouldAIRespond()
+        .then(async (shouldRespond) => {
+          if (!shouldRespond) return
+
+          const history = await prisma.message.findMany({
+            where: {
+              sessionId: session.id,
+              deletedAt: null,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 20,
+            select: {
+              content: true,
+              sender: true,
+            },
+          })
+
+          const messages: AIMessage[] = history.reverse().map((msg) => ({
+            content: msg.content,
+            sender: msg.sender.toLowerCase() as 'visitor' | 'operator' | 'ai',
+          }))
+
+          const aiResponse = await generateAIResponse(
+            auth.project.aiProvider as AIProvider,
+            messages,
+            {
+              apiKey: auth.project.aiApiKey!,
+              model: auth.project.aiModel || undefined,
+              systemPrompt: auth.project.aiSystemPrompt || undefined,
+            }
+          )
+
+          if (!aiResponse || aiResponse.trim().length === 0) return
+
+          const aiMessage = await prisma.message.create({
+            data: {
+              sessionId: session.id,
+              content: aiResponse.trim(),
+              sender: 'AI',
+              deliveredAt: new Date(),
+            },
+          })
+
+          // Send AI message to bridges
+          await sendAIMessageToBridges(aiMessage.id, session, aiResponse.trim())
+        })
+        .catch((error) => {
+          console.error('[AI] Error generating response:', error)
+        })
+    }
 
     return NextResponse.json({
       id: message.id,

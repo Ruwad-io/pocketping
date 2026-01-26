@@ -526,3 +526,143 @@ export async function handleOperatorMessage(params: {
 
   console.log(`[Bridges] Operator message from ${sourceBridge} synced to other bridges`)
 }
+
+/**
+ * Send AI response to all configured bridges
+ */
+export async function sendAIMessageToBridges(
+  messageId: string,
+  session: Session,
+  content: string
+): Promise<void> {
+  const project = await prisma.project.findUnique({
+    where: { id: session.projectId },
+  })
+
+  if (!project) return
+
+  const sessionInfo = toSessionInfo(session)
+  const bridgeMessageIds: {
+    telegramMessageId?: number
+    discordMessageId?: string
+    slackMessageTs?: string
+  } = {}
+
+  // Telegram
+  if (project.telegramBotToken && project.telegramChatId) {
+    try {
+      let topicId = session.telegramTopicId ? parseInt(session.telegramTopicId) : null
+
+      // Create topic on-demand if it doesn't exist
+      if (!topicId) {
+        topicId = await telegram.createForumTopic(
+          { botToken: project.telegramBotToken, chatId: project.telegramChatId },
+          sessionInfo
+        )
+        if (topicId) {
+          await prisma.session.update({
+            where: { id: session.id },
+            data: { telegramTopicId: String(topicId) },
+          })
+        }
+      }
+
+      if (topicId) {
+        const text = `🤖 *AI*\n\n${content}`
+        const result = await telegram.sendMessageToTopic(
+          { botToken: project.telegramBotToken, chatId: project.telegramChatId },
+          topicId,
+          text
+        )
+        if (result?.message_id) {
+          bridgeMessageIds.telegramMessageId = result.message_id
+        }
+      }
+    } catch (error) {
+      console.error('[Bridges] Telegram AI message error:', error)
+    }
+  }
+
+  // Discord
+  if (project.discordChannelId) {
+    const botToken = process.env.DISCORD_BOT_TOKEN
+    if (botToken) {
+      try {
+        let threadId = session.discordThreadId
+
+        // Create thread on-demand if it doesn't exist
+        if (!threadId) {
+          threadId = await discord.createThread(
+            { botToken, channelId: project.discordChannelId },
+            sessionInfo
+          )
+          if (threadId) {
+            await prisma.session.update({
+              where: { id: session.id },
+              data: { discordThreadId: threadId },
+            })
+          }
+        }
+
+        if (threadId) {
+          const text = `🤖 **AI**\n\n${content}`
+          const result = await discord.sendMessageToThread(
+            { botToken, channelId: project.discordChannelId },
+            threadId,
+            text
+          )
+          if (result?.id) {
+            bridgeMessageIds.discordMessageId = result.id
+          }
+        }
+      } catch (error) {
+        console.error('[Bridges] Discord AI message error:', error)
+      }
+    }
+  }
+
+  // Slack
+  if (project.slackBotToken && project.slackChannelId) {
+    try {
+      let threadTs = session.slackThreadTs
+
+      // Create thread on-demand if it doesn't exist
+      if (!threadTs) {
+        threadTs = await slack.createThread(
+          { botToken: project.slackBotToken, channelId: project.slackChannelId },
+          sessionInfo
+        )
+        if (threadTs) {
+          await prisma.session.update({
+            where: { id: session.id },
+            data: { slackThreadTs: threadTs },
+          })
+        }
+      }
+
+      if (threadTs) {
+        const text = `🤖 *AI*\n\n${content}`
+        const result = await slack.sendMessageToThread(
+          { botToken: project.slackBotToken, channelId: project.slackChannelId },
+          threadTs,
+          text
+        )
+        if (result) {
+          bridgeMessageIds.slackMessageTs = result
+        }
+      }
+    } catch (error) {
+      console.error('[Bridges] Slack AI message error:', error)
+    }
+  }
+
+  // Update message with bridge message IDs
+  if (Object.keys(bridgeMessageIds).length > 0) {
+    await prisma.message.update({
+      where: { id: messageId },
+      data: bridgeMessageIds,
+    })
+  }
+
+  console.log('[Bridges] AI message sent to bridges')
+}

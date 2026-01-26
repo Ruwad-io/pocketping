@@ -16,7 +16,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'SDKs',
       link: { type: 'doc', id: 'sdk/index' },
-      items: ['sdk/nodejs', 'sdk/python'],
+      items: ['sdk/nodejs', 'sdk/python', 'sdk/go', 'sdk/php', 'sdk/ruby'],
     },
     {
       type: 'category',

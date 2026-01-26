@@ -15,6 +15,13 @@ export interface AuthContext {
     name: string
     publicKey: string
     secretKey: string
+    // AI settings
+    aiEnabled: boolean
+    aiProvider: string | null
+    aiApiKey: string | null
+    aiModel: string | null
+    aiSystemPrompt: string | null
+    aiTakeoverDelay: number
   }
 }
 
@@ -31,6 +38,12 @@ export async function validatePublicKey(key: string): Promise<AuthContext | null
       name: true,
       publicKey: true,
       secretKey: true,
+      aiEnabled: true,
+      aiProvider: true,
+      aiApiKey: true,
+      aiModel: true,
+      aiSystemPrompt: true,
+      aiTakeoverDelay: true,
     },
   })
 
@@ -52,6 +65,12 @@ export async function validateSecretKey(key: string): Promise<AuthContext | null
       name: true,
       publicKey: true,
       secretKey: true,
+      aiEnabled: true,
+      aiProvider: true,
+      aiApiKey: true,
+      aiModel: true,
+      aiSystemPrompt: true,
+      aiTakeoverDelay: true,
     },
   })
 
