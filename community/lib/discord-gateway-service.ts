@@ -174,6 +174,8 @@ async function handleDiscordMessage(
   const attachmentData: Array<{
     filename: string
     mimeType: string
+    size: number
+    url: string
     data: Buffer
     bridgeFileId?: string
   }> = []
@@ -193,6 +195,8 @@ async function handleDiscordMessage(
       attachmentData.push({
         filename: att.filename,
         mimeType: att.contentType,
+        size: att.size,
+        url: downloaded.url,
         data: downloaded.buffer,
         bridgeFileId: att.id,
       })
@@ -222,6 +226,17 @@ async function handleDiscordMessage(
       sender: 'OPERATOR',
       discordMessageId: params.messageId,
       replyToId,
+      attachments: attachmentData.length
+        ? {
+            create: attachmentData.map((att) => ({
+              filename: att.filename,
+              mimeType: att.mimeType,
+              size: att.size,
+              url: att.url,
+              status: 'READY',
+            })),
+          }
+        : undefined,
     },
     include: {
       attachments: true,

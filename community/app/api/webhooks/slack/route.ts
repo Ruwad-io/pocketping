@@ -1,7 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createHmac, timingSafeEqual } from 'crypto'
 import { prisma } from '@/lib/db'
 import { parseSlackEvent, getUserInfo, downloadSlackFile, type SlackEvent } from '@/lib/bridges/slack'
 import { emitToSession } from '@/lib/sse'
+
+const SLACK_SIGNATURE_TOLERANCE_SECONDS = 60 * 5
+
+function verifySlackSignature(request: NextRequest, rawBody: string, signingSecret: string): boolean {
+  const signature = request.headers.get('x-slack-signature')
+  const timestamp = request.headers.get('x-slack-request-timestamp')
+
+  if (!signature || !timestamp) return false
+
+  const timestampNumber = Number(timestamp)
+  if (!Number.isFinite(timestampNumber)) return false
+
+  const now = Math.floor(Date.now() / 1000)
+  if (Math.abs(now - timestampNumber) > SLACK_SIGNATURE_TOLERANCE_SECONDS) {
+    return false
+  }
+
+  const baseString = `v0:${timestamp}:${rawBody}`
+  const expectedSignature = `v0=${createHmac('sha256', signingSecret).update(baseString).digest('hex')}`
+
+  const signatureBuffer = Buffer.from(signature)
+  const expectedBuffer = Buffer.from(expectedSignature)
+  if (signatureBuffer.length !== expectedBuffer.length) return false
+
+  return timingSafeEqual(signatureBuffer, expectedBuffer)
+}
 
 /**
  * POST /api/webhooks/slack
@@ -9,7 +36,18 @@ import { emitToSession } from '@/lib/sse'
  */
 export async function POST(request: NextRequest) {
   try {
-    const event: SlackEvent = await request.json()
+    const signingSecret = process.env.SLACK_SIGNING_SECRET
+    if (!signingSecret) {
+      console.error('[Slack Webhook] SLACK_SIGNING_SECRET not configured')
+      return NextResponse.json({ error: 'Slack signing secret not configured' }, { status: 500 })
+    }
+
+    const rawBody = await request.text()
+    if (!verifySlackSignature(request, rawBody, signingSecret)) {
+      return NextResponse.json({ error: 'Invalid Slack signature' }, { status: 401 })
+    }
+
+    const event: SlackEvent = JSON.parse(rawBody)
     const parsed = parseSlackEvent(event)
 
     // Handle URL verification challenge
