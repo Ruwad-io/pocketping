@@ -605,8 +605,8 @@ func TestSlackBridge_ErrorHandling(t *testing.T) {
 
 func TestSlackBridge_Timeout(t *testing.T) {
 	cfg := &config.SlackConfig{
-		BotToken:  "token",
-		ChannelID: "channel",
+		BotToken:  "xoxb-test-token",
+		ChannelID: "C123456",
 	}
 	bridge, err := NewSlackBridge(cfg)
 		if err != nil {
