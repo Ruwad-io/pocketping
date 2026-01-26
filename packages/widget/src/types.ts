@@ -157,6 +157,9 @@ export interface PocketPingConfig {
 
   /** Called when a version mismatch is detected */
   onVersionWarning?: (warning: VersionWarning) => void;
+
+  /** Called when a custom event is received from the backend */
+  onEvent?: (event: CustomEvent) => void;
 }
 
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
