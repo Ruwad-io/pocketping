@@ -504,6 +504,33 @@ function adjustBrightness(hex: string, percent: number): string {
       display: inline;
     }
 
+    /* Markdown styles */
+    .pp-message-content strong {
+      font-weight: 600;
+    }
+
+    .pp-message-content em {
+      font-style: italic;
+    }
+
+    .pp-message-content code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.9em;
+      background: ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)'};
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    .pp-md-list {
+      margin: 4px 0;
+      padding-left: 20px;
+      display: block;
+    }
+
+    .pp-md-list li {
+      margin: 2px 0;
+    }
+
     /* WhatsApp-style inline timestamp - floats to the right */
     .pp-message-time {
       font-size: 11px;

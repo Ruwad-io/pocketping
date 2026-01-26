@@ -4,6 +4,7 @@ import type { PocketPingClient } from '../client';
 import type { PocketPingConfig, Message, MessageStatus, Attachment, ReplyToData, PreChatFormConfig } from '../types';
 import { styles } from './styles';
 import { PreChatForm } from './PreChatForm';
+import { renderMarkdown } from '../utils/markdown';
 
 // Format date for message separators (Today, Yesterday, or date)
 function formatDateSeparator(date: Date): string {
@@ -788,7 +789,7 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
                     <>
                       {msg.content && (
                         <div class="pp-message-content">
-                          {msg.content}
+                          <span dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
                           <span class="pp-message-time">
                             {formatTime(msg.timestamp)}
                             {isEdited && <span class="pp-edited-badge">edited</span>}
