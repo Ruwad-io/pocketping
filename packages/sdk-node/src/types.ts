@@ -1,9 +1,9 @@
-import type { Storage } from './storage/types';
-import type { Bridge } from './bridges/types';
 import type { AIProvider } from './ai/types';
+import type { Bridge } from './bridges/types';
+import type { Storage } from './storage/types';
 import type { IpFilterConfig } from './utils/ip-filter';
 
-export type { IpFilterConfig, IpFilterMode, IpFilterLogEvent } from './utils/ip-filter';
+export type { IpFilterConfig, IpFilterLogEvent, IpFilterMode } from './utils/ip-filter';
 
 export interface PocketPingConfig {
   /** Storage adapter for sessions and messages */
@@ -346,10 +346,7 @@ export interface CustomEvent {
 }
 
 /** Handler for custom events */
-export type CustomEventHandler = (
-  event: CustomEvent,
-  session: Session
-) => void | Promise<void>;
+export type CustomEventHandler = (event: CustomEvent, session: Session) => void | Promise<void>;
 
 // ─────────────────────────────────────────────────────────────────
 // Version Management Types

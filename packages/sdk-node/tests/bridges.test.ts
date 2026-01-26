@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
-import { TelegramBridge } from '../src/bridges/telegram';
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import { DiscordBridge } from '../src/bridges/discord';
 import { SlackBridge } from '../src/bridges/slack';
-import type { Session, Message } from '../src/types';
+import { TelegramBridge } from '../src/bridges/telegram';
 import type { PocketPing } from '../src/pocketping';
+import type { Message, Session } from '../src/types';
 
 // ============================================================================
 // Test Fixtures
@@ -32,7 +32,7 @@ const createMockMessage = (overrides: Partial<Message> = {}): Message => ({
   ...overrides,
 });
 
-const createMockPocketPing = (): PocketPing => ({} as PocketPing);
+const createMockPocketPing = (): PocketPing => ({}) as PocketPing;
 
 // ============================================================================
 // Telegram Bridge Tests
@@ -349,7 +349,9 @@ describe('TelegramBridge', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => { throw new Error('Invalid JSON'); },
+        json: async () => {
+          throw new Error('Invalid JSON');
+        },
       });
 
       const result = await bridge.onVisitorMessage(message, session);
@@ -374,9 +376,7 @@ describe('TelegramBridge', () => {
 
       await bridge.init(createMockPocketPing());
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        `https://api.telegram.org/bot${BOT_TOKEN}/getMe`
-      );
+      expect(mockFetch).toHaveBeenCalledWith(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`);
     });
 
     it('should log error for invalid bot token', async () => {
@@ -863,7 +863,9 @@ describe('DiscordBridge', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => { throw new Error('Invalid JSON'); },
+        json: async () => {
+          throw new Error('Invalid JSON');
+        },
       });
 
       const result = await bridge.onVisitorMessage(message, session);
@@ -1361,7 +1363,9 @@ describe('SlackBridge', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => { throw new Error('Invalid JSON'); },
+        json: async () => {
+          throw new Error('Invalid JSON');
+        },
       });
 
       const result = await bridge.onVisitorMessage(message, session);

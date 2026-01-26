@@ -1,7 +1,7 @@
-import type { Bridge, BridgeMessageResult } from './types';
-import type { PocketPing } from '../pocketping';
-import type { Session, Message } from '../types';
 import { PocketPingSetupError, SETUP_GUIDES } from '../errors';
+import type { PocketPing } from '../pocketping';
+import type { Message, Session } from '../types';
+import type { Bridge, BridgeMessageResult } from './types';
 
 /**
  * Slack API response types
@@ -91,10 +91,7 @@ export class SlackBridge implements Bridge {
   /**
    * Create a Slack bridge using a webhook URL
    */
-  static webhook(
-    webhookUrl: string,
-    options: SlackWebhookOptions = {}
-  ): SlackBridge {
+  static webhook(webhookUrl: string, options: SlackWebhookOptions = {}): SlackBridge {
     if (!webhookUrl) {
       throw new PocketPingSetupError({
         bridge: 'Slack',
@@ -107,8 +104,9 @@ export class SlackBridge implements Bridge {
       throw new PocketPingSetupError({
         bridge: 'Slack',
         missing: 'valid webhookUrl',
-        guide: 'Webhook URL must start with https://hooks.slack.com/\n\n' +
-               SETUP_GUIDES.slack.webhookUrl,
+        guide:
+          'Webhook URL must start with https://hooks.slack.com/\n\n' +
+          SETUP_GUIDES.slack.webhookUrl,
       });
     }
 
@@ -124,11 +122,7 @@ export class SlackBridge implements Bridge {
   /**
    * Create a Slack bridge using a bot token
    */
-  static bot(
-    botToken: string,
-    channelId: string,
-    options: SlackBotOptions = {}
-  ): SlackBridge {
+  static bot(botToken: string, channelId: string, options: SlackBotOptions = {}): SlackBridge {
     if (!botToken) {
       throw new PocketPingSetupError({
         bridge: 'Slack',
@@ -141,8 +135,7 @@ export class SlackBridge implements Bridge {
       throw new PocketPingSetupError({
         bridge: 'Slack',
         missing: 'valid botToken',
-        guide: 'Bot token must start with xoxb-\n\n' +
-               SETUP_GUIDES.slack.botToken,
+        guide: `Bot token must start with xoxb-\n\n${SETUP_GUIDES.slack.botToken}`,
       });
     }
 
@@ -230,16 +223,11 @@ export class SlackBridge implements Bridge {
    * Called when a visitor sends a message.
    * Returns the Slack message timestamp for edit/delete sync.
    */
-  async onVisitorMessage(
-    message: Message,
-    session: Session
-  ): Promise<BridgeMessageResult> {
+  async onVisitorMessage(message: Message, session: Session): Promise<BridgeMessageResult> {
     const blocks: Array<Record<string, unknown>> = [];
 
     if (message.replyTo && this.pocketping?.getStorage().getMessage) {
-      const replyTarget = await this.pocketping
-        .getStorage()
-        .getMessage(message.replyTo);
+      const replyTarget = await this.pocketping.getStorage().getMessage(message.replyTo);
       if (replyTarget) {
         const senderLabel =
           replyTarget.sender === 'visitor'
@@ -247,10 +235,10 @@ export class SlackBridge implements Bridge {
             : replyTarget.sender === 'operator'
               ? 'Support'
               : 'AI';
-        const rawPreview =
-          replyTarget.deletedAt ? 'Message deleted' : replyTarget.content || 'Message';
-        const preview =
-          rawPreview.length > 140 ? `${rawPreview.slice(0, 140)}...` : rawPreview;
+        const rawPreview = replyTarget.deletedAt
+          ? 'Message deleted'
+          : replyTarget.content || 'Message';
+        const preview = rawPreview.length > 140 ? `${rawPreview.slice(0, 140)}...` : rawPreview;
         const quoted = `> *${this.escapeSlack(senderLabel)}* — ${this.escapeSlack(preview)}`;
         blocks.push({
           type: 'section',
@@ -278,7 +266,7 @@ export class SlackBridge implements Bridge {
             text: `<!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} at {time}|${new Date().toISOString()}>`,
           },
         ],
-      },
+      }
     );
 
     try {
@@ -383,10 +371,7 @@ export class SlackBridge implements Bridge {
    * Called when a visitor deletes their message.
    * @returns true if delete succeeded, false otherwise
    */
-  async onMessageDelete(
-    _messageId: string,
-    bridgeMessageId: string | number
-  ): Promise<boolean> {
+  async onMessageDelete(_messageId: string, bridgeMessageId: string | number): Promise<boolean> {
     // Only bot mode supports message deletion
     if (this.mode !== 'bot' || !this.channelId) {
       console.warn('[SlackBridge] Message delete only supported in bot mode');
@@ -528,9 +513,7 @@ export class SlackBridge implements Bridge {
   /**
    * Send blocks to Slack
    */
-  private async sendBlocks(
-    blocks: Array<Record<string, unknown>>
-  ): Promise<string | undefined> {
+  private async sendBlocks(blocks: Array<Record<string, unknown>>): Promise<string | undefined> {
     const payload: Record<string, unknown> = { blocks };
 
     if (this.username) {
@@ -584,9 +567,6 @@ export class SlackBridge implements Bridge {
    * Escape special characters for Slack mrkdwn
    */
   private escapeSlack(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 }

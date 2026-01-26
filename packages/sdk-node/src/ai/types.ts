@@ -9,10 +9,7 @@ export interface AIProvider {
   name: string;
 
   /** Generate a response to the conversation */
-  generateResponse(
-    messages: Message[],
-    systemPrompt?: string
-  ): Promise<string>;
+  generateResponse(messages: Message[], systemPrompt?: string): Promise<string>;
 
   /** Check if the provider is available */
   isAvailable(): Promise<boolean>;

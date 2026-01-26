@@ -1,4 +1,4 @@
-import type { Session, Message } from '../types';
+import type { Message, Session } from '../types';
 
 /**
  * Bridge message IDs for edit/delete sync.
