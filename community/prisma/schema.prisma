@@ -1,0 +1,191 @@
+// PocketPing Community Edition - Simplified Schema
+// Single project, no organizations, no billing
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Project Configuration
+// ─────────────────────────────────────────────────────────────────
+
+model Project {
+  id        String   @id @default(cuid())
+  name      String   @default("My Project")
+
+  // Widget customization
+  operatorName   String  @default("Support")
+  operatorAvatar String?
+  primaryColor   String  @default("#6366f1")
+  welcomeMessage String? @default("Hello! How can we help you today?")
+
+  // API Keys
+  publicKey String @unique @default(cuid())
+  secretKey String @unique @default(cuid())
+
+  // Telegram
+  telegramBotToken String?
+  telegramChatId   String?
+
+  // Discord (shared bot from env, just need channel)
+  discordChannelId   String?
+  discordGuildId     String?
+  discordGuildName   String?
+
+  // Slack
+  slackBotToken   String?
+  slackChannelId  String?
+  slackTeamId     String?
+  slackTeamName   String?
+
+  // AI (optional)
+  aiEnabled      Boolean @default(false)
+  aiProvider     String?
+  aiApiKey       String?
+  aiModel        String?
+  aiSystemPrompt String? @db.Text
+  aiTakeoverDelay Int    @default(300)
+
+  // Pre-chat form
+  preChatFormEnabled  Boolean @default(false)
+  preChatFormRequired Boolean @default(false)
+  preChatFormTiming   PreChatFormTiming @default(BEFORE_FIRST_MESSAGE)
+  preChatFormFields   PreChatFormFields @default(EMAIL_OR_PHONE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions Session[]
+}
+
+enum PreChatFormTiming {
+  BEFORE_FIRST_MESSAGE
+  AFTER_FIRST_MESSAGE
+}
+
+enum PreChatFormFields {
+  EMAIL_ONLY
+  PHONE_ONLY
+  EMAIL_OR_PHONE
+  EMAIL_AND_PHONE
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Sessions & Messages
+// ─────────────────────────────────────────────────────────────────
+
+model Session {
+  id        String   @id @default(cuid())
+  visitorId String
+
+  // Visitor info
+  url       String?
+  referrer  String?
+  userAgent String?
+  ip        String?
+  country   String?
+  city      String?
+
+  // Pre-chat form data
+  userEmail        String?
+  userPhone        String?
+  userPhoneCountry String?
+
+  // Status
+  status        SessionStatus @default(ACTIVE)
+  operatorOnline Boolean      @default(false)
+  aiActive      Boolean       @default(false)
+  unreadCount   Int           @default(0)
+
+  // Bridge thread IDs
+  telegramTopicId String?
+  discordThreadId String?
+  slackThreadTs   String?
+
+  projectId    String
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lastActivity DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+
+  messages Message[]
+
+  @@index([projectId, status])
+  @@index([visitorId])
+  @@index([discordThreadId])
+  @@index([slackThreadTs])
+  @@index([telegramTopicId])
+}
+
+enum SessionStatus {
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+model Message {
+  id      String  @id @default(cuid())
+  content String  @db.Text
+  sender  Sender
+
+  // Timestamps
+  deliveredAt DateTime?
+  readAt      DateTime?
+  editedAt    DateTime?
+  deletedAt   DateTime?
+
+  // AI
+  aiGenerated Boolean @default(false)
+
+  // Reply support
+  replyToId String?
+  replyTo   Message?  @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies   Message[] @relation("MessageReplies")
+
+  // Bridge message IDs (for edit/delete sync)
+  telegramMessageId Int?
+  discordMessageId  String?
+  slackMessageTs    String?
+
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  attachments Attachment[]
+
+  @@index([sessionId, createdAt])
+}
+
+enum Sender {
+  VISITOR
+  OPERATOR
+  AI
+  SYSTEM
+}
+
+model Attachment {
+  id           String           @id @default(cuid())
+  filename     String
+  mimeType     String
+  size         Int
+  url          String
+  thumbnailUrl String?
+  status       AttachmentStatus @default(PENDING)
+
+  messageId String
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([messageId])
+}
+
+enum AttachmentStatus {
+  PENDING
+  UPLOADING
+  READY
+  FAILED
+}

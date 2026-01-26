@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://pocketping:pocketping@db:5432/pocketping
+      # Telegram (optional)
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET}
+      # Discord (optional) - uses shared bot from env
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - ENABLE_DISCORD_GATEWAY=${ENABLE_DISCORD_GATEWAY:-true}
+      # Slack is configured per-project in the database
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=pocketping
+      - POSTGRES_PASSWORD=pocketping
+      - POSTGRES_DB=pocketping
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pocketping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Run migrations on startup
+  migrate:
+    build: .
+    command: npx prisma migrate deploy
+    environment:
+      - DATABASE_URL=postgresql://pocketping:pocketping@db:5432/pocketping
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

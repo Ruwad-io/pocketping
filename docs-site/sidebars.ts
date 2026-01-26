@@ -25,6 +25,7 @@ const sidebars: SidebarsConfig = {
       items: ['bridges/telegram', 'bridges/discord', 'bridges/slack', 'bridges/docker'],
     },
     'self-hosting',
+    'community-edition',
     'ai-fallback',
     'api',
   ],
