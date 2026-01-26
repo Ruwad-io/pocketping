@@ -1,38 +1,36 @@
-import type { IncomingMessage, ServerResponse } from 'http';
-import { createHmac } from 'crypto';
-import { WebSocketServer, WebSocket } from 'ws';
+import { createHmac } from 'node:crypto';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { WebSocket, WebSocketServer } from 'ws';
+import type { Bridge } from './bridges/types';
+import { MemoryStorage } from './storage/memory';
+import type { Storage } from './storage/types';
 import type {
-  PocketPingConfig,
-  Session,
-  SessionMetadata,
-  Message,
-  MessageStatus,
   ConnectRequest,
   ConnectResponse,
-  SendMessageRequest,
-  SendMessageResponse,
+  CustomEvent,
+  CustomEventHandler,
+  DeleteMessageRequest,
+  DeleteMessageResponse,
+  EditMessageRequest,
+  EditMessageResponse,
   GetMessagesRequest,
   GetMessagesResponse,
-  TypingRequest,
+  IdentifyRequest,
+  IdentifyResponse,
+  Message,
+  MessageStatus,
+  PocketPingConfig,
   PresenceResponse,
   ReadRequest,
   ReadResponse,
-  IdentifyRequest,
-  IdentifyResponse,
-  EditMessageRequest,
-  EditMessageResponse,
-  DeleteMessageRequest,
-  DeleteMessageResponse,
-  CustomEvent,
-  CustomEventHandler,
-  WebhookPayload,
+  SendMessageRequest,
+  SendMessageResponse,
+  Session,
+  TypingRequest,
   VersionCheckResult,
   VersionStatus,
-  UserIdentity,
+  WebhookPayload,
 } from './types';
-import type { Storage } from './storage/types';
-import { MemoryStorage } from './storage/memory';
-import type { Bridge } from './bridges/types';
 import { checkIpFilter, type IpFilterLogEvent } from './utils/ip-filter';
 
 // ─────────────────────────────────────────────────────────────────
@@ -49,7 +47,7 @@ function getClientIp(req: IncomingMessage): string {
 
   const realIp = req.headers['x-real-ip'];
   if (realIp) {
-    return Array.isArray(realIp) ? realIp[0] ?? 'unknown' : realIp;
+    return Array.isArray(realIp) ? (realIp[0] ?? 'unknown') : realIp;
   }
 
   // Fall back to socket address
@@ -155,7 +153,11 @@ export class PocketPing {
   // Express/Connect Middleware
   // ─────────────────────────────────────────────────────────────────
 
-  middleware(): (req: IncomingMessage & { body?: unknown; query?: Record<string, string> }, res: ServerResponse, next?: () => void) => void {
+  middleware(): (
+    req: IncomingMessage & { body?: unknown; query?: Record<string, string> },
+    res: ServerResponse,
+    next?: () => void
+  ) => void {
     return async (req, res, next) => {
       const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
       const path = url.pathname.replace(/^\/+/, '').replace(/\/+$/, '');
@@ -164,7 +166,10 @@ export class PocketPing {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-PocketPing-Version');
-      res.setHeader('Access-Control-Expose-Headers', 'X-PocketPing-Version-Status, X-PocketPing-Min-Version, X-PocketPing-Latest-Version, X-PocketPing-Version-Message');
+      res.setHeader(
+        'Access-Control-Expose-Headers',
+        'X-PocketPing-Version-Status, X-PocketPing-Min-Version, X-PocketPing-Latest-Version, X-PocketPing-Version-Message'
+      );
 
       if (req.method === 'OPTIONS') {
         res.statusCode = 204;
@@ -199,9 +204,11 @@ export class PocketPing {
 
           res.statusCode = this.config.ipFilter.blockedStatusCode ?? 403;
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({
-            error: this.config.ipFilter.blockedMessage ?? 'Forbidden',
-          }));
+          res.end(
+            JSON.stringify({
+              error: this.config.ipFilter.blockedMessage ?? 'Forbidden',
+            })
+          );
           return;
         }
       }
@@ -217,12 +224,15 @@ export class PocketPing {
       if (!versionCheck.canContinue) {
         res.statusCode = 426; // Upgrade Required
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({
-          error: 'Widget version unsupported',
-          message: versionCheck.message,
-          minVersion: versionCheck.minVersion,
-          upgradeUrl: this.config.versionUpgradeUrl || 'https://docs.pocketping.io/widget/installation',
-        }));
+        res.end(
+          JSON.stringify({
+            error: 'Widget version unsupported',
+            message: versionCheck.message,
+            minVersion: versionCheck.minVersion,
+            upgradeUrl:
+              this.config.versionUpgradeUrl || 'https://docs.pocketping.io/widget/installation',
+          })
+        );
         return;
       }
 
@@ -337,7 +347,7 @@ export class PocketPing {
   attachWebSocket(server: any): void {
     this.wss = new WebSocketServer({
       server,
-      path: '/pocketping/stream'
+      path: '/pocketping/stream',
     });
 
     this.wss.on('connection', async (ws, req) => {
@@ -361,7 +371,9 @@ export class PocketPing {
             if (this.config.ipFilter.logger) {
               this.config.ipFilter.logger(logEvent);
             } else {
-              console.log(`[PocketPing] WS IP blocked: ${clientIp} - reason: ${filterResult.reason}`);
+              console.log(
+                `[PocketPing] WS IP blocked: ${clientIp} - reason: ${filterResult.reason}`
+              );
             }
           }
 
@@ -399,7 +411,10 @@ export class PocketPing {
     });
   }
 
-  private async handleWebSocketMessage(sessionId: string, event: { type: string; data: unknown }): Promise<void> {
+  private async handleWebSocketMessage(
+    sessionId: string,
+    event: { type: string; data: unknown }
+  ): Promise<void> {
     switch (event.type) {
       case 'typing':
         this.broadcastToSession(sessionId, {
@@ -408,12 +423,13 @@ export class PocketPing {
         });
         break;
 
-      case 'event':
+      case 'event': {
         // Custom event from widget
         const customEvent = event.data as CustomEvent;
         customEvent.sessionId = sessionId;
         await this.handleCustomEvent(sessionId, customEvent);
         break;
+      }
     }
   }
 
@@ -1008,7 +1024,10 @@ export class PocketPing {
               } else if (bridge.name === 'slack') {
                 bridgeIds.slackMessageTs = result.messageId;
               }
-              await this.storage.saveBridgeMessageIds(message.id, bridgeIds as import('./storage/types').BridgeMessageIds);
+              await this.storage.saveBridgeMessageIds(
+                message.id,
+                bridgeIds as import('./storage/types').BridgeMessageIds
+              );
             }
             break;
           }
@@ -1156,9 +1175,7 @@ export class PocketPing {
 
     // Add HMAC signature if secret is configured
     if (this.config.webhookSecret) {
-      const signature = createHmac('sha256', this.config.webhookSecret)
-        .update(body)
-        .digest('hex');
+      const signature = createHmac('sha256', this.config.webhookSecret).update(body).digest('hex');
       headers['X-PocketPing-Signature'] = `sha256=${signature}`;
     }
 
@@ -1257,7 +1274,8 @@ export class PocketPing {
     if (minWidgetVersion && compareVersions(widgetVersion, minWidgetVersion) < 0) {
       // Widget is older than minimum supported
       status = 'unsupported';
-      message = this.config.versionWarningMessage ||
+      message =
+        this.config.versionWarningMessage ||
         `Widget version ${widgetVersion} is no longer supported. Minimum version: ${minWidgetVersion}`;
       canContinue = false;
     }
@@ -1269,7 +1287,8 @@ export class PocketPing {
       if (majorDiff >= 1) {
         // Major version behind = deprecated
         status = 'deprecated';
-        message = this.config.versionWarningMessage ||
+        message =
+          this.config.versionWarningMessage ||
           `Widget version ${widgetVersion} is deprecated. Please update to ${latestWidgetVersion}`;
       } else {
         // Minor/patch behind = just outdated (info only)
@@ -1314,14 +1333,19 @@ export class PocketPing {
     this.broadcastToSession(sessionId, {
       type: 'version_warning',
       data: {
-        severity: versionCheck.status === 'unsupported' ? 'error' :
-                  versionCheck.status === 'deprecated' ? 'warning' : 'info',
+        severity:
+          versionCheck.status === 'unsupported'
+            ? 'error'
+            : versionCheck.status === 'deprecated'
+              ? 'warning'
+              : 'info',
         message: versionCheck.message,
         currentVersion: 'unknown', // Will be filled by widget
         minVersion: versionCheck.minVersion,
         latestVersion: versionCheck.latestVersion,
         canContinue: versionCheck.canContinue,
-        upgradeUrl: this.config.versionUpgradeUrl || 'https://docs.pocketping.io/widget/installation',
+        upgradeUrl:
+          this.config.versionUpgradeUrl || 'https://docs.pocketping.io/widget/installation',
       },
     });
   }

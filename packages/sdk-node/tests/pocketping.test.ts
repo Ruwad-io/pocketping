@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PocketPing } from '../src/pocketping';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Bridge } from '../src/bridges/types';
-import type { CustomEvent, Session, Message } from '../src/types';
+import { PocketPing } from '../src/pocketping';
+import type { CustomEvent } from '../src/types';
 
 describe('PocketPing', () => {
   let pp: PocketPing;
@@ -195,11 +195,11 @@ describe('PocketPing', () => {
   });
 
   describe('Custom Events', () => {
-    let sessionId: string;
+    let _sessionId: string;
 
     beforeEach(async () => {
       const response = await pp.handleConnect({ visitorId: 'visitor-123' });
-      sessionId = response.sessionId;
+      _sessionId = response.sessionId;
     });
 
     describe('onEvent()', () => {
@@ -259,11 +259,11 @@ describe('PocketPing', () => {
   });
 
   describe('Bridges', () => {
-    let sessionId: string;
+    let _sessionId: string;
 
     beforeEach(async () => {
       const response = await pp.handleConnect({ visitorId: 'visitor-123' });
-      sessionId = response.sessionId;
+      _sessionId = response.sessionId;
     });
 
     it('should notify bridge on new session', async () => {

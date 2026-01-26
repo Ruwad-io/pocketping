@@ -37,7 +37,10 @@ export class PocketPingSetupError extends Error {
 │
 │  Missing: ${this.missing}
 │
-${this.guide.split('\n').map(line => `│  ${line}`).join('\n')}
+${this.guide
+  .split('\n')
+  .map((line) => `│  ${line}`)
+  .join('\n')}
 │
 │  📖 Full guide: ${this.docsUrl}
 │

@@ -1,7 +1,7 @@
-import type { Bridge, BridgeMessageResult } from './types';
-import type { PocketPing } from '../pocketping';
-import type { Session, Message } from '../types';
 import { PocketPingSetupError, SETUP_GUIDES } from '../errors';
+import type { PocketPing } from '../pocketping';
+import type { Message, Session } from '../types';
+import type { Bridge, BridgeMessageResult } from './types';
 
 /**
  * Discord API response types
@@ -82,10 +82,7 @@ export class DiscordBridge implements Bridge {
   /**
    * Create a Discord bridge using a webhook URL
    */
-  static webhook(
-    webhookUrl: string,
-    options: DiscordWebhookOptions = {}
-  ): DiscordBridge {
+  static webhook(webhookUrl: string, options: DiscordWebhookOptions = {}): DiscordBridge {
     if (!webhookUrl) {
       throw new PocketPingSetupError({
         bridge: 'Discord',
@@ -98,8 +95,9 @@ export class DiscordBridge implements Bridge {
       throw new PocketPingSetupError({
         bridge: 'Discord',
         missing: 'valid webhookUrl',
-        guide: 'Webhook URL must start with https://discord.com/api/webhooks/\n\n' +
-               SETUP_GUIDES.discord.webhookUrl,
+        guide:
+          'Webhook URL must start with https://discord.com/api/webhooks/\n\n' +
+          SETUP_GUIDES.discord.webhookUrl,
       });
     }
 
@@ -114,11 +112,7 @@ export class DiscordBridge implements Bridge {
   /**
    * Create a Discord bridge using a bot token
    */
-  static bot(
-    botToken: string,
-    channelId: string,
-    options: DiscordBotOptions = {}
-  ): DiscordBridge {
+  static bot(botToken: string, channelId: string, options: DiscordBotOptions = {}): DiscordBridge {
     if (!botToken) {
       throw new PocketPingSetupError({
         bridge: 'Discord',
@@ -191,10 +185,7 @@ export class DiscordBridge implements Bridge {
    * Called when a visitor sends a message.
    * Returns the Discord message ID for edit/delete sync.
    */
-  async onVisitorMessage(
-    message: Message,
-    session: Session
-  ): Promise<BridgeMessageResult> {
+  async onVisitorMessage(message: Message, session: Session): Promise<BridgeMessageResult> {
     const embed = {
       author: {
         name: session.visitorId,
@@ -263,13 +254,10 @@ export class DiscordBridge implements Bridge {
     if (!isTyping || this.mode !== 'bot' || !this.channelId) return;
 
     try {
-      await fetch(
-        `https://discord.com/api/v10/channels/${this.channelId}/typing`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bot ${this.botToken}` },
-        }
-      );
+      await fetch(`https://discord.com/api/v10/channels/${this.channelId}/typing`, {
+        method: 'POST',
+        headers: { Authorization: `Bot ${this.botToken}` },
+      });
     } catch (error) {
       console.error('[DiscordBridge] Failed to send typing indicator:', error);
     }
@@ -287,21 +275,18 @@ export class DiscordBridge implements Bridge {
     try {
       if (this.mode === 'webhook' && this.webhookUrl) {
         // Webhooks can edit their own messages
-        const response = await fetch(
-          `${this.webhookUrl}/messages/${bridgeMessageId}`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              embeds: [
-                {
-                  description: `${newContent}\n\n*(edited)*`,
-                  color: 0x57f287,
-                },
-              ],
-            }),
-          }
-        );
+        const response = await fetch(`${this.webhookUrl}/messages/${bridgeMessageId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            embeds: [
+              {
+                description: `${newContent}\n\n*(edited)*`,
+                color: 0x57f287,
+              },
+            ],
+          }),
+        });
         return response.ok;
       } else if (this.mode === 'bot' && this.channelId) {
         const response = await fetch(
@@ -335,16 +320,12 @@ export class DiscordBridge implements Bridge {
    * Called when a visitor deletes their message.
    * @returns true if delete succeeded, false otherwise
    */
-  async onMessageDelete(
-    _messageId: string,
-    bridgeMessageId: string | number
-  ): Promise<boolean> {
+  async onMessageDelete(_messageId: string, bridgeMessageId: string | number): Promise<boolean> {
     try {
       if (this.mode === 'webhook' && this.webhookUrl) {
-        const response = await fetch(
-          `${this.webhookUrl}/messages/${bridgeMessageId}`,
-          { method: 'DELETE' }
-        );
+        const response = await fetch(`${this.webhookUrl}/messages/${bridgeMessageId}`, {
+          method: 'DELETE',
+        });
         return response.ok || response.status === 404;
       } else if (this.mode === 'bot' && this.channelId) {
         const response = await fetch(
@@ -402,9 +383,7 @@ export class DiscordBridge implements Bridge {
     if (!session.identity) return;
 
     const identity = session.identity;
-    const fields = [
-      { name: 'User ID', value: identity.id, inline: true },
-    ];
+    const fields = [{ name: 'User ID', value: identity.id, inline: true }];
 
     if (identity.name) {
       fields.push({ name: 'Name', value: identity.name, inline: true });

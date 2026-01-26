@@ -1,5 +1,5 @@
-import type { Storage, BridgeMessageIds } from './types';
-import type { Session, Message } from '../types';
+import type { Message, Session } from '../types';
+import type { BridgeMessageIds, Storage } from './types';
 
 /**
  * In-memory storage adapter.

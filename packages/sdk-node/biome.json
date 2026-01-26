@@ -1,7 +1,13 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
-  "organizeImports": {
-    "enabled": true
+  "$schema": "https://biomejs.dev/schemas/2.3.13/schema.json",
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": {
+          "level": "on"
+        }
+      }
+    }
   },
   "linter": {
     "enabled": true,
@@ -22,7 +28,9 @@
       },
       "suspicious": {
         "noExplicitAny": "warn",
-        "noConsoleLog": "off"
+        "noConsole": "off",
+        "noConfusingVoidType": "off",
+        "noAssignInExpressions": "off"
       }
     }
   },
@@ -40,7 +48,6 @@
     }
   },
   "files": {
-    "include": ["src/**/*.ts", "tests/**/*.ts"],
-    "ignore": ["dist/**", "node_modules/**", "*.js", "*.cjs", "*.mjs"]
+    "includes": ["src/**/*.ts", "tests/**/*.ts"]
   }
 }

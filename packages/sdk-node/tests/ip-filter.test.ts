@@ -1,12 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  ipToNumber,
-  parseCidr,
-  ipMatchesCidr,
-  ipMatchesAny,
-  shouldAllowIp,
   checkIpFilter,
   type IpFilterConfig,
+  ipMatchesAny,
+  ipMatchesCidr,
+  ipToNumber,
+  parseCidr,
+  shouldAllowIp,
 } from '../src/utils/ip-filter';
 
 describe('IP Filter Utilities', () => {

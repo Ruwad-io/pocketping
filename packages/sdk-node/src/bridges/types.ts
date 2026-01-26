@@ -1,5 +1,5 @@
 import type { PocketPing } from '../pocketping';
-import type { Session, Message, MessageStatus, CustomEvent } from '../types';
+import type { CustomEvent, Message, MessageStatus, Session } from '../types';
 
 /**
  * Result from sending a message to a bridge.
@@ -71,10 +71,7 @@ export interface Bridge {
    * @param bridgeMessageId - The bridge-specific message ID
    * @returns true if delete succeeded, false otherwise
    */
-  onMessageDelete?(
-    messageId: string,
-    bridgeMessageId: string | number
-  ): boolean | Promise<boolean>;
+  onMessageDelete?(messageId: string, bridgeMessageId: string | number): boolean | Promise<boolean>;
 
   /** Called when a custom event is triggered from the widget */
   onCustomEvent?(event: CustomEvent, session: Session): void | Promise<void>;

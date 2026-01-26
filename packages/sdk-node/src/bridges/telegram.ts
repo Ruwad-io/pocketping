@@ -1,7 +1,7 @@
-import type { Bridge, BridgeMessageResult } from './types';
-import type { PocketPing } from '../pocketping';
-import type { Session, Message } from '../types';
 import { PocketPingSetupError, SETUP_GUIDES } from '../errors';
+import type { PocketPing } from '../pocketping';
+import type { Message, Session } from '../types';
+import type { Bridge, BridgeMessageResult } from './types';
 
 /**
  * Telegram API response types
@@ -49,11 +49,7 @@ export class TelegramBridge implements Bridge {
   private readonly disableNotification: boolean;
   private readonly baseUrl: string;
 
-  constructor(
-    botToken: string,
-    chatId: string | number,
-    options: TelegramBridgeOptions = {}
-  ) {
+  constructor(botToken: string, chatId: string | number, options: TelegramBridgeOptions = {}) {
     if (!botToken) {
       throw new PocketPingSetupError({
         bridge: 'Telegram',
@@ -112,10 +108,7 @@ export class TelegramBridge implements Bridge {
    * Called when a visitor sends a message.
    * Returns the Telegram message ID for edit/delete sync.
    */
-  async onVisitorMessage(
-    message: Message,
-    session: Session
-  ): Promise<BridgeMessageResult> {
+  async onVisitorMessage(message: Message, session: Session): Promise<BridgeMessageResult> {
     const text = this.formatVisitorMessage(session.visitorId, message.content);
     let replyToMessageId: number | undefined;
 
@@ -153,9 +146,10 @@ export class TelegramBridge implements Bridge {
     }
 
     const name = operatorName || 'Operator';
-    const text = this.parseMode === 'HTML'
-      ? `<b>${this.escapeHtml(name)}:</b>\n${this.escapeHtml(message.content)}`
-      : `*${this.escapeMarkdown(name)}:*\n${this.escapeMarkdown(message.content)}`;
+    const text =
+      this.parseMode === 'HTML'
+        ? `<b>${this.escapeHtml(name)}:</b>\n${this.escapeHtml(message.content)}`
+        : `*${this.escapeMarkdown(name)}:*\n${this.escapeMarkdown(message.content)}`;
 
     try {
       await this.sendMessage(text);
@@ -167,7 +161,7 @@ export class TelegramBridge implements Bridge {
   /**
    * Called when visitor starts/stops typing
    */
-  async onTyping(sessionId: string, isTyping: boolean): Promise<void> {
+  async onTyping(_sessionId: string, isTyping: boolean): Promise<void> {
     if (!isTyping) return;
 
     try {
@@ -214,10 +208,7 @@ export class TelegramBridge implements Bridge {
    * Called when a visitor deletes their message.
    * @returns true if delete succeeded, false otherwise
    */
-  async onMessageDelete(
-    _messageId: string,
-    bridgeMessageId: string | number
-  ): Promise<boolean> {
+  async onMessageDelete(_messageId: string, bridgeMessageId: string | number): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseUrl}/deleteMessage`, {
         method: 'POST',
@@ -249,9 +240,10 @@ export class TelegramBridge implements Bridge {
     session: Session
   ): Promise<void> {
     const dataStr = event.data ? JSON.stringify(event.data, null, 2) : '';
-    const text = this.parseMode === 'HTML'
-      ? `<b>Custom Event:</b> ${this.escapeHtml(event.name)}\n<b>Visitor:</b> ${this.escapeHtml(session.visitorId)}${dataStr ? `\n<pre>${this.escapeHtml(dataStr)}</pre>` : ''}`
-      : `*Custom Event:* ${this.escapeMarkdown(event.name)}\n*Visitor:* ${this.escapeMarkdown(session.visitorId)}${dataStr ? `\n\`\`\`\n${dataStr}\n\`\`\`` : ''}`;
+    const text =
+      this.parseMode === 'HTML'
+        ? `<b>Custom Event:</b> ${this.escapeHtml(event.name)}\n<b>Visitor:</b> ${this.escapeHtml(session.visitorId)}${dataStr ? `\n<pre>${this.escapeHtml(dataStr)}</pre>` : ''}`
+        : `*Custom Event:* ${this.escapeMarkdown(event.name)}\n*Visitor:* ${this.escapeMarkdown(session.visitorId)}${dataStr ? `\n\`\`\`\n${dataStr}\n\`\`\`` : ''}`;
 
     try {
       await this.sendMessage(text);
@@ -270,13 +262,15 @@ export class TelegramBridge implements Bridge {
     let text: string;
 
     if (this.parseMode === 'HTML') {
-      text = `<b>User Identified</b>\n` +
+      text =
+        `<b>User Identified</b>\n` +
         `<b>ID:</b> ${this.escapeHtml(identity.id)}\n` +
         (identity.name ? `<b>Name:</b> ${this.escapeHtml(identity.name)}\n` : '') +
         (identity.email ? `<b>Email:</b> ${this.escapeHtml(identity.email)}\n` : '') +
         (session.userPhone ? `<b>Phone:</b> ${this.escapeHtml(session.userPhone)}` : '');
     } else {
-      text = `*User Identified*\n` +
+      text =
+        `*User Identified*\n` +
         `*ID:* ${this.escapeMarkdown(identity.id)}\n` +
         (identity.name ? `*Name:* ${this.escapeMarkdown(identity.name)}\n` : '') +
         (identity.email ? `*Email:* ${this.escapeMarkdown(identity.email)}\n` : '') +
@@ -297,10 +291,7 @@ export class TelegramBridge implements Bridge {
   /**
    * Send a message to the Telegram chat
    */
-  private async sendMessage(
-    text: string,
-    replyToMessageId?: number
-  ): Promise<number | undefined> {
+  private async sendMessage(text: string, replyToMessageId?: number): Promise<number | undefined> {
     const response = await fetch(`${this.baseUrl}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -339,13 +330,17 @@ export class TelegramBridge implements Bridge {
    */
   private formatNewSession(visitorId: string, url: string): string {
     if (this.parseMode === 'HTML') {
-      return `<b>New chat session</b>\n` +
+      return (
+        `<b>New chat session</b>\n` +
         `<b>Visitor:</b> ${this.escapeHtml(visitorId)}\n` +
-        `<b>Page:</b> ${this.escapeHtml(url)}`;
+        `<b>Page:</b> ${this.escapeHtml(url)}`
+      );
     }
-    return `*New chat session*\n` +
+    return (
+      `*New chat session*\n` +
       `*Visitor:* ${this.escapeMarkdown(visitorId)}\n` +
-      `*Page:* ${this.escapeMarkdown(url)}`;
+      `*Page:* ${this.escapeMarkdown(url)}`
+    );
   }
 
   /**
@@ -362,10 +357,7 @@ export class TelegramBridge implements Bridge {
    * Escape HTML special characters
    */
   private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   /**

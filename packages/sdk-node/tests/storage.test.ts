@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { MemoryStorage } from '../src/storage/memory';
 import type { Message, Session } from '../src/types';
 
@@ -127,9 +127,7 @@ describe('MemoryStorage', () => {
     await storage.createSession(oldSession);
     await storage.createSession(newSession);
 
-    const removed = await storage.cleanupOldSessions(
-      new Date('2023-12-31T00:00:00.000Z')
-    );
+    const removed = await storage.cleanupOldSessions(new Date('2023-12-31T00:00:00.000Z'));
 
     expect(removed).toBe(1);
     expect(await storage.getSession(oldSession.id)).toBeNull();

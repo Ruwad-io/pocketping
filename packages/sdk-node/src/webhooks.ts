@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -230,7 +230,10 @@ export class WebhookHandler {
   /**
    * Create an Express/Connect middleware for handling Telegram webhooks
    */
-  handleTelegramWebhook(): (req: IncomingMessage & { body?: unknown }, res: ServerResponse) => Promise<void> {
+  handleTelegramWebhook(): (
+    req: IncomingMessage & { body?: unknown },
+    res: ServerResponse
+  ) => Promise<void> {
     return async (req, res) => {
       if (!this.config.telegramBotToken) {
         res.statusCode = 404;
@@ -284,7 +287,7 @@ export class WebhookHandler {
           const emoji = reaction.new_reaction?.[0]?.emoji;
           const topicId = reaction.message_thread_id;
 
-          if (emoji && emoji.includes('🗑') && topicId && this.config.onOperatorMessageDelete) {
+          if (emoji?.includes('🗑') && topicId && this.config.onOperatorMessageDelete) {
             const deletedAt = reaction.date
               ? new Date(reaction.date * 1000).toISOString()
               : new Date().toISOString();
@@ -428,7 +431,10 @@ export class WebhookHandler {
   /**
    * Create an Express/Connect middleware for handling Slack webhooks
    */
-  handleSlackWebhook(): (req: IncomingMessage & { body?: unknown }, res: ServerResponse) => Promise<void> {
+  handleSlackWebhook(): (
+    req: IncomingMessage & { body?: unknown },
+    res: ServerResponse
+  ) => Promise<void> {
     return async (req, res) => {
       if (!this.config.slackBotToken) {
         res.statusCode = 404;
@@ -572,7 +578,10 @@ export class WebhookHandler {
   /**
    * Create an Express/Connect middleware for handling Discord webhooks
    */
-  handleDiscordWebhook(): (req: IncomingMessage & { body?: unknown }, res: ServerResponse) => Promise<void> {
+  handleDiscordWebhook(): (
+    req: IncomingMessage & { body?: unknown },
+    res: ServerResponse
+  ) => Promise<void> {
     return async (req, res) => {
       try {
         const body = await this.parseBody(req);
@@ -586,22 +595,15 @@ export class WebhookHandler {
         }
 
         // Handle Application Commands (slash commands)
-        if (
-          interaction.type === DISCORD_INTERACTION_APPLICATION_COMMAND &&
-          interaction.data
-        ) {
+        if (interaction.type === DISCORD_INTERACTION_APPLICATION_COMMAND && interaction.data) {
           if (interaction.data.name === 'reply') {
             const threadId = interaction.channel_id;
-            const content = interaction.data.options?.find(
-              (opt) => opt.name === 'message'
-            )?.value;
+            const content = interaction.data.options?.find((opt) => opt.name === 'message')?.value;
 
             if (threadId && content) {
               // Get operator name
               const operatorName =
-                interaction.member?.user?.username ??
-                interaction.user?.username ??
-                'Operator';
+                interaction.member?.user?.username ?? interaction.user?.username ?? 'Operator';
 
               // Call callback (Discord reply support TODO)
               await this.config.onOperatorMessage(

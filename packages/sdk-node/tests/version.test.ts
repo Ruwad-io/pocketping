@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { PocketPing } from '../src/pocketping';
-import type { VersionCheckResult } from '../src/types';
 
 describe('Version Management', () => {
   describe('checkWidgetVersion', () => {
@@ -104,7 +103,7 @@ describe('Version Management', () => {
       });
 
       it('should return outdated for patch version behind', () => {
-        const result = pp.checkWidgetVersion('1.2.0');
+        const _result = pp.checkWidgetVersion('1.2.0');
         const ppPatch = new PocketPing({ latestWidgetVersion: '1.2.1' });
         const resultPatch = ppPatch.checkWidgetVersion('1.2.0');
 

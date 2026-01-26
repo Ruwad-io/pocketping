@@ -1,5 +1,5 @@
-import type { AIProvider } from './types';
 import type { Message } from '../types';
+import type { AIProvider } from './types';
 
 export interface AnthropicProviderConfig {
   apiKey: string;

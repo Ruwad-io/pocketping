@@ -64,7 +64,7 @@ export function ipToNumber(ip: string): number | null {
   let num = 0;
   for (const part of parts) {
     const n = parseInt(part, 10);
-    if (isNaN(n) || n < 0 || n > 255) return null;
+    if (Number.isNaN(n) || n < 0 || n > 255) return null;
     num = (num << 8) | n;
   }
   return num >>> 0; // Convert to unsigned
@@ -80,7 +80,7 @@ export function parseCidr(cidr: string): { base: number; mask: number } | null {
   if (base === null) return null;
 
   const prefix = bits ? parseInt(bits, 10) : 32;
-  if (isNaN(prefix) || prefix < 0 || prefix > 32) return null;
+  if (Number.isNaN(prefix) || prefix < 0 || prefix > 32) return null;
 
   // Create mask: prefix 1-bits followed by (32-prefix) 0-bits
   const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0;
@@ -98,7 +98,7 @@ export function ipMatchesCidr(ip: string, cidr: string): boolean {
   const parsed = parseCidr(cidr);
   if (!parsed) return false;
 
-  return ((ipNum & parsed.mask) >>> 0) === parsed.base;
+  return (ipNum & parsed.mask) >>> 0 === parsed.base;
 }
 
 /**
@@ -111,10 +111,7 @@ export function ipMatchesAny(ip: string, list: string[]): boolean {
 /**
  * Main IP filter function - determines if an IP should be allowed
  */
-export function shouldAllowIp(
-  ip: string,
-  config: IpFilterConfig
-): IpFilterResult {
+export function shouldAllowIp(ip: string, config: IpFilterConfig): IpFilterResult {
   const { mode = 'blocklist', allowlist = [], blocklist = [] } = config;
 
   switch (mode) {

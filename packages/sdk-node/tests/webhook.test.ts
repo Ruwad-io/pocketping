@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createHmac } from 'crypto';
+import { createHmac } from 'node:crypto';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PocketPing } from '../src/pocketping';
 
 describe('Webhook Forwarding', () => {
@@ -98,9 +98,7 @@ describe('Webhook Forwarding', () => {
       const signatureHeader = options.headers['X-PocketPing-Signature'];
       expect(signatureHeader).toMatch(/^sha256=[a-f0-9]+$/);
 
-      const expectedSignature = createHmac('sha256', secret)
-        .update(options.body)
-        .digest('hex');
+      const expectedSignature = createHmac('sha256', secret).update(options.body).digest('hex');
       expect(signatureHeader).toBe(`sha256=${expectedSignature}`);
     });
 
@@ -169,9 +167,7 @@ describe('Webhook Forwarding', () => {
 
   describe('webhook error handling', () => {
     it('should log error when webhook returns non-OK status', async () => {
-      const consoleSpy = vi
-        .spyOn(console, 'error')
-        .mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -196,9 +192,7 @@ describe('Webhook Forwarding', () => {
     });
 
     it('should log error when webhook request fails', async () => {
-      const consoleSpy = vi
-        .spyOn(console, 'error')
-        .mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
       const pp = new PocketPing({
@@ -213,10 +207,7 @@ describe('Webhook Forwarding', () => {
 
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        '[PocketPing] Webhook error:',
-        'Network error'
-      );
+      expect(consoleSpy).toHaveBeenCalledWith('[PocketPing] Webhook error:', 'Network error');
     });
 
     it('should not throw when webhook fails (non-blocking)', async () => {
@@ -232,9 +223,7 @@ describe('Webhook Forwarding', () => {
       });
 
       // Should not throw - triggerEvent completes even if webhook fails
-      await expect(
-        pp.triggerEvent(sessionId, 'test_event', {})
-      ).resolves.not.toThrow();
+      await expect(pp.triggerEvent(sessionId, 'test_event', {})).resolves.not.toThrow();
     });
   });
 
@@ -257,26 +246,22 @@ describe('Webhook Forwarding', () => {
     });
 
     it('should use custom timeout when configured', async () => {
-      const consoleSpy = vi
-        .spyOn(console, 'error')
-        .mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       // Create a mock that respects the abort signal
-      mockFetch.mockImplementation(
-        (_url: string, options?: { signal?: AbortSignal }) => {
-          return new Promise((_resolve, reject) => {
-            // Listen to abort signal
-            if (options?.signal) {
-              options.signal.addEventListener('abort', () => {
-                const error = new Error('This operation was aborted');
-                error.name = 'AbortError';
-                reject(error);
-              });
-            }
-            // Never resolve otherwise (simulates slow server)
-          });
-        }
-      );
+      mockFetch.mockImplementation((_url: string, options?: { signal?: AbortSignal }) => {
+        return new Promise((_resolve, reject) => {
+          // Listen to abort signal
+          if (options?.signal) {
+            options.signal.addEventListener('abort', () => {
+              const error = new Error('This operation was aborted');
+              error.name = 'AbortError';
+              reject(error);
+            });
+          }
+          // Never resolve otherwise (simulates slow server)
+        });
+      });
 
       const pp = new PocketPing({
         webhookUrl: 'https://webhook.example.com/events',
@@ -292,9 +277,7 @@ describe('Webhook Forwarding', () => {
       // Wait for timeout to occur (needs extra time for AbortController)
       await new Promise((resolve) => setTimeout(resolve, 200));
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        '[PocketPing] Webhook timed out after 100ms'
-      );
+      expect(consoleSpy).toHaveBeenCalledWith('[PocketPing] Webhook timed out after 100ms');
     });
   });
 });
