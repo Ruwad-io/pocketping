@@ -773,6 +773,9 @@ export class PocketPingClient {
       handlers.forEach((handler) => handler(event.data, event));
     }
 
+    // Call config onEvent callback
+    this.config.onEvent?.(event);
+
     // Also emit to generic 'event' listeners
     this.emit('event', event);
     this.emit(`event:${event.name}`, event);
