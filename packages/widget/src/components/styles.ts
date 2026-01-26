@@ -37,6 +37,7 @@ export function styles(options: StyleOptions): string {
   const resolvedToggleHoverColor = resolvedToggleColor !== '#25d366'
     ? adjustBrightness(resolvedToggleColor, -10)
     : '#22c55e';
+  const resolvedSendButtonHoverColor = adjustBrightness(resolvedHeaderColor, -15);
 
   // Background patterns
   const whatsappPattern = isDark
@@ -621,7 +622,7 @@ function adjustBrightness(hex: string, percent: number): string {
       height: 42px;
       min-width: 42px;
       border-radius: 50%;
-      background: #00a884;
+      background: ${resolvedHeaderColor};
       color: white;
       border: none;
       cursor: pointer;
@@ -635,7 +636,7 @@ function adjustBrightness(hex: string, percent: number): string {
     }
 
     .pp-send-btn:not(:disabled):hover {
-      background: #008f72;
+      background: ${resolvedSendButtonHoverColor};
     }
 
     .pp-send-btn:not(:disabled):active {
@@ -661,7 +662,7 @@ function adjustBrightness(hex: string, percent: number): string {
     }
 
     .pp-footer a {
-      color: ${isDark ? '#00a884' : '#008069'};
+      color: ${primaryColor};
       text-decoration: none;
       font-weight: 500;
     }
