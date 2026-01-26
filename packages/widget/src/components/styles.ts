@@ -207,24 +207,28 @@ function adjustBrightness(hex: string, percent: number): string {
       left: 20px;
     }
 
+    /* Mobile: fullscreen widget to prevent scroll issues */
     @media (max-width: 480px) {
       .pp-window {
-        width: calc(100vw - 20px);
-        height: auto;
-        min-height: 300px;
-        max-height: calc(100vh - 40px);
-        max-height: calc(100svh - 40px); /* svh = small viewport, excludes keyboard */
-        bottom: 10px;
-        right: 10px;
-        left: 10px;
-        border-radius: 12px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        height: 100%;
+        max-height: 100%;
+        max-height: 100dvh;
+        min-height: 100%;
+        min-height: 100dvh;
+        border-radius: 0;
+        overflow: hidden;
+        touch-action: none; /* Prevent page scroll behind widget */
       }
 
-      /* When keyboard is likely open (input focused), reduce height */
-      .pp-window:has(.pp-input:focus) {
-        max-height: calc(50vh - 20px);
-        max-height: calc(50svh - 20px);
-        bottom: 10px;
+      /* Prevent any horizontal scroll */
+      .pp-window * {
+        max-width: 100%;
       }
     }
 
@@ -308,6 +312,7 @@ function adjustBrightness(hex: string, percent: number): string {
     .pp-messages {
       flex: 1;
       overflow-y: auto;
+      overflow-x: hidden;
       padding: 16px 12px;
       display: flex;
       flex-direction: column;
@@ -319,6 +324,7 @@ function adjustBrightness(hex: string, percent: number): string {
       background-image: ${chatBgImage};
       background-size: ${chatBgSize};
       background-position: center;
+      touch-action: pan-y; /* Only allow vertical scrolling */
     }
 
     .pp-welcome {
@@ -357,8 +363,9 @@ function adjustBrightness(hex: string, percent: number): string {
       position: relative;
       display: flex;
       align-items: stretch;
-      overflow: visible;
-      touch-action: pan-y;
+      overflow: hidden; /* Prevent horizontal overflow */
+      touch-action: pan-y; /* Only vertical scroll */
+      max-width: 100%;
     }
 
     .pp-swipe-left {
@@ -493,11 +500,14 @@ function adjustBrightness(hex: string, percent: number): string {
     }
 
     /* Add spacing between different senders */
-    .pp-message-visitor + .pp-message-operator,
-    .pp-message-visitor + .pp-message-ai,
-    .pp-message-operator + .pp-message-visitor,
-    .pp-message-ai + .pp-message-visitor {
-      margin-top: 8px;
+    .pp-message-swipe-container + .pp-message-swipe-container {
+      margin-top: 4px;
+    }
+
+    /* More spacing when sender changes (visitor <-> operator/ai) */
+    .pp-swipe-left + .pp-swipe-right,
+    .pp-swipe-right + .pp-swipe-left {
+      margin-top: 16px;
     }
 
     .pp-message-content {
