@@ -2,6 +2,8 @@
 
 Node.js SDK for PocketPing - real-time customer chat with mobile notifications.
 
+> **Tip:** Use the CLI for guided bridge setup: `npx @pocketping/cli init`
+
 ## Installation
 
 ```bash

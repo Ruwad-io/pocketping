@@ -2,6 +2,8 @@
 
 Official Go SDK for PocketPing - the lightweight, privacy-first chat widget for your website.
 
+> **Tip:** Use the CLI for guided bridge setup: `npx @pocketping/cli init`
+
 ## Installation
 
 ```bash

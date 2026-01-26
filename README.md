@@ -144,6 +144,12 @@ Open your site, send a message, and watch it appear in Telegram!
 
 ## Setup Guides
 
+> **Tip:** Use the interactive CLI for guided setup:
+> ```bash
+> npx @pocketping/cli init
+> ```
+> It will walk you through configuring Telegram, Discord, or Slack and validate your credentials.
+
 ### Reply behavior (all modes)
 
 - **Telegram:** replies appear as native Telegram replies when replying to a message.
@@ -600,6 +606,7 @@ Location: Paris, France
 | Package | Description | Status |
 |---------|-------------|--------|
 | [@pocketping/widget](packages/widget) | Chat widget (~15KB) | Ready |
+| [@pocketping/cli](packages/cli) | Interactive setup CLI | Ready |
 | [pocketping](packages/sdk-python) | Python SDK (FastAPI, Django, Flask) | Ready |
 | [@pocketping/sdk-node](packages/sdk-node) | Node.js SDK (Express) | Ready |
 | [pocketping-go](packages/sdk-go) | Go SDK (net/http, Gin, Echo) | Ready |
@@ -767,6 +774,7 @@ make clean        # Remove Docker containers
 pocketping/
 ├── packages/
 │   ├── widget/          # Chat widget (Preact, ~15KB)
+│   ├── cli/             # Interactive setup CLI
 │   ├── sdk-node/        # Node.js SDK
 │   ├── sdk-python/      # Python SDK
 │   ├── sdk-go/          # Go SDK

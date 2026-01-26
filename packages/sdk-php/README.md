@@ -2,6 +2,8 @@
 
 The official PHP SDK for PocketPing - embed live chat support directly from your backend.
 
+> **Tip:** Use the CLI for guided bridge setup: `npx @pocketping/cli init`
+
 ## Requirements
 
 - PHP 8.1 or higher
