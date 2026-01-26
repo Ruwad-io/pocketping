@@ -2,6 +2,7 @@ const sidebars = {
     docsSidebar: [
         'intro',
         'quickstart',
+        'cli',
         'concepts',
         {
             type: 'category',
@@ -22,6 +23,7 @@ const sidebars = {
             items: ['bridges/telegram', 'bridges/discord', 'bridges/slack', 'bridges/docker'],
         },
         'self-hosting',
+        'community-edition',
         'ai-fallback',
         'api',
     ],

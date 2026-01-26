@@ -33,6 +33,13 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Compiled output (noEmit should prevent these, but just in case)
+*.js
+!next.config.js
+*.js.map
+*.d.ts
+*.d.ts.map
+
 # Prisma
 prisma/*.db
 prisma/*.db-journal
