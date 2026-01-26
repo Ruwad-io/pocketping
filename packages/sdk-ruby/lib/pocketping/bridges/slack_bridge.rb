@@ -3,6 +3,7 @@
 require "net/http"
 require "uri"
 require "json"
+require_relative "../errors"
 
 module PocketPing
   module Bridge
@@ -24,8 +25,24 @@ module PocketPing
       # @param webhook_url [String] Slack incoming webhook URL
       # @param username [String, nil] Override webhook username
       # @param icon_emoji [String, nil] Override webhook icon emoji
+      # @raise [SetupError] if webhook_url is missing or invalid
       def initialize(webhook_url:, username: nil, icon_emoji: nil)
         super()
+
+        # Validate webhook_url
+        if webhook_url.nil? || webhook_url.empty?
+          raise SetupError.new(bridge: "Slack", missing: "webhook_url")
+        end
+
+        unless webhook_url.start_with?("https://hooks.slack.com/")
+          raise SetupError.new(
+            bridge: "Slack",
+            missing: "valid webhook_url",
+            guide: "Webhook URL must start with https://hooks.slack.com/\n\n" +
+                   SetupError::SETUP_GUIDES[:slack][:webhook_url]
+          )
+        end
+
         @webhook_url = webhook_url
         @username = username
         @icon_emoji = icon_emoji
@@ -193,8 +210,29 @@ module PocketPing
 
       # @param bot_token [String] Slack bot token (xoxb-...)
       # @param channel_id [String] Channel ID to send messages to
+      # @raise [SetupError] if bot_token or channel_id is missing or invalid
       def initialize(bot_token:, channel_id:)
         super()
+
+        # Validate bot_token
+        if bot_token.nil? || bot_token.empty?
+          raise SetupError.new(bridge: "Slack", missing: "bot_token")
+        end
+
+        unless bot_token.start_with?("xoxb-")
+          raise SetupError.new(
+            bridge: "Slack",
+            missing: "valid bot_token",
+            guide: "Bot token must start with xoxb-\n\n" +
+                   SetupError::SETUP_GUIDES[:slack][:bot_token]
+          )
+        end
+
+        # Validate channel_id
+        if channel_id.nil? || channel_id.empty?
+          raise SetupError.new(bridge: "Slack", missing: "channel_id")
+        end
+
         @bot_token = bot_token
         @channel_id = channel_id
       end

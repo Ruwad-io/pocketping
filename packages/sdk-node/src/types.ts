@@ -104,6 +104,10 @@ export interface Session {
   metadata?: SessionMetadata;
   /** User identity if identified via PocketPing.identify() */
   identity?: UserIdentity;
+  /** User phone from pre-chat form (E.164 format: +33612345678) */
+  userPhone?: string;
+  /** User phone country code (ISO: FR, US, etc.) */
+  userPhoneCountry?: string;
 }
 
 export interface SessionMetadata {

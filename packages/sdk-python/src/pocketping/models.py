@@ -131,6 +131,10 @@ class Session(BaseModel):
     ai_active: bool = Field(False, alias="aiActive")
     metadata: Optional[SessionMetadata] = None
     identity: Optional[UserIdentity] = None
+    user_phone: Optional[str] = Field(None, alias="userPhone")
+    """User phone from pre-chat form (E.164 format: +33612345678)."""
+    user_phone_country: Optional[str] = Field(None, alias="userPhoneCountry")
+    """User phone country code (ISO: FR, US, etc.)."""
 
 
 class Message(BaseModel):

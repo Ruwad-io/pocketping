@@ -3,6 +3,7 @@
 require "net/http"
 require "uri"
 require "json"
+require_relative "../errors"
 
 module PocketPing
   module Bridge
@@ -29,8 +30,29 @@ module PocketPing
       # @param chat_id [String, Integer] Chat ID to send messages to
       # @param parse_mode [String] Message parse mode ("HTML", "Markdown", "MarkdownV2")
       # @param disable_notification [Boolean] Send messages silently
+      # @raise [SetupError] if bot_token or chat_id is missing or invalid
       def initialize(bot_token:, chat_id:, parse_mode: "HTML", disable_notification: false)
         super()
+
+        # Validate bot_token
+        if bot_token.nil? || bot_token.to_s.empty?
+          raise SetupError.new(bridge: "Telegram", missing: "bot_token")
+        end
+
+        unless bot_token.to_s.match?(/^\d+:[A-Za-z0-9_-]+$/)
+          raise SetupError.new(
+            bridge: "Telegram",
+            missing: "valid bot_token",
+            guide: "Bot token format should be: 123456789:ABCdef...\n\n" +
+                   SetupError::SETUP_GUIDES[:telegram][:bot_token]
+          )
+        end
+
+        # Validate chat_id
+        if chat_id.nil? || chat_id.to_s.empty?
+          raise SetupError.new(bridge: "Telegram", missing: "chat_id")
+        end
+
         @bot_token = bot_token
         @chat_id = chat_id
         @parse_mode = parse_mode

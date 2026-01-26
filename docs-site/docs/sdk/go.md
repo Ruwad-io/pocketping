@@ -79,11 +79,117 @@ func main() {
 }
 ```
 
+## Built-in Bridges
+
+The SDK includes built-in bridges for Telegram, Discord, and Slack with automatic validation and helpful setup guides.
+
+```go
+package main
+
+import (
+    "log"
+    "os"
+    pocketping "github.com/pocketping/pocketping-go"
+)
+
+func main() {
+    pp := pocketping.New(pocketping.Config{})
+
+    // Add Telegram bridge
+    telegram, err := pocketping.NewTelegramBridge(
+        os.Getenv("TELEGRAM_BOT_TOKEN"),
+        os.Getenv("TELEGRAM_CHAT_ID"),
+    )
+    if err != nil {
+        // Helpful error with setup guide is printed automatically
+        log.Fatal(err)
+    }
+    pp.AddBridge(telegram)
+
+    // Add Discord bridge (bot mode)
+    discord, err := pocketping.NewDiscordBotBridge(
+        os.Getenv("DISCORD_BOT_TOKEN"),
+        os.Getenv("DISCORD_CHANNEL_ID"),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    pp.AddBridge(discord)
+
+    // Add Slack bridge (bot mode)
+    slack, err := pocketping.NewSlackBotBridge(
+        os.Getenv("SLACK_BOT_TOKEN"),
+        os.Getenv("SLACK_CHANNEL_ID"),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    pp.AddBridge(slack)
+}
+```
+
+### Validation Errors
+
+If configuration is missing or invalid, you'll see a helpful setup guide:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ⚠️  Telegram Setup Required
+├─────────────────────────────────────────────────────────────┤
+│
+│  Missing: bot_token
+│
+│  To create a Telegram Bot:
+│
+│  1. Open @BotFather in Telegram
+│  2. Send /newbot
+│  3. Choose a name and username
+│  4. Copy the Bot Token you receive
+│
+│  📖 Full guide: https://pocketping.io/docs/telegram
+│
+│  💡 Quick fix: npx @pocketping/cli init telegram
+│
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Bridge Modes
+
+| Bridge | Mode | Constructor | Features |
+|--------|------|-------------|----------|
+| Telegram | Bot | `NewTelegramBridge()` | Send, edit, delete |
+| Discord | Webhook | `NewDiscordWebhookBridge()` | Send only |
+| Discord | Bot | `NewDiscordBotBridge()` | Send, edit, delete |
+| Slack | Webhook | `NewSlackWebhookBridge()` | Send only |
+| Slack | Bot | `NewSlackBotBridge()` | Send, edit, delete |
+
+:::tip Bot vs Webhook
+Use **Bot mode** for full bidirectional communication. Webhooks are simpler but only support sending messages.
+:::
+
+:::warning Discord Bot requires long-running server
+**Discord bot mode** uses the Discord Gateway (WebSocket) to receive operator replies. This only works on **long-running servers**.
+
+**Does NOT work with:**
+- AWS Lambda
+- Google Cloud Functions
+- Azure Functions
+- Any serverless environment
+
+**For serverless + Discord bidirectional:** Use the [Bridge Server](/bridges/docker) instead, or use `NewDiscordWebhookBridge()` (send-only).
+:::
+
+:::info Telegram & Slack work with serverless
+**Telegram** and **Slack** use HTTP webhooks (not WebSocket), so they work fully with serverless environments like Lambda, Cloud Functions, etc.
+:::
+
+---
+
 ## Configuration
 
 ```go
 pp := pocketping.New(pocketping.Config{
-    // Bridge server URL
+    // Bridge server URL (alternative to built-in bridges)
     BridgeURL: "http://localhost:3001",
 
     // Welcome message for new visitors

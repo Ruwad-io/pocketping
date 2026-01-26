@@ -461,6 +461,10 @@ You are the virtual assistant for a digital marketing agency.
 ## Next Steps
 
 - **[Node.js SDK](/sdk/nodejs)** - Handle events and customize behavior
+- **[Python SDK](/sdk/python)** - Backend integration for Python
+- **[Go SDK](/sdk/go)** - Backend integration for Go
+- **[PHP SDK](/sdk/php)** - Backend integration for PHP
+- **[Ruby SDK](/sdk/ruby)** - Backend integration for Ruby
 - **[Telegram Bridge](/bridges/telegram)** - Set up Telegram
 - **[Self-Hosting](/self-hosting)** - Deploy your own instance
 - **[API Reference](/api)** - Full API documentation

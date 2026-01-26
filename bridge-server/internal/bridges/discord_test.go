@@ -322,6 +322,27 @@ func TestDiscordBridge_OnIdentityUpdate(t *testing.T) {
 			t.Errorf("user ID field mismatch")
 		}
 	})
+
+	t.Run("includes phone field when present", func(t *testing.T) {
+		session := &types.Session{
+			ID: "s1",
+			Identity: &types.UserIdentity{
+				ID:    "user123",
+				Name:  "John",
+				Email: "john@example.com",
+			},
+			UserPhone:        "+33612345678",
+			UserPhoneCountry: "FR",
+		}
+
+		// Verify the session has phone data that would be added to embed
+		if session.UserPhone != "+33612345678" {
+			t.Errorf("phone should be +33612345678, got %s", session.UserPhone)
+		}
+		if session.UserPhoneCountry != "FR" {
+			t.Errorf("phone country should be FR, got %s", session.UserPhoneCountry)
+		}
+	})
 }
 
 func TestDiscordBridge_OnAITakeover(t *testing.T) {

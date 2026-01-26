@@ -27,6 +27,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "libphonenumber-js": "^1.12.35",
     "preact": "^10.19.0"
   },
   "devDependencies": {

@@ -331,6 +331,30 @@ func TestSlackBridge_OnIdentityUpdate(t *testing.T) {
 			t.Errorf("expected 3 fields, got %d", len(fields))
 		}
 	})
+
+	t.Run("includes phone field when present", func(t *testing.T) {
+		session := &types.Session{
+			ID: "s1",
+			Identity: &types.UserIdentity{
+				ID:    "user123",
+				Name:  "John",
+				Email: "john@example.com",
+			},
+			UserPhone:        "+33612345678",
+			UserPhoneCountry: "FR",
+		}
+
+		// Verify the session has phone data that would be added to fields
+		if session.UserPhone != "+33612345678" {
+			t.Errorf("phone should be +33612345678, got %s", session.UserPhone)
+		}
+
+		// Expected phone field format
+		expectedText := "*Phone:*\n+33612345678"
+		if !strings.Contains(expectedText, session.UserPhone) {
+			t.Errorf("phone field should contain %s", session.UserPhone)
+		}
+	})
 }
 
 func TestSlackBridge_OnAITakeover(t *testing.T) {

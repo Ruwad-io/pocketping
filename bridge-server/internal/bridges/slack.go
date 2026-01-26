@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	pocketping "github.com/Ruwad-io/pocketping/sdk-go"
 	"github.com/pocketping/bridge-server/internal/config"
 	"github.com/pocketping/bridge-server/internal/types"
 )
@@ -27,8 +28,23 @@ type SlackBridge struct {
 	client     *http.Client
 }
 
-// NewSlackBridge creates a new Slack bridge
-func NewSlackBridge(cfg *config.SlackConfig) *SlackBridge {
+// NewSlackBridge creates a new Slack bridge with validation
+func NewSlackBridge(cfg *config.SlackConfig) (*SlackBridge, error) {
+	// Validate based on mode
+	if cfg.BotToken != "" {
+		// Bot mode
+		if err := pocketping.ValidateSlackBotConfig(cfg.BotToken, cfg.ChannelID); err != nil {
+			return nil, err
+		}
+	} else if cfg.WebhookURL != "" {
+		// Webhook mode
+		if err := pocketping.ValidateSlackWebhookConfig(cfg.WebhookURL); err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, pocketping.NewSetupError("Slack", "bot_token or webhook_url")
+	}
+
 	return &SlackBridge{
 		BaseBridge: NewBaseBridge("slack"),
 		botToken:   cfg.BotToken,
@@ -39,7 +55,7 @@ func NewSlackBridge(cfg *config.SlackConfig) *SlackBridge {
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-	}
+	}, nil
 }
 
 // isBotMode returns true if using bot mode (vs webhook mode)
@@ -301,6 +317,12 @@ func (b *SlackBridge) OnIdentityUpdate(session *types.Session) error {
 		blocks[1].Fields = append(blocks[1].Fields, slackField{
 			Type: "mrkdwn",
 			Text: fmt.Sprintf("*Email:*\n%s", escapeSlack(session.Identity.Email)),
+		})
+	}
+	if session.UserPhone != "" {
+		blocks[1].Fields = append(blocks[1].Fields, slackField{
+			Type: "mrkdwn",
+			Text: fmt.Sprintf("*Phone:*\n%s", escapeSlack(session.UserPhone)),
 		})
 	}
 

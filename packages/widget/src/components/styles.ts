@@ -18,6 +18,17 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       color: ${colors.text};
     }
 
+    #pocketping-container,
+    #pocketping-container * {
+      box-sizing: border-box;
+    }
+
+    #pocketping-container img,
+    #pocketping-container video {
+      max-width: 100%;
+      height: auto;
+    }
+
     .pp-toggle {
       position: fixed;
       width: 56px;
@@ -213,10 +224,14 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     .pp-messages {
       flex: 1;
       overflow-y: auto;
-      padding: 12px;
+      padding: 32px 12px 12px 12px;
       display: flex;
       flex-direction: column;
       gap: 3px;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      /* Ensure proper stacking context for positioned elements */
+      position: relative;
     }
 
     .pp-welcome {
@@ -242,6 +257,75 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       font-weight: 500;
     }
 
+    /* Swipe container for mobile actions */
+    .pp-message-swipe-container {
+      position: relative;
+      display: flex;
+      align-items: stretch;
+      overflow: visible;
+      touch-action: pan-y;
+    }
+
+    .pp-swipe-left {
+      justify-content: flex-end;
+    }
+
+    .pp-swipe-right {
+      justify-content: flex-start;
+    }
+
+    .pp-swipe-actions {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding-right: 8px;
+    }
+
+    .pp-swipe-left .pp-swipe-actions {
+      right: 0;
+      left: auto;
+    }
+
+    .pp-swipe-right .pp-swipe-actions {
+      left: 0;
+      right: auto;
+      padding-left: 8px;
+      padding-right: 0;
+    }
+
+    .pp-swipe-action {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.9;
+    }
+
+    .pp-swipe-action svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .pp-swipe-reply {
+      background: ${primaryColor};
+    }
+
+    .pp-swipe-edit {
+      background: #3b82f6;
+    }
+
+    .pp-swipe-delete {
+      background: #ef4444;
+    }
+
     .pp-message {
       max-width: 85%;
       padding: 6px 10px;
@@ -252,12 +336,15 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       -webkit-user-select: text;
       font-size: 14px;
       line-height: 1.35;
+      display: flex;
+      flex-direction: column;
+      will-change: transform;
     }
 
     /* Hover actions container - positioned above message (Slack style) */
     .pp-message-actions {
       position: absolute;
-      top: -28px;
+      top: -32px;
       display: flex;
       gap: 2px;
       background: ${colors.bg};
@@ -270,6 +357,8 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       z-index: 10;
       /* Reset color inheritance from message */
       color: ${colors.textSecondary};
+      /* Ensure actions don't interfere with layout */
+      pointer-events: auto;
     }
 
     @keyframes pp-actions-fade-in {
@@ -365,18 +454,19 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-message-content {
-      display: inline;
+      display: block;
+      flex: 1;
     }
 
     .pp-message-time {
       font-size: 10px;
       opacity: 0.6;
-      display: inline-flex;
+      display: flex;
       align-items: center;
       gap: 3px;
-      float: right;
-      margin-left: 8px;
-      margin-top: 4px;
+      justify-content: flex-end;
+      margin-top: 8px;
+      flex-shrink: 0;
     }
 
     .pp-ai-badge {
@@ -668,7 +758,10 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       display: flex;
       flex-direction: column;
       gap: 8px;
-      margin-top: 4px;
+      margin-top: 6px;
+      max-width: 100%;
+      align-items: flex-start;
+      flex-shrink: 0;
     }
 
     .pp-attachment {
@@ -679,11 +772,22 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       overflow: hidden;
     }
 
+    .pp-attachment-image,
+    .pp-attachment-video,
+    .pp-attachment-audio {
+      width: 240px;
+      max-width: 100%;
+    }
+
     .pp-attachment-image img {
-      max-width: 200px;
+      width: 100% !important;
+      height: auto !important;
+      max-width: 240px;
       max-height: 200px;
       border-radius: 8px;
       display: block;
+      object-fit: cover !important;
+      object-position: center;
     }
 
     .pp-attachment-audio {
@@ -693,7 +797,8 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-attachment-audio audio {
-      width: 200px;
+      width: 240px;
+      max-width: 100%;
       height: 36px;
     }
 
@@ -703,14 +808,18 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 200px;
+      max-width: 100%;
     }
 
     .pp-attachment-video video {
-      max-width: 200px;
-      max-height: 200px;
+      width: 100% !important;
+      height: auto !important;
+      max-width: 240px;
+      max-height: none;
       border-radius: 8px;
       display: block;
+      object-fit: contain !important;
+      object-position: center;
     }
 
     .pp-attachment-file {
@@ -1060,6 +1169,273 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       color: ${colors.textSecondary};
       margin-left: 4px;
       font-style: italic;
+    }
+
+    /* Pre-Chat Form */
+    .pp-prechat {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 24px 20px;
+      overflow-y: auto;
+    }
+
+    .pp-prechat-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: ${colors.text};
+    }
+
+    .pp-prechat-subtitle {
+      font-size: 13px;
+      color: ${colors.textSecondary};
+      margin-bottom: 24px;
+    }
+
+    .pp-prechat-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .pp-prechat-tab {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid ${colors.border};
+      border-radius: 8px;
+      background: transparent;
+      color: ${colors.textSecondary};
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .pp-prechat-tab:hover {
+      background: ${colors.bgSecondary};
+    }
+
+    .pp-prechat-tab.active {
+      background: ${primaryColor}15;
+      border-color: ${primaryColor};
+      color: ${primaryColor};
+    }
+
+    .pp-prechat-tab svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .pp-prechat-field {
+      margin-bottom: 16px;
+    }
+
+    .pp-prechat-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: ${colors.textSecondary};
+      margin-bottom: 6px;
+    }
+
+    .pp-prechat-input {
+      width: 100%;
+      height: 44px;
+      padding: 0 14px;
+      border: 1px solid ${colors.border};
+      border-radius: 8px;
+      background: ${colors.bg};
+      color: ${colors.text};
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+      box-sizing: border-box;
+    }
+
+    .pp-prechat-input:focus {
+      border-color: ${primaryColor};
+    }
+
+    .pp-prechat-input::placeholder {
+      color: ${colors.textSecondary};
+    }
+
+    .pp-prechat-input.error {
+      border-color: #ef4444;
+    }
+
+    .pp-prechat-error {
+      color: #ef4444;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    .pp-phone-input-wrapper {
+      display: flex;
+      gap: 8px;
+    }
+
+    .pp-country-select {
+      position: relative;
+    }
+
+    .pp-country-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 44px;
+      padding: 0 10px;
+      border: 1px solid ${colors.border};
+      border-radius: 8px;
+      background: ${colors.bg};
+      color: ${colors.text};
+      font-size: 14px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .pp-country-btn:focus {
+      border-color: ${primaryColor};
+      outline: none;
+    }
+
+    .pp-country-flag {
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .pp-country-code {
+      font-size: 13px;
+      color: ${colors.textSecondary};
+    }
+
+    .pp-country-chevron {
+      width: 12px;
+      height: 12px;
+      color: ${colors.textSecondary};
+    }
+
+    .pp-country-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      width: 280px;
+      max-height: 280px;
+      overflow-y: auto;
+      background: ${colors.bg};
+      border: 1px solid ${colors.border};
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 100;
+    }
+
+    .pp-country-search {
+      position: sticky;
+      top: 0;
+      padding: 8px;
+      background: ${colors.bg};
+      border-bottom: 1px solid ${colors.border};
+    }
+
+    .pp-country-search-input {
+      width: 100%;
+      height: 36px;
+      padding: 0 12px;
+      border: 1px solid ${colors.border};
+      border-radius: 6px;
+      background: ${colors.bgSecondary};
+      color: ${colors.text};
+      font-size: 13px;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    .pp-country-search-input:focus {
+      border-color: ${primaryColor};
+    }
+
+    .pp-country-list {
+      padding: 4px;
+    }
+
+    .pp-country-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background 0.15s;
+    }
+
+    .pp-country-option:hover {
+      background: ${colors.bgSecondary};
+    }
+
+    .pp-country-option.selected {
+      background: ${primaryColor}15;
+    }
+
+    .pp-country-name {
+      flex: 1;
+      font-size: 13px;
+      color: ${colors.text};
+    }
+
+    .pp-country-dial {
+      font-size: 12px;
+      color: ${colors.textSecondary};
+    }
+
+    .pp-phone-number-input {
+      flex: 1;
+    }
+
+    .pp-prechat-submit {
+      width: 100%;
+      height: 44px;
+      margin-top: 8px;
+      border: none;
+      border-radius: 8px;
+      background: ${primaryColor};
+      color: white;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .pp-prechat-submit:hover:not(:disabled) {
+      opacity: 0.9;
+    }
+
+    .pp-prechat-submit:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    .pp-prechat-submit:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .pp-prechat-skip {
+      width: 100%;
+      padding: 12px;
+      margin-top: 8px;
+      border: none;
+      background: transparent;
+      color: ${colors.textSecondary};
+      font-size: 13px;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .pp-prechat-skip:hover {
+      color: ${colors.text};
     }
   `;
 }

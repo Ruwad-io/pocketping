@@ -36,17 +36,44 @@ func main() {
 
 	if cfg.Telegram != nil {
 		log.Println("[Bridge Server] Initializing Telegram bridge...")
-		bridgeList = append(bridgeList, bridges.NewTelegramBridge(cfg.Telegram))
+		bridge, err := bridges.NewTelegramBridge(cfg.Telegram)
+		if err != nil {
+			if setupErr, ok := err.(*pocketping.SetupError); ok {
+				fmt.Println(setupErr.FormattedGuide())
+			} else {
+				log.Printf("[Bridge Server] Telegram bridge error: %v", err)
+			}
+		} else {
+			bridgeList = append(bridgeList, bridge)
+		}
 	}
 
 	if cfg.Discord != nil {
 		log.Println("[Bridge Server] Initializing Discord bridge...")
-		bridgeList = append(bridgeList, bridges.NewDiscordBridge(cfg.Discord))
+		bridge, err := bridges.NewDiscordBridge(cfg.Discord)
+		if err != nil {
+			if setupErr, ok := err.(*pocketping.SetupError); ok {
+				fmt.Println(setupErr.FormattedGuide())
+			} else {
+				log.Printf("[Bridge Server] Discord bridge error: %v", err)
+			}
+		} else {
+			bridgeList = append(bridgeList, bridge)
+		}
 	}
 
 	if cfg.Slack != nil {
 		log.Println("[Bridge Server] Initializing Slack bridge...")
-		bridgeList = append(bridgeList, bridges.NewSlackBridge(cfg.Slack))
+		bridge, err := bridges.NewSlackBridge(cfg.Slack)
+		if err != nil {
+			if setupErr, ok := err.(*pocketping.SetupError); ok {
+				fmt.Println(setupErr.FormattedGuide())
+			} else {
+				log.Printf("[Bridge Server] Slack bridge error: %v", err)
+			}
+		} else {
+			bridgeList = append(bridgeList, bridge)
+		}
 	}
 
 	if len(bridgeList) == 0 {

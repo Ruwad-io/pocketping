@@ -47,7 +47,16 @@ func WithSlackWebhookHTTPClient(client *http.Client) SlackWebhookOption {
 }
 
 // NewSlackWebhookBridge creates a new Slack webhook bridge.
-func NewSlackWebhookBridge(webhookURL string, opts ...SlackWebhookOption) *SlackWebhookBridge {
+// Returns an error if configuration is invalid.
+func NewSlackWebhookBridge(webhookURL string, opts ...SlackWebhookOption) (*SlackWebhookBridge, error) {
+	// Validate configuration
+	if err := ValidateSlackWebhookConfig(webhookURL); err != nil {
+		if setupErr, ok := err.(*SetupError); ok {
+			log.Println(setupErr.FormattedGuide())
+		}
+		return nil, err
+	}
+
 	s := &SlackWebhookBridge{
 		BaseBridge: BaseBridge{BridgeName: "slack-webhook"},
 		WebhookURL: webhookURL,
@@ -60,6 +69,15 @@ func NewSlackWebhookBridge(webhookURL string, opts ...SlackWebhookOption) *Slack
 		opt(s)
 	}
 
+	return s, nil
+}
+
+// MustNewSlackWebhookBridge creates a new Slack webhook bridge or panics on error.
+func MustNewSlackWebhookBridge(webhookURL string, opts ...SlackWebhookOption) *SlackWebhookBridge {
+	s, err := NewSlackWebhookBridge(webhookURL, opts...)
+	if err != nil {
+		panic(err)
+	}
 	return s
 }
 
@@ -169,6 +187,9 @@ func (s *SlackWebhookBridge) OnIdentityUpdate(ctx context.Context, session *Sess
 	if session.Identity.Email != "" {
 		text += fmt.Sprintf("\n:email: Email: %s", session.Identity.Email)
 	}
+	if session.UserPhone != "" {
+		text += fmt.Sprintf("\n:telephone_receiver: Phone: %s", session.UserPhone)
+	}
 
 	err := s.sendWebhookMessage(ctx, text)
 	if err != nil {
@@ -250,7 +271,16 @@ func WithSlackBotHTTPClient(client *http.Client) SlackBotOption {
 }
 
 // NewSlackBotBridge creates a new Slack bot bridge.
-func NewSlackBotBridge(botToken, channelID string, opts ...SlackBotOption) *SlackBotBridge {
+// Returns an error if configuration is invalid.
+func NewSlackBotBridge(botToken, channelID string, opts ...SlackBotOption) (*SlackBotBridge, error) {
+	// Validate configuration
+	if err := ValidateSlackBotConfig(botToken, channelID); err != nil {
+		if setupErr, ok := err.(*SetupError); ok {
+			log.Println(setupErr.FormattedGuide())
+		}
+		return nil, err
+	}
+
 	s := &SlackBotBridge{
 		BaseBridge: BaseBridge{BridgeName: "slack-bot"},
 		BotToken:   botToken,
@@ -262,6 +292,15 @@ func NewSlackBotBridge(botToken, channelID string, opts ...SlackBotOption) *Slac
 		opt(s)
 	}
 
+	return s, nil
+}
+
+// MustNewSlackBotBridge creates a new Slack bot bridge or panics on error.
+func MustNewSlackBotBridge(botToken, channelID string, opts ...SlackBotOption) *SlackBotBridge {
+	s, err := NewSlackBotBridge(botToken, channelID, opts...)
+	if err != nil {
+		panic(err)
+	}
 	return s
 }
 
@@ -421,6 +460,9 @@ func (s *SlackBotBridge) OnIdentityUpdate(ctx context.Context, session *Session)
 	}
 	if session.Identity.Email != "" {
 		text += fmt.Sprintf("\n:email: Email: %s", session.Identity.Email)
+	}
+	if session.UserPhone != "" {
+		text += fmt.Sprintf("\n:telephone_receiver: Phone: %s", session.UserPhone)
 	}
 
 	_, err := s.postMessage(ctx, text)

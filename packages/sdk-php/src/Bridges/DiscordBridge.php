@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PocketPing\Bridges;
 
+use PocketPing\Exceptions\SetupException;
 use PocketPing\Http\CurlHttpClient;
 use PocketPing\Http\HttpClientInterface;
 use PocketPing\Models\BridgeMessageIds;
@@ -65,6 +66,8 @@ class DiscordBridge extends AbstractBridge implements BridgeWithEditDeleteInterf
     /**
      * Create a Discord bridge using webhook mode.
      * Webhooks are simpler but cannot edit/delete messages.
+     *
+     * @throws SetupException if webhookUrl is missing or invalid
      */
     public static function webhook(
         string $webhookUrl,
@@ -72,6 +75,20 @@ class DiscordBridge extends AbstractBridge implements BridgeWithEditDeleteInterf
         ?string $avatarUrl = null,
         ?HttpClientInterface $httpClient = null
     ): self {
+        // Validate webhook URL
+        if (empty($webhookUrl)) {
+            throw new SetupException('Discord', 'webhook_url');
+        }
+
+        if (!str_starts_with($webhookUrl, 'https://discord.com/api/webhooks/')) {
+            throw new SetupException(
+                'Discord',
+                'valid webhook_url',
+                "Webhook URL must start with https://discord.com/api/webhooks/\n\n"
+                    . SetupException::SETUP_GUIDES['discord']['webhook_url']
+            );
+        }
+
         return new self(
             isWebhookMode: true,
             webhookUrl: $webhookUrl,
@@ -84,12 +101,24 @@ class DiscordBridge extends AbstractBridge implements BridgeWithEditDeleteInterf
     /**
      * Create a Discord bridge using bot mode.
      * Bot mode supports full edit/delete functionality.
+     *
+     * @throws SetupException if botToken or channelId is missing
      */
     public static function bot(
         string $botToken,
         string $channelId,
         ?HttpClientInterface $httpClient = null
     ): self {
+        // Validate bot token
+        if (empty($botToken)) {
+            throw new SetupException('Discord', 'bot_token');
+        }
+
+        // Validate channel ID
+        if (empty($channelId)) {
+            throw new SetupException('Discord', 'channel_id');
+        }
+
         return new self(
             isWebhookMode: false,
             botToken: $botToken,
@@ -221,6 +250,10 @@ class DiscordBridge extends AbstractBridge implements BridgeWithEditDeleteInterf
 
         if ($identity->email !== null) {
             $fields[] = ['name' => '📧 Email', 'value' => $identity->email, 'inline' => true];
+        }
+
+        if ($session->userPhone !== null) {
+            $fields[] = ['name' => '📱 Phone', 'value' => $session->userPhone, 'inline' => true];
         }
 
         $embed = [

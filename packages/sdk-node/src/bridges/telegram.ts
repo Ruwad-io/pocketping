@@ -1,6 +1,7 @@
 import type { Bridge, BridgeMessageResult } from './types';
 import type { PocketPing } from '../pocketping';
 import type { Session, Message } from '../types';
+import { PocketPingSetupError, SETUP_GUIDES } from '../errors';
 
 /**
  * Telegram API response types
@@ -53,6 +54,22 @@ export class TelegramBridge implements Bridge {
     chatId: string | number,
     options: TelegramBridgeOptions = {}
   ) {
+    if (!botToken) {
+      throw new PocketPingSetupError({
+        bridge: 'Telegram',
+        missing: 'botToken',
+        guide: SETUP_GUIDES.telegram.botToken,
+      });
+    }
+
+    if (!chatId) {
+      throw new PocketPingSetupError({
+        bridge: 'Telegram',
+        missing: 'chatId',
+        guide: SETUP_GUIDES.telegram.chatId,
+      });
+    }
+
     this.botToken = botToken;
     this.chatId = chatId;
     this.parseMode = options.parseMode ?? 'HTML';
@@ -256,12 +273,14 @@ export class TelegramBridge implements Bridge {
       text = `<b>User Identified</b>\n` +
         `<b>ID:</b> ${this.escapeHtml(identity.id)}\n` +
         (identity.name ? `<b>Name:</b> ${this.escapeHtml(identity.name)}\n` : '') +
-        (identity.email ? `<b>Email:</b> ${this.escapeHtml(identity.email)}` : '');
+        (identity.email ? `<b>Email:</b> ${this.escapeHtml(identity.email)}\n` : '') +
+        (session.userPhone ? `<b>Phone:</b> ${this.escapeHtml(session.userPhone)}` : '');
     } else {
       text = `*User Identified*\n` +
         `*ID:* ${this.escapeMarkdown(identity.id)}\n` +
         (identity.name ? `*Name:* ${this.escapeMarkdown(identity.name)}\n` : '') +
-        (identity.email ? `*Email:* ${this.escapeMarkdown(identity.email)}` : '');
+        (identity.email ? `*Email:* ${this.escapeMarkdown(identity.email)}\n` : '') +
+        (session.userPhone ? `*Phone:* ${this.escapeMarkdown(session.userPhone)}` : '');
     }
 
     try {

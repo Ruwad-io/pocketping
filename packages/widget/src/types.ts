@@ -84,6 +84,9 @@ export interface PocketPingConfig {
   /** Auto-open chat after delay in ms (0 = disabled) */
   autoOpenDelay?: number;
 
+  /** Auto-open chat when operator sends a message (default: true) */
+  autoOpenOnMessage?: boolean;
+
   /** Play sound on new message */
   soundEnabled?: boolean;
 
@@ -170,6 +173,29 @@ export interface Session {
   messages: Message[];
   /** User identity if identified via PocketPing.identify() */
   identity?: UserIdentity;
+  /** Pre-chat form configuration */
+  preChatForm?: PreChatFormConfig;
+}
+
+/** Pre-chat form configuration */
+export interface PreChatFormConfig {
+  /** Whether the form is enabled */
+  enabled: boolean;
+  /** Whether the form is required (can't skip) */
+  required: boolean;
+  /** When to show the form: 'before-first-message' | 'after-first-message' */
+  timing: 'before-first-message' | 'after-first-message';
+  /** What fields to collect: 'email-only' | 'phone-only' | 'email-or-phone' | 'email-and-phone' */
+  fields: 'email-only' | 'phone-only' | 'email-or-phone' | 'email-and-phone';
+  /** Whether the form was already completed for this session */
+  completed: boolean;
+}
+
+/** Pre-chat form submission data */
+export interface PreChatFormData {
+  email?: string;
+  phone?: string;
+  phoneCountry?: string;
 }
 
 export interface ConnectResponse {
@@ -191,6 +217,8 @@ export interface ConnectResponse {
   operatorAvatar?: string;
   /** Primary color from server */
   primaryColor?: string;
+  /** Pre-chat form configuration */
+  preChatForm?: PreChatFormConfig;
 }
 
 export interface SendMessageResponse {

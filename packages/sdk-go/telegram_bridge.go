@@ -49,7 +49,16 @@ func WithTelegramHTTPClient(client *http.Client) TelegramOption {
 }
 
 // NewTelegramBridge creates a new Telegram bridge.
-func NewTelegramBridge(botToken, chatID string, opts ...TelegramOption) *TelegramBridge {
+// Returns an error if configuration is invalid.
+func NewTelegramBridge(botToken, chatID string, opts ...TelegramOption) (*TelegramBridge, error) {
+	// Validate configuration
+	if err := ValidateTelegramConfig(botToken, chatID); err != nil {
+		if setupErr, ok := err.(*SetupError); ok {
+			log.Println(setupErr.FormattedGuide())
+		}
+		return nil, err
+	}
+
 	t := &TelegramBridge{
 		BaseBridge: BaseBridge{BridgeName: "telegram"},
 		BotToken:   botToken,
@@ -62,6 +71,15 @@ func NewTelegramBridge(botToken, chatID string, opts ...TelegramOption) *Telegra
 		opt(t)
 	}
 
+	return t, nil
+}
+
+// MustNewTelegramBridge creates a new Telegram bridge or panics on error.
+func MustNewTelegramBridge(botToken, chatID string, opts ...TelegramOption) *TelegramBridge {
+	t, err := NewTelegramBridge(botToken, chatID, opts...)
+	if err != nil {
+		panic(err)
+	}
 	return t
 }
 
@@ -196,6 +214,9 @@ func (t *TelegramBridge) OnIdentityUpdate(ctx context.Context, session *Session)
 	}
 	if session.Identity.Email != "" {
 		text += fmt.Sprintf("\n📧 Email: %s", session.Identity.Email)
+	}
+	if session.UserPhone != "" {
+		text += fmt.Sprintf("\n📱 Phone: %s", session.UserPhone)
 	}
 
 	_, err := t.sendMessage(ctx, text, nil)

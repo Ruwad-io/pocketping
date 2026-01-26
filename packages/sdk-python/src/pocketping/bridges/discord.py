@@ -545,6 +545,8 @@ class DiscordBridge(Bridge):
             parts.append(f"**Name:** {session.identity.name}")
         if session.identity.email:
             parts.append(f"**Email:** {session.identity.email}")
+        if session.user_phone:
+            parts.append(f"**Phone:** {session.user_phone}")
         parts.append(f"Session: `{session.id[:8]}`")
 
         embed = self._create_embed(

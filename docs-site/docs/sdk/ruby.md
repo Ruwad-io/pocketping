@@ -76,11 +76,112 @@ map '/' do
 end
 ```
 
+## Built-in Bridges
+
+The SDK includes built-in bridges for Telegram, Discord, and Slack with automatic validation and helpful setup guides.
+
+```ruby
+require 'pocketping'
+
+pp = PocketPing.new
+
+# Add Telegram bridge
+begin
+  pp.add_bridge(PocketPing::TelegramBridge.new(
+    bot_token: ENV['TELEGRAM_BOT_TOKEN'],
+    chat_id: ENV['TELEGRAM_CHAT_ID']
+  ))
+rescue PocketPing::SetupError => e
+  # Helpful error with setup guide
+  puts e.formatted_guide
+  exit 1
+end
+
+# Add Discord bridge (bot mode)
+begin
+  pp.add_bridge(PocketPing::DiscordBotBridge.new(
+    bot_token: ENV['DISCORD_BOT_TOKEN'],
+    channel_id: ENV['DISCORD_CHANNEL_ID']
+  ))
+rescue PocketPing::SetupError => e
+  puts e.formatted_guide
+  exit 1
+end
+
+# Add Slack bridge (bot mode)
+begin
+  pp.add_bridge(PocketPing::SlackBotBridge.new(
+    bot_token: ENV['SLACK_BOT_TOKEN'],
+    channel_id: ENV['SLACK_CHANNEL_ID']
+  ))
+rescue PocketPing::SetupError => e
+  puts e.formatted_guide
+  exit 1
+end
+```
+
+### Validation Errors
+
+If configuration is missing or invalid, you'll see a helpful setup guide:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ⚠️  Discord Setup Required
+├─────────────────────────────────────────────────────────────┤
+│
+│  Missing: bot_token
+│
+│  To set up Discord Bot mode:
+│
+│  1. Go to https://discord.com/developers/applications
+│  2. Create a new application
+│  3. Go to Bot → Add Bot → Reset Token
+│  4. Copy the token and set DISCORD_BOT_TOKEN
+│
+│  Enable MESSAGE CONTENT INTENT in Bot settings!
+│
+│  📖 Full guide: https://pocketping.io/docs/discord
+│
+│  💡 Quick fix: npx @pocketping/cli init discord
+│
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Bridge Modes
+
+| Bridge | Mode | Class | Features |
+|--------|------|-------|----------|
+| Telegram | Bot | `TelegramBridge` | Send, edit, delete |
+| Discord | Webhook | `DiscordWebhookBridge` | Send only |
+| Discord | Bot | `DiscordBotBridge` | Send, edit, delete |
+| Slack | Webhook | `SlackWebhookBridge` | Send only |
+| Slack | Bot | `SlackBotBridge` | Send, edit, delete |
+
+:::tip Bot vs Webhook
+Use **Bot mode** for full bidirectional communication. Webhooks are simpler but only support sending messages.
+:::
+
+:::warning Discord Bot requires long-running server
+**Discord bot mode** uses the Discord Gateway (WebSocket) to receive operator replies. This only works on **long-running servers** (Puma, Unicorn, etc.).
+
+**Does NOT work with:**
+- AWS Lambda
+- Any serverless environment
+
+**For serverless + Discord bidirectional:** Use the [Bridge Server](/bridges/docker) instead, or use `DiscordWebhookBridge` (send-only).
+:::
+
+:::info Telegram & Slack work with serverless
+**Telegram** and **Slack** use HTTP webhooks (not WebSocket), so they work fully with serverless environments like Lambda, etc.
+:::
+
+---
+
 ## Configuration
 
 ```ruby
 pp = PocketPing.new(
-  # Bridge server URL
+  # Bridge server URL (alternative to built-in bridges)
   bridge_url: 'http://localhost:3001',
 
   # Welcome message for new visitors

@@ -62,7 +62,10 @@ func createTestMessage(id, sessionID, content string) *Message {
 // --- Constructor Validation Tests ---
 
 func TestTelegramBridge_Constructor_WithRequiredParams(t *testing.T) {
-	bridge := NewTelegramBridge("bot-token-123", "chat-id-456")
+	bridge, err := NewTelegramBridge("bot-token-123", "chat-id-456")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if bridge == nil {
 		t.Fatal("expected non-nil TelegramBridge")
@@ -79,7 +82,10 @@ func TestTelegramBridge_Constructor_WithRequiredParams(t *testing.T) {
 }
 
 func TestTelegramBridge_Constructor_UsesDefaultOptions(t *testing.T) {
-	bridge := NewTelegramBridge("token", "chat")
+	bridge, err := NewTelegramBridge("token", "chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if bridge.ParseMode != "HTML" {
 		t.Errorf("expected default ParseMode='HTML', got '%s'", bridge.ParseMode)
@@ -95,13 +101,16 @@ func TestTelegramBridge_Constructor_UsesDefaultOptions(t *testing.T) {
 func TestTelegramBridge_Constructor_AcceptsFunctionalOptions(t *testing.T) {
 	customClient := &http.Client{Timeout: 60 * time.Second}
 
-	bridge := NewTelegramBridge(
+	bridge, err := NewTelegramBridge(
 		"token",
 		"chat",
 		WithTelegramParseMode("Markdown"),
 		WithTelegramDisableNotification(true),
 		WithTelegramHTTPClient(customClient),
 	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if bridge.ParseMode != "Markdown" {
 		t.Errorf("expected ParseMode='Markdown', got '%s'", bridge.ParseMode)
@@ -138,7 +147,10 @@ func TestTelegramBridge_OnVisitorMessage_SendsMessageToAPI(t *testing.T) {
 	defer server.Close()
 
 	// Create bridge with test server URL
-	bridge := NewTelegramBridge("test-token", "test-chat")
+	bridge, err := NewTelegramBridge("test-token", "test-chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &testTransport{baseURL: server.URL, token: "test-token"},
 	}
@@ -147,7 +159,7 @@ func TestTelegramBridge_OnVisitorMessage_SendsMessageToAPI(t *testing.T) {
 	session := createTestSession("sess-1", "visitor-1", nil, nil)
 	message := createTestMessage("msg-1", "sess-1", "Hello from visitor")
 
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -183,7 +195,10 @@ func TestTelegramBridge_OnVisitorMessage_ReturnsMessageID(t *testing.T) {
 	storage := newMockStorage()
 	pp := mockPocketPing(storage)
 
-	bridge := NewTelegramBridge("test-token", "test-chat")
+	bridge, err := NewTelegramBridge("test-token", "test-chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &testTransport{baseURL: server.URL, token: "test-token"},
 	}
@@ -193,7 +208,7 @@ func TestTelegramBridge_OnVisitorMessage_ReturnsMessageID(t *testing.T) {
 	session := createTestSession("sess-1", "visitor-1", nil, nil)
 	message := createTestMessage("msg-1", "sess-1", "Test message")
 
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -218,7 +233,10 @@ func TestTelegramBridge_OnVisitorMessage_HandlesAPIErrors(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge := NewTelegramBridge("test-token", "test-chat")
+	bridge, err := NewTelegramBridge("test-token", "test-chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &testTransport{baseURL: server.URL, token: "test-token"},
 	}
@@ -228,7 +246,7 @@ func TestTelegramBridge_OnVisitorMessage_HandlesAPIErrors(t *testing.T) {
 	message := createTestMessage("msg-1", "sess-1", "Test message")
 
 	// Should not return error (logs but doesn't fail)
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Errorf("expected nil error (error should be logged, not returned), got %v", err)
 	}
@@ -255,7 +273,10 @@ func TestTelegramBridge_OnNewSession_SendsSessionAnnouncement(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge := NewTelegramBridge("test-token", "test-chat")
+	bridge, err := NewTelegramBridge("test-token", "test-chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &testTransport{baseURL: server.URL, token: "test-token"},
 	}
@@ -263,7 +284,7 @@ func TestTelegramBridge_OnNewSession_SendsSessionAnnouncement(t *testing.T) {
 	ctx := context.Background()
 	session := createTestSession("sess-1", "visitor-123", nil, nil)
 
-	err := bridge.OnNewSession(ctx, session)
+	err = bridge.OnNewSession(ctx, session)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -296,7 +317,10 @@ func TestTelegramBridge_OnNewSession_FormatsSessionInfoCorrectly(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge := NewTelegramBridge("test-token", "test-chat")
+	bridge, err := NewTelegramBridge("test-token", "test-chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &testTransport{baseURL: server.URL, token: "test-token"},
 	}
@@ -309,7 +333,7 @@ func TestTelegramBridge_OnNewSession_FormatsSessionInfoCorrectly(t *testing.T) {
 		&SessionMetadata{URL: "https://example.com/pricing"},
 	)
 
-	err := bridge.OnNewSession(ctx, session)
+	err = bridge.OnNewSession(ctx, session)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -359,7 +383,10 @@ func TestTelegramBridge_OnMessageEdit_CallsEditAPI(t *testing.T) {
 		TelegramMessageID: 12345,
 	})
 
-	bridge := NewTelegramBridge("test-token", "test-chat")
+	bridge, err := NewTelegramBridge("test-token", "test-chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &testTransport{baseURL: server.URL, token: "test-token"},
 	}
@@ -406,7 +433,10 @@ func TestTelegramBridge_OnMessageEdit_ReturnsNilOnSuccess(t *testing.T) {
 		TelegramMessageID: 12345,
 	})
 
-	bridge := NewTelegramBridge("test-token", "test-chat")
+	bridge, err := NewTelegramBridge("test-token", "test-chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &testTransport{baseURL: server.URL, token: "test-token"},
 	}
@@ -438,7 +468,10 @@ func TestTelegramBridge_OnMessageEdit_ReturnsNilOnFailure(t *testing.T) {
 		TelegramMessageID: 12345,
 	})
 
-	bridge := NewTelegramBridge("test-token", "test-chat")
+	bridge, err := NewTelegramBridge("test-token", "test-chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &testTransport{baseURL: server.URL, token: "test-token"},
 	}
@@ -484,13 +517,16 @@ func TestTelegramBridge_OnMessageDelete_CallsDeleteAPI(t *testing.T) {
 		TelegramMessageID: 54321,
 	})
 
-	bridge := NewTelegramBridge("test-token", "test-chat")
+	bridge, err := NewTelegramBridge("test-token", "test-chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &testTransport{baseURL: server.URL, token: "test-token"},
 	}
 	bridge.Init(context.Background(), pp)
 
-	err := bridge.OnMessageDelete(context.Background(), "sess-1", "msg-1", time.Now())
+	err = bridge.OnMessageDelete(context.Background(), "sess-1", "msg-1", time.Now())
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -522,13 +558,16 @@ func TestTelegramBridge_OnMessageDelete_ReturnsNilOnSuccess(t *testing.T) {
 		TelegramMessageID: 12345,
 	})
 
-	bridge := NewTelegramBridge("test-token", "test-chat")
+	bridge, err := NewTelegramBridge("test-token", "test-chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &testTransport{baseURL: server.URL, token: "test-token"},
 	}
 	bridge.Init(context.Background(), pp)
 
-	err := bridge.OnMessageDelete(context.Background(), "sess-1", "msg-1", time.Now())
+	err = bridge.OnMessageDelete(context.Background(), "sess-1", "msg-1", time.Now())
 	if err != nil {
 		t.Errorf("expected nil error on success, got %v", err)
 	}
@@ -550,13 +589,16 @@ func TestTelegramBridge_OnMessageDelete_ReturnsNilOnFailure(t *testing.T) {
 		TelegramMessageID: 12345,
 	})
 
-	bridge := NewTelegramBridge("test-token", "test-chat")
+	bridge, err := NewTelegramBridge("test-token", "test-chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &testTransport{baseURL: server.URL, token: "test-token"},
 	}
 	bridge.Init(context.Background(), pp)
 
-	err := bridge.OnMessageDelete(context.Background(), "sess-1", "msg-1", time.Now())
+	err = bridge.OnMessageDelete(context.Background(), "sess-1", "msg-1", time.Now())
 	// Error is logged but returns nil
 	if err != nil {
 		t.Errorf("expected nil error (logged), got %v", err)
@@ -572,7 +614,10 @@ func TestTelegramBridge_LogsErrorButDoesNotPanicOnAPIFailure(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge := NewTelegramBridge("test-token", "test-chat")
+	bridge, err := NewTelegramBridge("test-token", "test-chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &testTransport{baseURL: server.URL, token: "test-token"},
 	}
@@ -588,7 +633,7 @@ func TestTelegramBridge_LogsErrorButDoesNotPanicOnAPIFailure(t *testing.T) {
 		}
 	}()
 
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Errorf("expected nil error (logged), got %v", err)
 	}
@@ -596,7 +641,10 @@ func TestTelegramBridge_LogsErrorButDoesNotPanicOnAPIFailure(t *testing.T) {
 
 func TestTelegramBridge_HandlesNetworkErrors(t *testing.T) {
 	// Use a non-existent server
-	bridge := NewTelegramBridge("test-token", "test-chat")
+	bridge, err := NewTelegramBridge("test-token", "test-chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Timeout: 100 * time.Millisecond,
 		Transport: &testTransport{
@@ -610,7 +658,7 @@ func TestTelegramBridge_HandlesNetworkErrors(t *testing.T) {
 	message := createTestMessage("msg-1", "sess-1", "Test")
 
 	// Should not return error (logged)
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Errorf("expected nil error for network errors, got %v", err)
 	}
@@ -623,7 +671,10 @@ func TestTelegramBridge_HandlesInvalidResponses(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge := NewTelegramBridge("test-token", "test-chat")
+	bridge, err := NewTelegramBridge("test-token", "test-chat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &testTransport{baseURL: server.URL, token: "test-token"},
 	}
@@ -633,7 +684,7 @@ func TestTelegramBridge_HandlesInvalidResponses(t *testing.T) {
 	message := createTestMessage("msg-1", "sess-1", "Test")
 
 	// Should not panic, error is logged
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Errorf("expected nil error for invalid JSON, got %v", err)
 	}
@@ -646,7 +697,10 @@ func TestTelegramBridge_HandlesInvalidResponses(t *testing.T) {
 // --- Constructor Validation Tests ---
 
 func TestDiscordWebhookBridge_Constructor_WithRequiredParams(t *testing.T) {
-	bridge := NewDiscordWebhookBridge("https://discord.com/api/webhooks/123/abc")
+	bridge, err := NewDiscordWebhookBridge("https://discord.com/api/webhooks/123/abc")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if bridge == nil {
 		t.Fatal("expected non-nil DiscordWebhookBridge")
@@ -660,7 +714,10 @@ func TestDiscordWebhookBridge_Constructor_WithRequiredParams(t *testing.T) {
 }
 
 func TestDiscordWebhookBridge_Constructor_UsesDefaultOptions(t *testing.T) {
-	bridge := NewDiscordWebhookBridge("https://webhook.url")
+	bridge, err := NewDiscordWebhookBridge("https://discord.com/api/webhooks/test/test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if bridge.Username != "PocketPing" {
 		t.Errorf("expected default Username='PocketPing', got '%s'", bridge.Username)
@@ -673,12 +730,15 @@ func TestDiscordWebhookBridge_Constructor_UsesDefaultOptions(t *testing.T) {
 func TestDiscordWebhookBridge_Constructor_AcceptsFunctionalOptions(t *testing.T) {
 	customClient := &http.Client{Timeout: 60 * time.Second}
 
-	bridge := NewDiscordWebhookBridge(
-		"https://webhook.url",
+	bridge, err := NewDiscordWebhookBridge(
+		"https://discord.com/api/webhooks/123/abc",
 		WithDiscordWebhookUsername("CustomBot"),
 		WithDiscordWebhookAvatarURL("https://avatar.url/image.png"),
 		WithDiscordWebhookHTTPClient(customClient),
 	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if bridge.Username != "CustomBot" {
 		t.Errorf("expected Username='CustomBot', got '%s'", bridge.Username)
@@ -711,13 +771,17 @@ func TestDiscordWebhookBridge_OnVisitorMessage_SendsMessageToAPI(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge := NewDiscordWebhookBridge(server.URL)
+	bridge, err := NewDiscordWebhookBridge("https://discord.com/api/webhooks/test/test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	bridge.WebhookURL = server.URL
 
 	ctx := context.Background()
 	session := createTestSession("sess-1", "visitor-1", nil, nil)
 	message := createTestMessage("msg-1", "sess-1", "Hello from visitor")
 
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -743,14 +807,18 @@ func TestDiscordWebhookBridge_OnVisitorMessage_HandlesAPIErrors(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge := NewDiscordWebhookBridge(server.URL)
+	bridge, err := NewDiscordWebhookBridge("https://discord.com/api/webhooks/test/test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	bridge.WebhookURL = server.URL
 
 	ctx := context.Background()
 	session := createTestSession("sess-1", "visitor-1", nil, nil)
 	message := createTestMessage("msg-1", "sess-1", "Test message")
 
 	// Should not return error (logs but doesn't fail)
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Errorf("expected nil error (logged), got %v", err)
 	}
@@ -774,12 +842,16 @@ func TestDiscordWebhookBridge_OnNewSession_SendsSessionAnnouncement(t *testing.T
 	}))
 	defer server.Close()
 
-	bridge := NewDiscordWebhookBridge(server.URL)
+	bridge, err := NewDiscordWebhookBridge("https://discord.com/api/webhooks/test/test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	bridge.WebhookURL = server.URL
 
 	ctx := context.Background()
 	session := createTestSession("sess-1", "visitor-123", nil, nil)
 
-	err := bridge.OnNewSession(ctx, session)
+	err = bridge.OnNewSession(ctx, session)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1119,7 +1191,10 @@ func TestDiscordBotBridge_HandlesNetworkErrors(t *testing.T) {
 // --- Constructor Validation Tests ---
 
 func TestSlackWebhookBridge_Constructor_WithRequiredParams(t *testing.T) {
-	bridge := NewSlackWebhookBridge("https://hooks.slack.com/services/T00/B00/xxx")
+	bridge, err := NewSlackWebhookBridge("https://hooks.slack.com/services/T00/B00/xxx")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if bridge == nil {
 		t.Fatal("expected non-nil SlackWebhookBridge")
@@ -1133,7 +1208,10 @@ func TestSlackWebhookBridge_Constructor_WithRequiredParams(t *testing.T) {
 }
 
 func TestSlackWebhookBridge_Constructor_UsesDefaultOptions(t *testing.T) {
-	bridge := NewSlackWebhookBridge("https://webhook.url")
+	bridge, err := NewSlackWebhookBridge("https://hooks.slack.com/services/T00/B00/test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if bridge.Username != "PocketPing" {
 		t.Errorf("expected default Username='PocketPing', got '%s'", bridge.Username)
@@ -1149,12 +1227,15 @@ func TestSlackWebhookBridge_Constructor_UsesDefaultOptions(t *testing.T) {
 func TestSlackWebhookBridge_Constructor_AcceptsFunctionalOptions(t *testing.T) {
 	customClient := &http.Client{Timeout: 60 * time.Second}
 
-	bridge := NewSlackWebhookBridge(
-		"https://webhook.url",
+	bridge, err := NewSlackWebhookBridge(
+		"https://hooks.slack.com/services/T00/B00/test",
 		WithSlackWebhookUsername("CustomBot"),
 		WithSlackWebhookIconEmoji(":robot_face:"),
 		WithSlackWebhookHTTPClient(customClient),
 	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if bridge.Username != "CustomBot" {
 		t.Errorf("expected Username='CustomBot', got '%s'", bridge.Username)
@@ -1185,13 +1266,17 @@ func TestSlackWebhookBridge_OnVisitorMessage_SendsMessageToAPI(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge := NewSlackWebhookBridge(server.URL)
+	bridge, err := NewSlackWebhookBridge("https://hooks.slack.com/services/T00/B00/test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	bridge.WebhookURL = server.URL
 
 	ctx := context.Background()
 	session := createTestSession("sess-1", "visitor-1", nil, nil)
 	message := createTestMessage("msg-1", "sess-1", "Hello from visitor")
 
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1217,14 +1302,18 @@ func TestSlackWebhookBridge_OnVisitorMessage_HandlesAPIErrors(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge := NewSlackWebhookBridge(server.URL)
+	bridge, err := NewSlackWebhookBridge("https://hooks.slack.com/services/T00/B00/test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	bridge.WebhookURL = server.URL
 
 	ctx := context.Background()
 	session := createTestSession("sess-1", "visitor-1", nil, nil)
 	message := createTestMessage("msg-1", "sess-1", "Test message")
 
 	// Should not return error (logs but doesn't fail)
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Errorf("expected nil error (logged), got %v", err)
 	}
@@ -1246,12 +1335,16 @@ func TestSlackWebhookBridge_OnNewSession_SendsSessionAnnouncement(t *testing.T) 
 	}))
 	defer server.Close()
 
-	bridge := NewSlackWebhookBridge(server.URL)
+	bridge, err := NewSlackWebhookBridge("https://hooks.slack.com/services/T00/B00/test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	bridge.WebhookURL = server.URL
 
 	ctx := context.Background()
 	session := createTestSession("sess-1", "visitor-123", nil, nil)
 
-	err := bridge.OnNewSession(ctx, session)
+	err = bridge.OnNewSession(ctx, session)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1275,7 +1368,10 @@ func TestSlackWebhookBridge_OnNewSession_SendsSessionAnnouncement(t *testing.T) 
 // --- Constructor Validation Tests ---
 
 func TestSlackBotBridge_Constructor_WithRequiredParams(t *testing.T) {
-	bridge := NewSlackBotBridge("xoxb-bot-token-123", "C1234567890")
+	bridge, err := NewSlackBotBridge("xoxb-bot-token-123", "C1234567890")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if bridge == nil {
 		t.Fatal("expected non-nil SlackBotBridge")
@@ -1292,7 +1388,10 @@ func TestSlackBotBridge_Constructor_WithRequiredParams(t *testing.T) {
 }
 
 func TestSlackBotBridge_Constructor_UsesDefaultOptions(t *testing.T) {
-	bridge := NewSlackBotBridge("token", "channel")
+	bridge, err := NewSlackBotBridge("xoxb-test-token", "C1234567890")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if bridge.httpClient == nil {
 		t.Error("expected default httpClient to be set")
@@ -1302,11 +1401,14 @@ func TestSlackBotBridge_Constructor_UsesDefaultOptions(t *testing.T) {
 func TestSlackBotBridge_Constructor_AcceptsFunctionalOptions(t *testing.T) {
 	customClient := &http.Client{Timeout: 60 * time.Second}
 
-	bridge := NewSlackBotBridge(
-		"token",
-		"channel",
+	bridge, err := NewSlackBotBridge(
+		"xoxb-test-token",
+		"C1234567890",
 		WithSlackBotHTTPClient(customClient),
 	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if bridge.httpClient != customClient {
 		t.Error("expected custom httpClient to be used")
@@ -1334,7 +1436,10 @@ func TestSlackBotBridge_OnVisitorMessage_SendsMessageToAPI(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge := NewSlackBotBridge("test-token", "test-channel")
+	bridge, err := NewSlackBotBridge("xoxb-test-token", "C1234567890")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &slackTestTransport{baseURL: server.URL},
 	}
@@ -1343,7 +1448,7 @@ func TestSlackBotBridge_OnVisitorMessage_SendsMessageToAPI(t *testing.T) {
 	session := createTestSession("sess-1", "visitor-1", nil, nil)
 	message := createTestMessage("msg-1", "sess-1", "Hello from visitor")
 
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1378,7 +1483,10 @@ func TestSlackBotBridge_OnVisitorMessage_ReturnsMessageTS(t *testing.T) {
 	storage := newMockStorage()
 	pp := mockPocketPing(storage)
 
-	bridge := NewSlackBotBridge("test-token", "test-channel")
+	bridge, err := NewSlackBotBridge("xoxb-test-token", "C1234567890")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &slackTestTransport{baseURL: server.URL},
 	}
@@ -1388,7 +1496,7 @@ func TestSlackBotBridge_OnVisitorMessage_ReturnsMessageTS(t *testing.T) {
 	session := createTestSession("sess-1", "visitor-1", nil, nil)
 	message := createTestMessage("msg-1", "sess-1", "Test message")
 
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1413,7 +1521,10 @@ func TestSlackBotBridge_OnVisitorMessage_HandlesAPIErrors(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge := NewSlackBotBridge("test-token", "test-channel")
+	bridge, err := NewSlackBotBridge("xoxb-test-token", "C1234567890")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &slackTestTransport{baseURL: server.URL},
 	}
@@ -1423,7 +1534,7 @@ func TestSlackBotBridge_OnVisitorMessage_HandlesAPIErrors(t *testing.T) {
 	message := createTestMessage("msg-1", "sess-1", "Test message")
 
 	// Should not return error (logs but doesn't fail)
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Errorf("expected nil error (logged), got %v", err)
 	}
@@ -1448,7 +1559,10 @@ func TestSlackBotBridge_OnNewSession_SendsSessionAnnouncement(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge := NewSlackBotBridge("test-token", "test-channel")
+	bridge, err := NewSlackBotBridge("xoxb-test-token", "C1234567890")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &slackTestTransport{baseURL: server.URL},
 	}
@@ -1456,7 +1570,7 @@ func TestSlackBotBridge_OnNewSession_SendsSessionAnnouncement(t *testing.T) {
 	ctx := context.Background()
 	session := createTestSession("sess-1", "visitor-123", nil, nil)
 
-	err := bridge.OnNewSession(ctx, session)
+	err = bridge.OnNewSession(ctx, session)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1490,7 +1604,10 @@ func TestSlackBotBridge_OnNewSession_FormatsSessionInfoCorrectly(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge := NewSlackBotBridge("test-token", "test-channel")
+	bridge, err := NewSlackBotBridge("xoxb-test-token", "C1234567890")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &slackTestTransport{baseURL: server.URL},
 	}
@@ -1503,7 +1620,7 @@ func TestSlackBotBridge_OnNewSession_FormatsSessionInfoCorrectly(t *testing.T) {
 		&SessionMetadata{URL: "https://example.com/contact"},
 	)
 
-	err := bridge.OnNewSession(ctx, session)
+	err = bridge.OnNewSession(ctx, session)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1555,7 +1672,10 @@ func TestSlackBotBridge_OnMessageEdit_CallsEditAPI(t *testing.T) {
 		SlackMessageTS: "1234567890.123456",
 	})
 
-	bridge := NewSlackBotBridge("test-token", "test-channel")
+	bridge, err := NewSlackBotBridge("xoxb-test-token", "C1234567890")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &slackTestTransport{baseURL: server.URL},
 	}
@@ -1599,7 +1719,10 @@ func TestSlackBotBridge_OnMessageEdit_ReturnsNilOnFailure(t *testing.T) {
 		SlackMessageTS: "1234567890.123456",
 	})
 
-	bridge := NewSlackBotBridge("test-token", "test-channel")
+	bridge, err := NewSlackBotBridge("xoxb-test-token", "C1234567890")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &slackTestTransport{baseURL: server.URL},
 	}
@@ -1643,13 +1766,16 @@ func TestSlackBotBridge_OnMessageDelete_CallsDeleteAPI(t *testing.T) {
 		SlackMessageTS: "9876543210.654321",
 	})
 
-	bridge := NewSlackBotBridge("test-token", "test-channel")
+	bridge, err := NewSlackBotBridge("xoxb-test-token", "C1234567890")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &slackTestTransport{baseURL: server.URL},
 	}
 	bridge.Init(context.Background(), pp)
 
-	err := bridge.OnMessageDelete(context.Background(), "sess-1", "msg-1", time.Now())
+	err = bridge.OnMessageDelete(context.Background(), "sess-1", "msg-1", time.Now())
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -1680,13 +1806,16 @@ func TestSlackBotBridge_OnMessageDelete_ReturnsNilOnSuccess(t *testing.T) {
 		SlackMessageTS: "123.456",
 	})
 
-	bridge := NewSlackBotBridge("test-token", "test-channel")
+	bridge, err := NewSlackBotBridge("xoxb-test-token", "C1234567890")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &slackTestTransport{baseURL: server.URL},
 	}
 	bridge.Init(context.Background(), pp)
 
-	err := bridge.OnMessageDelete(context.Background(), "sess-1", "msg-1", time.Now())
+	err = bridge.OnMessageDelete(context.Background(), "sess-1", "msg-1", time.Now())
 	if err != nil {
 		t.Errorf("expected nil error on success, got %v", err)
 	}
@@ -1708,13 +1837,16 @@ func TestSlackBotBridge_OnMessageDelete_ReturnsNilOnFailure(t *testing.T) {
 		SlackMessageTS: "123.456",
 	})
 
-	bridge := NewSlackBotBridge("test-token", "test-channel")
+	bridge, err := NewSlackBotBridge("xoxb-test-token", "C1234567890")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &slackTestTransport{baseURL: server.URL},
 	}
 	bridge.Init(context.Background(), pp)
 
-	err := bridge.OnMessageDelete(context.Background(), "sess-1", "msg-1", time.Now())
+	err = bridge.OnMessageDelete(context.Background(), "sess-1", "msg-1", time.Now())
 	if err != nil {
 		t.Errorf("expected nil error (logged), got %v", err)
 	}
@@ -1729,7 +1861,10 @@ func TestSlackBotBridge_LogsErrorButDoesNotPanicOnAPIFailure(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge := NewSlackBotBridge("test-token", "test-channel")
+	bridge, err := NewSlackBotBridge("xoxb-test-token", "C1234567890")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &slackTestTransport{baseURL: server.URL},
 	}
@@ -1744,14 +1879,17 @@ func TestSlackBotBridge_LogsErrorButDoesNotPanicOnAPIFailure(t *testing.T) {
 		}
 	}()
 
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Errorf("expected nil error (logged), got %v", err)
 	}
 }
 
 func TestSlackBotBridge_HandlesNetworkErrors(t *testing.T) {
-	bridge := NewSlackBotBridge("test-token", "test-channel")
+	bridge, err := NewSlackBotBridge("xoxb-test-token", "C1234567890")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Timeout: 100 * time.Millisecond,
 		Transport: &slackTestTransport{
@@ -1763,7 +1901,7 @@ func TestSlackBotBridge_HandlesNetworkErrors(t *testing.T) {
 	session := createTestSession("sess-1", "visitor-1", nil, nil)
 	message := createTestMessage("msg-1", "sess-1", "Test")
 
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Errorf("expected nil error for network errors, got %v", err)
 	}
@@ -1776,7 +1914,10 @@ func TestSlackBotBridge_HandlesInvalidResponses(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge := NewSlackBotBridge("test-token", "test-channel")
+	bridge, err := NewSlackBotBridge("xoxb-test-token", "C1234567890")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	bridge.httpClient = &http.Client{
 		Transport: &slackTestTransport{baseURL: server.URL},
 	}
@@ -1785,7 +1926,7 @@ func TestSlackBotBridge_HandlesInvalidResponses(t *testing.T) {
 	session := createTestSession("sess-1", "visitor-1", nil, nil)
 	message := createTestMessage("msg-1", "sess-1", "Test")
 
-	err := bridge.OnVisitorMessage(ctx, message, session)
+	err = bridge.OnVisitorMessage(ctx, message, session)
 	if err != nil {
 		t.Errorf("expected nil error for invalid JSON, got %v", err)
 	}

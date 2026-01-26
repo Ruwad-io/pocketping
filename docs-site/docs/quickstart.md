@@ -277,6 +277,10 @@ PocketPing.trigger('clicked_pricing', { plan: 'pro' });
 ```
 → [Custom events guide](/widget/configuration#custom-events)
 
+### Backend SDKs
+Integrate with your backend using official SDKs with built-in bridges.
+→ [Node.js](/sdk/nodejs) | [Python](/sdk/python) | [Go](/sdk/go) | [PHP](/sdk/php) | [Ruby](/sdk/ruby)
+
 ### Self-host
 Deploy on your own infrastructure.
 → [Self-hosting guide](/self-hosting)

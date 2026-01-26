@@ -696,6 +696,18 @@ All SDKs SHOULD provide ready-to-use bridge implementations using HTTP APIs. Thi
 | Discord | `https://discord.com/api/v10` | Bot Token header or Webhook URL |
 | Slack | `https://slack.com/api` | Bot Token header |
 
+### Serverless Compatibility Summary
+
+| Bridge | Send Messages | Receive Messages | Serverless Support |
+|--------|---------------|------------------|-------------------|
+| **Telegram** | ✅ HTTP API | ✅ HTTP Webhooks | ✅ **Full support** |
+| **Discord Webhook** | ✅ HTTP API | ❌ N/A | ✅ Send only |
+| **Discord Bot** | ✅ HTTP API | ⚠️ Gateway (WebSocket) | ❌ **Not supported** |
+| **Slack Webhook** | ✅ HTTP API | ❌ N/A | ✅ Send only |
+| **Slack Bot** | ✅ HTTP API | ✅ Events API (HTTP) | ✅ **Full support** |
+
+**Key takeaway:** Only Discord Bot mode requires WebSocket (Gateway) and doesn't work with serverless. Use Bridge Server for Discord bidirectional with serverless backends.
+
 ---
 
 ### 15. TelegramBridge
@@ -706,7 +718,19 @@ Sends notifications to a Telegram chat/group via Bot API.
 TelegramBridge {
   constructor(botToken: string, chatId: string | number, options?: TelegramBridgeOptions)
 }
+```
 
+#### Language-Specific Patterns
+
+| Language | Constructor |
+|----------|-------------|
+| Node.js | `new TelegramBridge({ botToken, chatId })` |
+| Python | `TelegramBridge(token=..., chat_id=...)` |
+| Go | `NewTelegramBridge(botToken, chatID)` |
+| PHP | `new TelegramBridge($botToken, $chatId)` |
+| Ruby | `TelegramBridge.new(bot_token:, chat_id:)` |
+
+```
 TelegramBridgeOptions {
   parseMode?: 'HTML' | 'Markdown' | 'MarkdownV2'  // Default: 'HTML'
   disableNotification?: boolean                   // Default: false
@@ -743,6 +767,20 @@ Edited message:
 {content}
 ```
 
+#### Telegram Webhooks (Serverless Compatible)
+
+Telegram uses **HTTP webhooks** to deliver updates. This means Telegram **works with serverless environments**.
+
+| Environment | Telegram Support |
+|-------------|------------------|
+| Express, Fastify, etc. | ✅ Works |
+| AWS Lambda | ✅ Works |
+| Vercel Functions | ✅ Works |
+| Cloudflare Workers | ✅ Works |
+| Google Cloud Functions | ✅ Works |
+
+**Note:** You must set the webhook URL via `setWebhook` API call to receive operator messages.
+
 ---
 
 ### 16. DiscordBridge
@@ -754,9 +792,24 @@ DiscordBridge {
   // Option 1: Webhook (simple, no bot needed)
   constructor(webhookUrl: string, options?: DiscordBridgeOptions)
 
-  // Option 2: Bot (for edit/delete support)
+  // Option 2: Bot (for edit/delete support + receiving messages)
   constructor(botToken: string, channelId: string, options?: DiscordBridgeOptions)
 }
+```
+
+#### Language-Specific Patterns
+
+Different languages may use idiomatic patterns:
+
+| Language | Webhook | Bot |
+|----------|---------|-----|
+| Node.js | `DiscordBridge.webhook(url)` | `DiscordBridge.bot(token, channelId)` |
+| Python | `DiscordBridge(webhook_url=...)` | `DiscordBridge(bot_token=..., channel_id=...)` |
+| Go | `NewDiscordWebhookBridge(url)` | `NewDiscordBotBridge(token, channelId)` |
+| PHP | `DiscordBridge::webhook($url)` | `DiscordBridge::bot($token, $channelId)` |
+| Ruby | `DiscordWebhookBridge.new(webhook_url:)` | `DiscordBotBridge.new(bot_token:, channel_id:)` |
+
+```
 
 DiscordBridgeOptions {
   username?: string                              // Webhook display name
@@ -791,7 +844,22 @@ DiscordEmbed {
 | Send messages | ✅ | ✅ |
 | Edit messages | ❌ | ✅ |
 | Delete messages | ❌ | ✅ |
+| Receive operator messages | ❌ | ✅ (requires Gateway) |
 | Setup complexity | Simple | Requires bot creation |
+
+#### Discord Gateway Limitation
+
+**IMPORTANT:** Discord Bot mode uses the **Discord Gateway (WebSocket)** to receive operator messages. This requires a persistent connection and **only works on long-running servers**.
+
+| Environment | Discord Bot Support |
+|-------------|---------------------|
+| Express, Fastify, etc. | ✅ Works |
+| AWS Lambda | ❌ Not supported |
+| Vercel Functions | ❌ Not supported |
+| Cloudflare Workers | ❌ Not supported |
+| Google Cloud Functions | ❌ Not supported |
+
+**For serverless environments:** Use the Bridge Server (which runs as a long-lived process) or use Discord Webhook mode (send-only).
 
 ---
 
@@ -804,10 +872,22 @@ SlackBridge {
   // Option 1: Webhook (simple, no bot needed)
   constructor(webhookUrl: string, options?: SlackBridgeOptions)
 
-  // Option 2: Bot (for edit/delete support)
+  // Option 2: Bot (for edit/delete support + receiving messages)
   constructor(botToken: string, channelId: string, options?: SlackBridgeOptions)
 }
+```
 
+#### Language-Specific Patterns
+
+| Language | Webhook | Bot |
+|----------|---------|-----|
+| Node.js | `SlackBridge.webhook(url)` | `SlackBridge.bot(token, channelId)` |
+| Python | `SlackBridge(webhook_url=...)` | `SlackBridge(bot_token=..., channel_id=...)` |
+| Go | `NewSlackWebhookBridge(url)` | `NewSlackBotBridge(token, channelId)` |
+| PHP | `SlackBridge::webhook($url)` | `SlackBridge::bot($token, $channelId)` |
+| Ruby | `SlackWebhookBridge.new(webhook_url:)` | `SlackBotBridge.new(bot_token:, channel_id:)` |
+
+```
 SlackBridgeOptions {
   username?: string                              // Display name
   iconEmoji?: string                             // e.g., ':speech_balloon:'
@@ -838,8 +918,23 @@ SlackBlock {
 | Send messages | ✅ | ✅ |
 | Edit messages | ❌ | ✅ |
 | Delete messages | ❌ | ✅ |
+| Receive operator messages | ❌ | ✅ (via Events API) |
 | Get message ts | ❌ | ✅ |
 | Setup complexity | Simple | Requires app creation |
+
+#### Slack Events API (Serverless Compatible)
+
+Unlike Discord, Slack uses the **Events API** which delivers events via **HTTP webhooks** (not WebSocket). This means Slack Bot mode **works with serverless environments**.
+
+| Environment | Slack Bot Support |
+|-------------|-------------------|
+| Express, Fastify, etc. | ✅ Works |
+| AWS Lambda | ✅ Works |
+| Vercel Functions | ✅ Works |
+| Cloudflare Workers | ✅ Works |
+| Google Cloud Functions | ✅ Works |
+
+**Note:** You must configure the Events API Request URL in your Slack app settings to point to your webhook endpoint.
 
 ---
 

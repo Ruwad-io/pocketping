@@ -118,6 +118,10 @@ Bridges connect PocketPing to messaging platforms. They handle bidirectional syn
 | **Discord** | Threads in channel | Team support, gaming |
 | **Slack** | Threads in channel | Enterprise, team collaboration |
 
+:::tip SDK Built-in Bridges
+All backend SDKs (Node.js, Python, Go, PHP, Ruby) include **built-in bridges** with automatic validation and helpful setup guides. You can use these directly without a separate bridge server. See [SDK Built-in Bridges vs Bridge Server](/bridges#sdk-built-in-bridges-vs-bridge-server) for details.
+:::
+
 ### How Bridges Work
 
 ```mermaid

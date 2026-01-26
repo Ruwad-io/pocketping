@@ -8,6 +8,10 @@ description: Deploy the PocketPing bridge server with Docker
 
 Deploy the PocketPing bridge server using Docker for production use.
 
+:::tip SDK Built-in Bridges
+If you're using a backend SDK (Node.js, Python, Go, PHP, Ruby), you can use the **built-in bridges** directly without deploying a separate bridge server. See [SDK Built-in Bridges](/bridges#sdk-built-in-bridges-vs-bridge-server) for details.
+:::
+
 ## Quick Start
 
 ```bash

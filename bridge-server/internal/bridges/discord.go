@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	pocketping "github.com/Ruwad-io/pocketping/sdk-go"
 	"github.com/pocketping/bridge-server/internal/config"
 	"github.com/pocketping/bridge-server/internal/types"
 )
@@ -26,8 +27,23 @@ type DiscordBridge struct {
 	client     *http.Client
 }
 
-// NewDiscordBridge creates a new Discord bridge
-func NewDiscordBridge(cfg *config.DiscordConfig) *DiscordBridge {
+// NewDiscordBridge creates a new Discord bridge with validation
+func NewDiscordBridge(cfg *config.DiscordConfig) (*DiscordBridge, error) {
+	// Validate based on mode
+	if cfg.BotToken != "" {
+		// Bot mode
+		if err := pocketping.ValidateDiscordBotConfig(cfg.BotToken, cfg.ChannelID); err != nil {
+			return nil, err
+		}
+	} else if cfg.WebhookURL != "" {
+		// Webhook mode
+		if err := pocketping.ValidateDiscordWebhookConfig(cfg.WebhookURL); err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, pocketping.NewSetupError("Discord", "bot_token or webhook_url")
+	}
+
 	return &DiscordBridge{
 		BaseBridge: NewBaseBridge("discord"),
 		botToken:   cfg.BotToken,
@@ -38,7 +54,7 @@ func NewDiscordBridge(cfg *config.DiscordConfig) *DiscordBridge {
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-	}
+	}, nil
 }
 
 // isBotMode returns true if using bot mode (vs webhook mode)
@@ -289,6 +305,13 @@ func (b *DiscordBridge) OnIdentityUpdate(session *types.Session) error {
 		embed.Fields = append(embed.Fields, discordEmbedField{
 			Name:   "Email",
 			Value:  session.Identity.Email,
+			Inline: true,
+		})
+	}
+	if session.UserPhone != "" {
+		embed.Fields = append(embed.Fields, discordEmbedField{
+			Name:   "Phone",
+			Value:  session.UserPhone,
 			Inline: true,
 		})
 	}

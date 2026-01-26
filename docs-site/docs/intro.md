@@ -224,8 +224,8 @@ Ready to get started?
 **[Quick Start →](/quickstart)**
 Get running in 5 minutes with the hosted service
 
-**[Self-Hosting →](/self-hosting)**
-Deploy on your own infrastructure
+**[Backend SDKs →](/sdk/nodejs)**
+Node.js, Python, Go, PHP, Ruby with built-in bridges
 
 **[API Reference →](/api)**
 Build custom integrations

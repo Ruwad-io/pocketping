@@ -1,6 +1,7 @@
 import type { Bridge, BridgeMessageResult } from './types';
 import type { PocketPing } from '../pocketping';
 import type { Session, Message } from '../types';
+import { PocketPingSetupError, SETUP_GUIDES } from '../errors';
 
 /**
  * Discord API response types
@@ -85,6 +86,23 @@ export class DiscordBridge implements Bridge {
     webhookUrl: string,
     options: DiscordWebhookOptions = {}
   ): DiscordBridge {
+    if (!webhookUrl) {
+      throw new PocketPingSetupError({
+        bridge: 'Discord',
+        missing: 'webhookUrl',
+        guide: SETUP_GUIDES.discord.webhookUrl,
+      });
+    }
+
+    if (!webhookUrl.startsWith('https://discord.com/api/webhooks/')) {
+      throw new PocketPingSetupError({
+        bridge: 'Discord',
+        missing: 'valid webhookUrl',
+        guide: 'Webhook URL must start with https://discord.com/api/webhooks/\n\n' +
+               SETUP_GUIDES.discord.webhookUrl,
+      });
+    }
+
     return new DiscordBridge({
       mode: 'webhook',
       webhookUrl,
@@ -101,6 +119,22 @@ export class DiscordBridge implements Bridge {
     channelId: string,
     options: DiscordBotOptions = {}
   ): DiscordBridge {
+    if (!botToken) {
+      throw new PocketPingSetupError({
+        bridge: 'Discord',
+        missing: 'botToken',
+        guide: SETUP_GUIDES.discord.botToken,
+      });
+    }
+
+    if (!channelId) {
+      throw new PocketPingSetupError({
+        bridge: 'Discord',
+        missing: 'channelId',
+        guide: SETUP_GUIDES.discord.channelId,
+      });
+    }
+
     return new DiscordBridge({
       mode: 'bot',
       botToken,
@@ -377,6 +411,9 @@ export class DiscordBridge implements Bridge {
     }
     if (identity.email) {
       fields.push({ name: 'Email', value: identity.email, inline: true });
+    }
+    if (session.userPhone) {
+      fields.push({ name: 'Phone', value: session.userPhone, inline: true });
     }
 
     const embed = {

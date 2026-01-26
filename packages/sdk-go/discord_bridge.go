@@ -48,7 +48,16 @@ func WithDiscordWebhookHTTPClient(client *http.Client) DiscordWebhookOption {
 }
 
 // NewDiscordWebhookBridge creates a new Discord webhook bridge.
-func NewDiscordWebhookBridge(webhookURL string, opts ...DiscordWebhookOption) *DiscordWebhookBridge {
+// Returns an error if configuration is invalid.
+func NewDiscordWebhookBridge(webhookURL string, opts ...DiscordWebhookOption) (*DiscordWebhookBridge, error) {
+	// Validate configuration
+	if err := ValidateDiscordWebhookConfig(webhookURL); err != nil {
+		if setupErr, ok := err.(*SetupError); ok {
+			log.Println(setupErr.FormattedGuide())
+		}
+		return nil, err
+	}
+
 	d := &DiscordWebhookBridge{
 		BaseBridge: BaseBridge{BridgeName: "discord-webhook"},
 		WebhookURL: webhookURL,
@@ -60,6 +69,15 @@ func NewDiscordWebhookBridge(webhookURL string, opts ...DiscordWebhookOption) *D
 		opt(d)
 	}
 
+	return d, nil
+}
+
+// MustNewDiscordWebhookBridge creates a new Discord webhook bridge or panics on error.
+func MustNewDiscordWebhookBridge(webhookURL string, opts ...DiscordWebhookOption) *DiscordWebhookBridge {
+	d, err := NewDiscordWebhookBridge(webhookURL, opts...)
+	if err != nil {
+		panic(err)
+	}
 	return d
 }
 
@@ -184,6 +202,9 @@ func (d *DiscordWebhookBridge) OnIdentityUpdate(ctx context.Context, session *Se
 	}
 	if session.Identity.Email != "" {
 		content += fmt.Sprintf("\n📧 Email: %s", session.Identity.Email)
+	}
+	if session.UserPhone != "" {
+		content += fmt.Sprintf("\n📱 Phone: %s", session.UserPhone)
 	}
 
 	_, err := d.sendWebhookMessage(ctx, content, "")
@@ -435,6 +456,9 @@ func (d *DiscordBotBridge) OnIdentityUpdate(ctx context.Context, session *Sessio
 	}
 	if session.Identity.Email != "" {
 		content += fmt.Sprintf("\n📧 Email: %s", session.Identity.Email)
+	}
+	if session.UserPhone != "" {
+		content += fmt.Sprintf("\n📱 Phone: %s", session.UserPhone)
 	}
 
 	_, err := d.sendMessage(ctx, content, "")

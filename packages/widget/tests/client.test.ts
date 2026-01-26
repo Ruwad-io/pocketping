@@ -1403,4 +1403,111 @@ describe('PocketPingClient', () => {
       });
     });
   });
+
+  describe('Pre-Chat Form', () => {
+    beforeEach(async () => {
+      const mockResponse = {
+        sessionId: 'session-123',
+        visitorId: 'visitor-456',
+        operatorOnline: false,
+        messages: [],
+        preChatForm: {
+          enabled: true,
+          required: false,
+          timing: 'before-first-message',
+          fields: 'email-or-phone',
+          completed: false,
+        },
+      };
+
+      (globalThis.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+        headers: new Headers(),
+      });
+
+      await client.connect();
+    });
+
+    describe('submitPreChat()', () => {
+      it('should submit email successfully', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ ok: true }),
+          headers: new Headers(),
+        });
+
+        await client.submitPreChat({ email: 'test@example.com' });
+
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/prechat'),
+          expect.objectContaining({
+            method: 'POST',
+            body: expect.stringContaining('test@example.com'),
+          })
+        );
+      });
+
+      it('should submit phone successfully', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ ok: true }),
+          headers: new Headers(),
+        });
+
+        await client.submitPreChat({
+          phone: '+33612345678',
+          phoneCountry: 'FR',
+        });
+
+        const lastCall = (globalThis.fetch as any).mock.calls.pop();
+        const body = JSON.parse(lastCall[1].body);
+
+        expect(body.phone).toBe('+33612345678');
+        expect(body.phoneCountry).toBe('FR');
+      });
+
+      it('should submit both email and phone', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ ok: true }),
+          headers: new Headers(),
+        });
+
+        await client.submitPreChat({
+          email: 'test@example.com',
+          phone: '+33612345678',
+          phoneCountry: 'FR',
+        });
+
+        const lastCall = (globalThis.fetch as any).mock.calls.pop();
+        const body = JSON.parse(lastCall[1].body);
+
+        expect(body.email).toBe('test@example.com');
+        expect(body.phone).toBe('+33612345678');
+        expect(body.phoneCountry).toBe('FR');
+      });
+
+      it('should throw error when not connected', async () => {
+        const disconnectedClient = new PocketPingClient(mockConfig);
+
+        await expect(
+          disconnectedClient.submitPreChat({ email: 'test@example.com' })
+        ).rejects.toThrow('Not connected');
+      });
+
+      it('should handle API error', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: () => Promise.resolve({ error: 'Invalid email' }),
+          headers: new Headers(),
+        });
+
+        await expect(
+          client.submitPreChat({ email: 'invalid' })
+        ).rejects.toThrow();
+      });
+    });
+  });
 });

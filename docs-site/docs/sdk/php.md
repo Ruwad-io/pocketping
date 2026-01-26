@@ -80,11 +80,118 @@ $response = $pp->handleRequest();
 $response->send();
 ```
 
+## Built-in Bridges
+
+The SDK includes built-in bridges for Telegram, Discord, and Slack with automatic validation and helpful setup guides.
+
+```php
+<?php
+use PocketPing\PocketPing;
+use PocketPing\Bridges\TelegramBridge;
+use PocketPing\Bridges\DiscordBridge;
+use PocketPing\Bridges\SlackBridge;
+use PocketPing\Exceptions\SetupException;
+
+$pp = new PocketPing();
+
+// Add Telegram bridge
+try {
+    $pp->addBridge(new TelegramBridge(
+        botToken: $_ENV['TELEGRAM_BOT_TOKEN'],
+        chatId: $_ENV['TELEGRAM_CHAT_ID']
+    ));
+} catch (SetupException $e) {
+    // Helpful error with setup guide
+    echo $e->getFormattedGuide();
+    exit(1);
+}
+
+// Add Discord bridge (bot mode)
+try {
+    $pp->addBridge(DiscordBridge::bot(
+        botToken: $_ENV['DISCORD_BOT_TOKEN'],
+        channelId: $_ENV['DISCORD_CHANNEL_ID']
+    ));
+} catch (SetupException $e) {
+    echo $e->getFormattedGuide();
+    exit(1);
+}
+
+// Add Slack bridge (bot mode)
+try {
+    $pp->addBridge(SlackBridge::bot(
+        botToken: $_ENV['SLACK_BOT_TOKEN'],
+        channelId: $_ENV['SLACK_CHANNEL_ID']
+    ));
+} catch (SetupException $e) {
+    echo $e->getFormattedGuide();
+    exit(1);
+}
+```
+
+### Validation Errors
+
+If configuration is missing or invalid, you'll see a helpful setup guide:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ⚠️  Slack Setup Required
+├─────────────────────────────────────────────────────────────┤
+│
+│  Missing: bot_token
+│
+│  To set up Slack Bot mode:
+│
+│  1. Go to https://api.slack.com/apps
+│  2. Create New App → From scratch
+│  3. OAuth & Permissions → Add Bot Token Scopes:
+│     - chat:write, channels:read, channels:join
+│     - channels:history, groups:history, users:read
+│  4. Install to Workspace → Copy Bot Token (xoxb-...)
+│
+│  📖 Full guide: https://pocketping.io/docs/slack
+│
+│  💡 Quick fix: npx @pocketping/cli init slack
+│
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Bridge Modes
+
+| Bridge | Mode | Factory Method | Features |
+|--------|------|----------------|----------|
+| Telegram | Bot | `new TelegramBridge()` | Send, edit, delete |
+| Discord | Webhook | `DiscordBridge::webhook()` | Send only |
+| Discord | Bot | `DiscordBridge::bot()` | Send, edit, delete |
+| Slack | Webhook | `SlackBridge::webhook()` | Send only |
+| Slack | Bot | `SlackBridge::bot()` | Send, edit, delete |
+
+:::tip Bot vs Webhook
+Use **Bot mode** for full bidirectional communication. Webhooks are simpler but only support sending messages.
+:::
+
+:::warning Discord Bot requires long-running server
+**Discord bot mode** uses the Discord Gateway (WebSocket) to receive operator replies. This only works on **long-running servers** (Apache, nginx + PHP-FPM with Swoole/ReactPHP, etc.).
+
+**Does NOT work with:**
+- AWS Lambda
+- Vercel PHP
+- Any serverless environment
+
+**For serverless + Discord bidirectional:** Use the [Bridge Server](/bridges/docker) instead, or use `DiscordBridge::webhook()` (send-only).
+:::
+
+:::info Telegram & Slack work with serverless
+**Telegram** and **Slack** use HTTP webhooks (not WebSocket), so they work fully with serverless environments like Lambda, etc.
+:::
+
+---
+
 ## Configuration
 
 ```php
 $pp = new PocketPing([
-    // Bridge server URL
+    // Bridge server URL (alternative to built-in bridges)
     'bridgeUrl' => 'http://localhost:3001',
 
     // Welcome message for new visitors

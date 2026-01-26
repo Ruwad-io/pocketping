@@ -1,8 +1,9 @@
 import { h, Fragment } from 'preact';
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import type { PocketPingClient } from '../client';
-import type { PocketPingConfig, Message, MessageStatus, Attachment, ReplyToData } from '../types';
+import type { PocketPingConfig, Message, MessageStatus, Attachment, ReplyToData, PreChatFormConfig } from '../types';
 import { styles } from './styles';
+import { PreChatForm } from './PreChatForm';
 
 // Format date for message separators (Today, Yesterday, or date)
 function formatDateSeparator(date: Date): string {
@@ -65,8 +66,15 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
   const [isDragging, setIsDragging] = useState(false);
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [longPressTimer, setLongPressTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  // Swipe state for mobile
+  const [swipedMessageId, setSwipedMessageId] = useState<string | null>(null);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   // Config can be updated from server (SaaS dashboard settings)
   const [config, setConfig] = useState(initialConfig);
+  // Pre-chat form state
+  const [preChatForm, setPreChatForm] = useState<PreChatFormConfig | undefined>(undefined);
+  const [preChatSkipped, setPreChatSkipped] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,6 +100,12 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
       setOperatorOnline(client.getSession()?.operatorOnline ?? false);
       // Update config with server values after connect
       setConfig(client.getConfig());
+      // Set pre-chat form config from session
+      setPreChatForm(client.getSession()?.preChatForm);
+    });
+    const unsubPreChat = client.on('preChatCompleted', () => {
+      // Mark pre-chat as completed in local state
+      setPreChatForm((prev) => prev ? { ...prev, completed: true } : prev);
     });
     // Listen for config updates from server (SaaS dashboard changes)
     const unsubConfig = client.on('configUpdate', () => {
@@ -104,6 +118,7 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
       setMessages(client.getMessages());
       setOperatorOnline(client.getSession()?.operatorOnline ?? false);
       setConfig(client.getConfig());
+      setPreChatForm(client.getSession()?.preChatForm);
     }
 
     return () => {
@@ -112,6 +127,7 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
       unsubTyping();
       unsubPresence();
       unsubConnect();
+      unsubPreChat();
       unsubConfig();
     };
   }, [client]);
@@ -373,24 +389,58 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
   };
 
   // Long press for mobile
-  const handleTouchStart = (message: Message) => {
-    const timer = setTimeout(() => {
-      // Trigger haptic feedback if available
-      if (navigator.vibrate) navigator.vibrate(50);
-      setMessageMenu({
-        message,
-        x: window.innerWidth / 2 - 60, // Center horizontally
-        y: window.innerHeight / 2 - 50, // Center vertically
-      });
-    }, 500); // 500ms long press
-    setLongPressTimer(timer);
+  // Swipe gesture handlers for mobile
+  const handleTouchStart = (e: TouchEvent, message: Message) => {
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+
+    // Reset any other swiped message
+    if (swipedMessageId && swipedMessageId !== message.id) {
+      setSwipedMessageId(null);
+      setSwipeOffset(0);
+    }
   };
 
-  const handleTouchEnd = () => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      setLongPressTimer(null);
+  const handleTouchMove = (e: TouchEvent, message: Message) => {
+    if (!touchStartRef.current) return;
+
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+
+    // If scrolling vertically, don't swipe
+    if (Math.abs(deltaY) > Math.abs(deltaX)) return;
+
+    // Only allow left swipe (negative deltaX)
+    if (deltaX < 0) {
+      // Limit swipe to -100px max
+      const offset = Math.max(deltaX, -100);
+      setSwipeOffset(offset);
+      setSwipedMessageId(message.id);
     }
+  };
+
+  const handleTouchEnd = (message: Message) => {
+    if (!touchStartRef.current) return;
+
+    const elapsed = Date.now() - touchStartRef.current.time;
+
+    // If swiped more than 50px or fast swipe, lock open
+    if (swipeOffset < -50 || (swipeOffset < -20 && elapsed < 200)) {
+      setSwipeOffset(-80); // Lock at action reveal position
+      if (navigator.vibrate) navigator.vibrate(30);
+    } else {
+      // Reset
+      setSwipeOffset(0);
+      setSwipedMessageId(null);
+    }
+
+    touchStartRef.current = null;
+  };
+
+  const resetSwipe = () => {
+    setSwipedMessageId(null);
+    setSwipeOffset(0);
   };
 
   // Close menu when clicking outside
@@ -516,6 +566,18 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
   // Action icon color (matches styles.ts textSecondary)
   const actionIconColor = theme === 'dark' ? '#9ca3af' : '#6b7280';
 
+  // Determine if we should show the pre-chat form
+  const shouldShowPreChat = preChatForm
+    && preChatForm.enabled
+    && !preChatForm.completed
+    && !preChatSkipped
+    && (
+      // Before first message: show immediately
+      (preChatForm.timing === 'before-first-message' && messages.length === 0)
+      // After first message: show when visitor has sent at least one message
+      || (preChatForm.timing === 'after-first-message' && messages.some(m => m.sender === 'visitor'))
+    );
+
   return (
     <Fragment>
       <style>{styles(primaryColor, theme)}</style>
@@ -583,8 +645,23 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
             </button>
           </div>
 
+          {/* Pre-Chat Form */}
+          {shouldShowPreChat && preChatForm && (
+            <PreChatForm
+              client={client}
+              config={preChatForm}
+              onComplete={() => {
+                setPreChatForm((prev) => prev ? { ...prev, completed: true } : prev);
+              }}
+              onSkip={() => {
+                setPreChatSkipped(true);
+              }}
+            />
+          )}
+
           {/* Messages */}
-          <div class="pp-messages" ref={messagesContainerRef}>
+          {!shouldShowPreChat && (
+          <div class="pp-messages" ref={messagesContainerRef} onClick={() => swipedMessageId && resetSwipe()}>
             {config.welcomeMessage && messages.length === 0 && (
               <div class="pp-welcome">
                 {config.welcomeMessage}
@@ -626,6 +703,9 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
               const isHovered = hoveredMessageId === msg.id;
               const showActions = isHovered && !isDeleted;
 
+              const isSwiped = swipedMessageId === msg.id;
+              const msgSwipeOffset = isSwiped ? swipeOffset : 0;
+
               return (
                 <Fragment key={msg.id}>
                   {showDateSeparator && (
@@ -633,16 +713,44 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
                       <span>{formatDateSeparator(msgDate)}</span>
                     </div>
                   )}
-                  <div
-                    id={`pp-msg-${msg.id}`}
-                    class={`pp-message pp-message-${msg.sender} ${isDeleted ? 'pp-message-deleted' : ''}`}
-                    onContextMenu={(e) => handleMessageContextMenu(e, msg)}
-                    onMouseEnter={() => setHoveredMessageId(msg.id)}
-                    onMouseLeave={() => setHoveredMessageId(null)}
-                    onTouchStart={() => handleTouchStart(msg)}
-                    onTouchEnd={handleTouchEnd}
-                    onTouchCancel={handleTouchEnd}
-                  >
+                  <div class={`pp-message-swipe-container ${msg.sender === 'visitor' ? 'pp-swipe-left' : 'pp-swipe-right'}`}>
+                    {/* Swipe actions (mobile) - revealed when swiping */}
+                    <div class="pp-swipe-actions">
+                      <button
+                        class="pp-swipe-action pp-swipe-reply"
+                        onClick={() => { handleReply(msg); resetSwipe(); }}
+                      >
+                        <ReplyIcon color="#fff" />
+                      </button>
+                      {msg.sender === 'visitor' && !isDeleted && (
+                        <>
+                          <button
+                            class="pp-swipe-action pp-swipe-edit"
+                            onClick={() => { handleStartEdit(msg); resetSwipe(); }}
+                          >
+                            <EditIcon color="#fff" />
+                          </button>
+                          <button
+                            class="pp-swipe-action pp-swipe-delete"
+                            onClick={() => { handleDelete(msg); resetSwipe(); }}
+                          >
+                            <DeleteIcon color="#fff" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <div
+                      id={`pp-msg-${msg.id}`}
+                      class={`pp-message pp-message-${msg.sender} ${isDeleted ? 'pp-message-deleted' : ''}`}
+                      style={{ transform: `translateX(${msgSwipeOffset}px)`, transition: touchStartRef.current ? 'none' : 'transform 0.2s ease-out' }}
+                      onContextMenu={(e) => handleMessageContextMenu(e, msg)}
+                      onMouseEnter={() => setHoveredMessageId(msg.id)}
+                      onMouseLeave={() => setHoveredMessageId(null)}
+                      onTouchStart={(e) => handleTouchStart(e, msg)}
+                      onTouchMove={(e) => handleTouchMove(e, msg)}
+                      onTouchEnd={() => handleTouchEnd(msg)}
+                      onTouchCancel={() => handleTouchEnd(msg)}
+                    >
                   {/* Hover actions (desktop) */}
                   {showActions && (
                     <div class={`pp-message-actions ${msg.sender === 'visitor' ? 'pp-actions-left' : 'pp-actions-right'}`}>
@@ -727,7 +835,8 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
                       </span>
                     )}
                   </div>
-                </div>
+                    </div>
+                  </div>
                 </Fragment>
               );
             })}
@@ -740,6 +849,7 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
 
             <div ref={messagesEndRef} />
           </div>
+          )}
 
           {/* Message Context Menu */}
           {messageMenu && (
@@ -837,6 +947,7 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
           )}
 
           {/* Input */}
+          {!shouldShowPreChat && (
           <form class="pp-input-form" onSubmit={handleSubmit}>
             {/* Hidden file input - using both onChange and native onchange for Preact compatibility */}
             <input
@@ -880,6 +991,7 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
               <SendIcon />
             </button>
           </form>
+          )}
 
           {/* Powered by */}
           <div class="pp-footer">

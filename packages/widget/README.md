@@ -156,6 +156,7 @@ Control when and how the widget behaves.
 | `hideOnPages` | `string[]` | - | Hide on pages matching these regex patterns |
 | `showDelay` | `number` | `0` | Delay before showing widget (ms) |
 | `autoOpenDelay` | `number` | `0` | Auto-open chat after delay (ms, `0` = disabled) |
+| `autoOpenOnMessage` | `boolean` | `true` | Auto-open chat when operator sends a message |
 | `soundEnabled` | `boolean` | `true` | Play sound on new message |
 | `showUnreadBadge` | `boolean` | `true` | Show unread badge on toggle button |
 | `persistOpenState` | `boolean` | `false` | Persist chat open/closed state in localStorage |
@@ -169,6 +170,7 @@ PocketPing.init({
   hideOnPages: ['^/admin', '^/checkout'],
   showDelay: 3000,
   autoOpenDelay: 10000,
+  autoOpenOnMessage: true,
   soundEnabled: true,
   showUnreadBadge: true,
   persistOpenState: true

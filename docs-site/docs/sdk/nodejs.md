@@ -132,19 +132,35 @@ pp.addBridge(new TelegramBridge({
 }));
 
 // Add Discord bridge (bot mode for bidirectional)
-pp.addBridge(DiscordBridge.withBot({
-  botToken: process.env.DISCORD_BOT_TOKEN,
-  channelId: process.env.DISCORD_CHANNEL_ID,
-}));
+pp.addBridge(DiscordBridge.bot(
+  process.env.DISCORD_BOT_TOKEN,
+  process.env.DISCORD_CHANNEL_ID
+));
 
 // Add Slack bridge (webhook mode for simple notifications)
-pp.addBridge(SlackBridge.withWebhook({
-  webhookUrl: process.env.SLACK_WEBHOOK_URL,
-}));
+pp.addBridge(SlackBridge.webhook(
+  process.env.SLACK_WEBHOOK_URL
+));
 ```
 
 :::tip Multiple bridges
 You can add multiple bridges simultaneously. Messages sync across all platforms.
+:::
+
+:::warning Discord requires long-running server
+**Discord bot mode** uses the Discord Gateway (WebSocket) to receive operator replies. This only works on **long-running servers** (Express, Fastify, etc.).
+
+**Does NOT work with:**
+- Vercel Functions
+- AWS Lambda
+- Cloudflare Workers
+- Any serverless environment
+
+**For serverless + Discord bidirectional:** Use the [Bridge Server](/bridges/docker) instead, or use `DiscordBridge.webhook(url)` (send-only).
+:::
+
+:::info Telegram & Slack work with serverless
+**Telegram** and **Slack** use HTTP webhooks (not WebSocket), so they work fully with serverless environments like Vercel, Lambda, etc.
 :::
 
 ---

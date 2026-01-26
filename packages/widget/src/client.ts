@@ -18,6 +18,7 @@ import type {
   Attachment,
   InitiateUploadResponse,
   CompleteUploadResponse,
+  PreChatFormData,
 } from './types';
 import { VERSION } from './version';
 
@@ -88,6 +89,7 @@ export class PocketPingClient {
       operatorOnline: response.operatorOnline ?? false,
       messages: response.messages ?? [],
       identity: response.identity || storedIdentity || undefined,
+      preChatForm: response.preChatForm,
     };
 
     // Merge server config into client config (server values take precedence)
@@ -542,6 +544,41 @@ export class PocketPingClient {
         console.error('[PocketPing] Failed to identify:', err);
         throw err;
       }
+    }
+  }
+
+  /**
+   * Submit pre-chat form data (email and/or phone)
+   * @param data - Form data containing email and/or phone
+   */
+  async submitPreChat(data: PreChatFormData): Promise<void> {
+    if (!this.session) {
+      throw new Error('[PocketPing] Not connected');
+    }
+
+    if (!data.email && !data.phone) {
+      throw new Error('[PocketPing] Either email or phone is required');
+    }
+
+    try {
+      await this.fetch<{ ok: boolean }>('/prechat', {
+        method: 'POST',
+        body: JSON.stringify({
+          sessionId: this.session.sessionId,
+          email: data.email,
+          phone: data.phone,
+          phoneCountry: data.phoneCountry,
+        }),
+      });
+
+      // Mark pre-chat form as completed in session
+      if (this.session.preChatForm) {
+        this.session.preChatForm.completed = true;
+      }
+      this.emit('preChatCompleted', data);
+    } catch (err) {
+      console.error('[PocketPing] Failed to submit pre-chat form:', err);
+      throw err;
     }
   }
 
@@ -1373,6 +1410,14 @@ export class PocketPingClient {
             this.session.messages.push(message);
             this.emit('message', message);
             this.config.onMessage?.(message);
+
+            // Auto-open widget when operator/AI sends a message (if enabled)
+            if (message.sender !== 'visitor' && !this.isOpen) {
+              const autoOpen = this.config.autoOpenOnMessage ?? true;
+              if (autoOpen) {
+                this.setOpen(true);
+              }
+            }
           }
         }
         // Clear typing indicator when operator/AI sends a message
@@ -1566,6 +1611,14 @@ export class PocketPingClient {
             this.session.messages.push(message);
             this.emit('message', message);
             this.config.onMessage?.(message);
+
+            // Auto-open widget when operator/AI sends a message (if enabled)
+            if (message.sender !== 'visitor' && !this.isOpen) {
+              const autoOpen = this.config.autoOpenOnMessage ?? true;
+              if (autoOpen) {
+                this.setOpen(true);
+              }
+            }
           }
         }
       } catch (err) {

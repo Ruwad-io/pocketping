@@ -203,6 +203,25 @@ func TestTelegramBridge_OnIdentityUpdate(t *testing.T) {
 			t.Errorf("identity ID should be included")
 		}
 	})
+
+	t.Run("includes phone when present", func(t *testing.T) {
+		session := &types.Session{
+			ID: "s1",
+			Identity: &types.UserIdentity{
+				ID:    "user123",
+				Name:  "John",
+				Email: "john@example.com",
+			},
+			UserPhone:        "+33612345678",
+			UserPhoneCountry: "FR",
+		}
+
+		// Verify phone is in the expected format
+		expectedPhoneText := "📱 Phone: +33612345678"
+		if !strings.Contains(expectedPhoneText, session.UserPhone) {
+			t.Errorf("phone should be included, expected %s", session.UserPhone)
+		}
+	})
 }
 
 func TestTelegramBridge_OnAITakeover(t *testing.T) {

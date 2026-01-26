@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	pocketping "github.com/Ruwad-io/pocketping/sdk-go"
 	"github.com/pocketping/bridge-server/internal/config"
 	"github.com/pocketping/bridge-server/internal/types"
 )
@@ -23,8 +24,12 @@ type TelegramBridge struct {
 	client   *http.Client
 }
 
-// NewTelegramBridge creates a new Telegram bridge
-func NewTelegramBridge(cfg *config.TelegramConfig) *TelegramBridge {
+// NewTelegramBridge creates a new Telegram bridge with validation
+func NewTelegramBridge(cfg *config.TelegramConfig) (*TelegramBridge, error) {
+	if err := pocketping.ValidateTelegramConfig(cfg.BotToken, cfg.ChatID); err != nil {
+		return nil, err
+	}
+
 	return &TelegramBridge{
 		BaseBridge: NewBaseBridge("telegram"),
 		botToken:   cfg.BotToken,
@@ -32,7 +37,7 @@ func NewTelegramBridge(cfg *config.TelegramConfig) *TelegramBridge {
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-	}
+	}, nil
 }
 
 // telegramResponse is the standard Telegram API response
@@ -219,6 +224,9 @@ func (b *TelegramBridge) OnIdentityUpdate(session *types.Session) error {
 	}
 	if session.Identity.Email != "" {
 		text += fmt.Sprintf("\nEmail: %s", session.Identity.Email)
+	}
+	if session.UserPhone != "" {
+		text += fmt.Sprintf("\n📱 Phone: %s", session.UserPhone)
 	}
 
 	_, err := b.sendMessage(text, nil)

@@ -30,14 +30,16 @@ type SessionMetadata struct {
 
 // Session represents a chat session
 type Session struct {
-	ID             string           `json:"id"`
-	VisitorID      string           `json:"visitorId"`
-	CreatedAt      time.Time        `json:"createdAt"`
-	LastActivity   time.Time        `json:"lastActivity"`
-	OperatorOnline bool             `json:"operatorOnline"`
-	AIActive       bool             `json:"aiActive"`
-	Metadata       *SessionMetadata `json:"metadata,omitempty"`
-	Identity       *UserIdentity    `json:"identity,omitempty"`
+	ID               string           `json:"id"`
+	VisitorID        string           `json:"visitorId"`
+	CreatedAt        time.Time        `json:"createdAt"`
+	LastActivity     time.Time        `json:"lastActivity"`
+	OperatorOnline   bool             `json:"operatorOnline"`
+	AIActive         bool             `json:"aiActive"`
+	Metadata         *SessionMetadata `json:"metadata,omitempty"`
+	Identity         *UserIdentity    `json:"identity,omitempty"`
+	UserPhone        string           `json:"userPhone,omitempty"`        // E.164 format: +33612345678
+	UserPhoneCountry string           `json:"userPhoneCountry,omitempty"` // ISO: FR, US, etc.
 }
 
 // SenderType represents who sent a message

@@ -390,6 +390,8 @@ class TelegramBridge(Bridge):
             parts.append(f"Name: {self._escape_html(session.identity.name)}")
         if session.identity.email:
             parts.append(f"Email: {self._escape_html(session.identity.email)}")
+        if session.user_phone:
+            parts.append(f"Phone: {self._escape_html(session.user_phone)}")
         parts.append(f"Session: <code>{session.id[:8]}</code>")
 
         await self._send_message("\n".join(parts))

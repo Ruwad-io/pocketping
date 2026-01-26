@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PocketPing\Bridges;
 
+use PocketPing\Exceptions\SetupException;
 use PocketPing\Http\CurlHttpClient;
 use PocketPing\Http\HttpClientInterface;
 use PocketPing\Models\BridgeMessageIds;
@@ -25,6 +26,9 @@ class TelegramBridge extends AbstractBridge implements BridgeWithEditDeleteInter
 
     private readonly HttpClientInterface $httpClient;
 
+    /**
+     * @throws SetupException if botToken or chatId is missing or invalid
+     */
     public function __construct(
         private readonly string $botToken,
         private readonly string|int $chatId,
@@ -32,6 +36,26 @@ class TelegramBridge extends AbstractBridge implements BridgeWithEditDeleteInter
         private readonly bool $disableNotification = false,
         ?HttpClientInterface $httpClient = null,
     ) {
+        // Validate bot token
+        if (empty($botToken)) {
+            throw new SetupException('Telegram', 'bot_token');
+        }
+
+        if (!preg_match('/^\d+:[A-Za-z0-9_-]+$/', $botToken)) {
+            throw new SetupException(
+                'Telegram',
+                'valid bot_token',
+                "Bot token format should be: 123456789:ABCdef...\n\n"
+                    . SetupException::SETUP_GUIDES['telegram']['bot_token']
+            );
+        }
+
+        // Validate chat ID
+        $chatIdStr = (string) $chatId;
+        if (empty($chatIdStr)) {
+            throw new SetupException('Telegram', 'chat_id');
+        }
+
         $this->httpClient = $httpClient ?? new CurlHttpClient();
     }
 
@@ -142,6 +166,10 @@ class TelegramBridge extends AbstractBridge implements BridgeWithEditDeleteInter
 
         if ($identity->email !== null) {
             $text .= "\n📧 Email: " . $this->escapeHtml($identity->email);
+        }
+
+        if ($session->userPhone !== null) {
+            $text .= "\n📱 Phone: " . $this->escapeHtml($session->userPhone);
         }
 
         $this->sendMessage($text);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PocketPing\Bridges;
 
+use PocketPing\Exceptions\SetupException;
 use PocketPing\Http\CurlHttpClient;
 use PocketPing\Http\HttpClientInterface;
 use PocketPing\Models\BridgeMessageIds;
@@ -53,6 +54,8 @@ class SlackBridge extends AbstractBridge implements BridgeWithEditDeleteInterfac
     /**
      * Create a Slack bridge using webhook mode.
      * Webhooks are simpler but cannot edit/delete messages.
+     *
+     * @throws SetupException if webhookUrl is missing or invalid
      */
     public static function webhook(
         string $webhookUrl,
@@ -60,6 +63,20 @@ class SlackBridge extends AbstractBridge implements BridgeWithEditDeleteInterfac
         ?string $iconEmoji = null,
         ?HttpClientInterface $httpClient = null
     ): self {
+        // Validate webhook URL
+        if (empty($webhookUrl)) {
+            throw new SetupException('Slack', 'webhook_url');
+        }
+
+        if (!str_starts_with($webhookUrl, 'https://hooks.slack.com/')) {
+            throw new SetupException(
+                'Slack',
+                'valid webhook_url',
+                "Webhook URL must start with https://hooks.slack.com/\n\n"
+                    . SetupException::SETUP_GUIDES['slack']['webhook_url']
+            );
+        }
+
         return new self(
             isWebhookMode: true,
             webhookUrl: $webhookUrl,
@@ -72,12 +89,33 @@ class SlackBridge extends AbstractBridge implements BridgeWithEditDeleteInterfac
     /**
      * Create a Slack bridge using bot mode.
      * Bot mode supports full edit/delete functionality.
+     *
+     * @throws SetupException if botToken or channelId is missing or invalid
      */
     public static function bot(
         string $botToken,
         string $channelId,
         ?HttpClientInterface $httpClient = null
     ): self {
+        // Validate bot token
+        if (empty($botToken)) {
+            throw new SetupException('Slack', 'bot_token');
+        }
+
+        if (!str_starts_with($botToken, 'xoxb-')) {
+            throw new SetupException(
+                'Slack',
+                'valid bot_token',
+                "Bot token must start with xoxb-\n\n"
+                    . SetupException::SETUP_GUIDES['slack']['bot_token']
+            );
+        }
+
+        // Validate channel ID
+        if (empty($channelId)) {
+            throw new SetupException('Slack', 'channel_id');
+        }
+
         return new self(
             isWebhookMode: false,
             botToken: $botToken,
@@ -267,6 +305,13 @@ class SlackBridge extends AbstractBridge implements BridgeWithEditDeleteInterfac
             $fields[] = [
                 'type' => 'mrkdwn',
                 'text' => "📧 *Email:*\n{$this->escapeSlack($identity->email)}",
+            ];
+        }
+
+        if ($session->userPhone !== null) {
+            $fields[] = [
+                'type' => 'mrkdwn',
+                'text' => "📱 *Phone:*\n{$this->escapeSlack($session->userPhone)}",
             ];
         }
 

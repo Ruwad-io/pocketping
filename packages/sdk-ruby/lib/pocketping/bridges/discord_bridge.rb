@@ -3,6 +3,7 @@
 require "net/http"
 require "uri"
 require "json"
+require_relative "../errors"
 
 module PocketPing
   module Bridge
@@ -24,8 +25,24 @@ module PocketPing
       # @param webhook_url [String] Discord webhook URL
       # @param username [String, nil] Override webhook username
       # @param avatar_url [String, nil] Override webhook avatar URL
+      # @raise [SetupError] if webhook_url is missing or invalid
       def initialize(webhook_url:, username: nil, avatar_url: nil)
         super()
+
+        # Validate webhook_url
+        if webhook_url.nil? || webhook_url.empty?
+          raise SetupError.new(bridge: "Discord", missing: "webhook_url")
+        end
+
+        unless webhook_url.start_with?("https://discord.com/api/webhooks/")
+          raise SetupError.new(
+            bridge: "Discord",
+            missing: "valid webhook_url",
+            guide: "Webhook URL must start with https://discord.com/api/webhooks/\n\n" +
+                   SetupError::SETUP_GUIDES[:discord][:webhook_url]
+          )
+        end
+
         @webhook_url = webhook_url
         @username = username
         @avatar_url = avatar_url
@@ -211,8 +228,20 @@ module PocketPing
 
       # @param bot_token [String] Discord bot token
       # @param channel_id [String] Channel ID to send messages to
+      # @raise [SetupError] if bot_token or channel_id is missing
       def initialize(bot_token:, channel_id:)
         super()
+
+        # Validate bot_token
+        if bot_token.nil? || bot_token.empty?
+          raise SetupError.new(bridge: "Discord", missing: "bot_token")
+        end
+
+        # Validate channel_id
+        if channel_id.nil? || channel_id.empty?
+          raise SetupError.new(bridge: "Discord", missing: "channel_id")
+        end
+
         @bot_token = bot_token
         @channel_id = channel_id
       end

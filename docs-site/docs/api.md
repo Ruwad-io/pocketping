@@ -264,3 +264,6 @@ For easier integration, use our official SDKs:
 
 - [Node.js SDK](/sdk/nodejs)
 - [Python SDK](/sdk/python)
+- [Go SDK](/sdk/go)
+- [PHP SDK](/sdk/php)
+- [Ruby SDK](/sdk/ruby)

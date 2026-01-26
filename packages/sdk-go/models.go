@@ -179,6 +179,10 @@ type Session struct {
 	AIActive       bool             `json:"aiActive"`
 	Metadata       *SessionMetadata `json:"metadata,omitempty"`
 	Identity       *UserIdentity    `json:"identity,omitempty"`
+	// UserPhone is the user's phone from pre-chat form (E.164 format: +33612345678).
+	UserPhone string `json:"userPhone,omitempty"`
+	// UserPhoneCountry is the user's phone country code (ISO: FR, US, etc.).
+	UserPhoneCountry string `json:"userPhoneCountry,omitempty"`
 }
 
 // Message represents a chat message.

@@ -209,6 +209,10 @@ module PocketPing
     attribute :ai_active, type: :boolean, default: false, alias_name: :aiActive
     attribute :metadata, type: SessionMetadata
     attribute :identity, type: UserIdentity
+    # User phone from pre-chat form (E.164 format: +33612345678)
+    attribute :user_phone, type: String, alias_name: :userPhone
+    # User phone country code (ISO: FR, US, etc.)
+    attribute :user_phone_country, type: String, alias_name: :userPhoneCountry
   end
 
   # File attachment in a message

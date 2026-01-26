@@ -18,6 +18,10 @@ final class Session implements \JsonSerializable
         public bool $aiActive = false,
         public ?SessionMetadata $metadata = null,
         public ?UserIdentity $identity = null,
+        /** User phone from pre-chat form (E.164 format: +33612345678) */
+        public ?string $userPhone = null,
+        /** User phone country code (ISO: FR, US, etc.) */
+        public ?string $userPhoneCountry = null,
     ) {
     }
 
@@ -56,6 +60,8 @@ final class Session implements \JsonSerializable
             identity: isset($data['identity']) && is_array($data['identity'])
                 ? UserIdentity::fromArray($data['identity'])
                 : null,
+            userPhone: isset($data['userPhone']) ? (string) $data['userPhone'] : null,
+            userPhoneCountry: isset($data['userPhoneCountry']) ? (string) $data['userPhoneCountry'] : null,
         );
     }
 
@@ -73,6 +79,8 @@ final class Session implements \JsonSerializable
             'aiActive' => $this->aiActive,
             'metadata' => $this->metadata?->toArray(),
             'identity' => $this->identity?->toArray(),
+            'userPhone' => $this->userPhone,
+            'userPhoneCountry' => $this->userPhoneCountry,
         ];
     }
 

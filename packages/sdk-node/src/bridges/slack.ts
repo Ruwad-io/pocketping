@@ -1,6 +1,7 @@
 import type { Bridge, BridgeMessageResult } from './types';
 import type { PocketPing } from '../pocketping';
 import type { Session, Message } from '../types';
+import { PocketPingSetupError, SETUP_GUIDES } from '../errors';
 
 /**
  * Slack API response types
@@ -94,6 +95,23 @@ export class SlackBridge implements Bridge {
     webhookUrl: string,
     options: SlackWebhookOptions = {}
   ): SlackBridge {
+    if (!webhookUrl) {
+      throw new PocketPingSetupError({
+        bridge: 'Slack',
+        missing: 'webhookUrl',
+        guide: SETUP_GUIDES.slack.webhookUrl,
+      });
+    }
+
+    if (!webhookUrl.startsWith('https://hooks.slack.com/')) {
+      throw new PocketPingSetupError({
+        bridge: 'Slack',
+        missing: 'valid webhookUrl',
+        guide: 'Webhook URL must start with https://hooks.slack.com/\n\n' +
+               SETUP_GUIDES.slack.webhookUrl,
+      });
+    }
+
     return new SlackBridge({
       mode: 'webhook',
       webhookUrl,
@@ -111,6 +129,31 @@ export class SlackBridge implements Bridge {
     channelId: string,
     options: SlackBotOptions = {}
   ): SlackBridge {
+    if (!botToken) {
+      throw new PocketPingSetupError({
+        bridge: 'Slack',
+        missing: 'botToken',
+        guide: SETUP_GUIDES.slack.botToken,
+      });
+    }
+
+    if (!botToken.startsWith('xoxb-')) {
+      throw new PocketPingSetupError({
+        bridge: 'Slack',
+        missing: 'valid botToken',
+        guide: 'Bot token must start with xoxb-\n\n' +
+               SETUP_GUIDES.slack.botToken,
+      });
+    }
+
+    if (!channelId) {
+      throw new PocketPingSetupError({
+        bridge: 'Slack',
+        missing: 'channelId',
+        guide: SETUP_GUIDES.slack.channelId,
+      });
+    }
+
     return new SlackBridge({
       mode: 'bot',
       botToken,
@@ -447,6 +490,12 @@ export class SlackBridge implements Bridge {
       fields.push({
         type: 'mrkdwn',
         text: `*Email:*\n${identity.email}`,
+      });
+    }
+    if (session.userPhone) {
+      fields.push({
+        type: 'mrkdwn',
+        text: `*Phone:*\n${session.userPhone}`,
       });
     }
 

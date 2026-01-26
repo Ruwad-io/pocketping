@@ -34,7 +34,7 @@ class TelegramBridgeTest extends TestCase
         ];
 
         $this->bridge = new TelegramBridge(
-            botToken: 'test-bot-token',
+            botToken: '123456789:ABCdefGHIjklMNOpqrsTUVwxyz',
             chatId: '123456789',
             parseMode: 'HTML',
             disableNotification: false,
@@ -55,7 +55,7 @@ class TelegramBridgeTest extends TestCase
     public function testCreatesBridgeWithRequiredParams(): void
     {
         $bridge = new TelegramBridge(
-            botToken: 'my-token',
+            botToken: '123456789:ABCdefGHIjklMNOpqrsTUVwxyz',
             chatId: '12345',
             httpClient: $this->httpClient,
         );
@@ -66,7 +66,7 @@ class TelegramBridgeTest extends TestCase
     public function testUsesDefaultOptions(): void
     {
         $bridge = new TelegramBridge(
-            botToken: 'my-token',
+            botToken: '123456789:ABCdefGHIjklMNOpqrsTUVwxyz',
             chatId: '12345',
             httpClient: $this->httpClient,
         );
@@ -84,7 +84,7 @@ class TelegramBridgeTest extends TestCase
     public function testAcceptsCustomOptions(): void
     {
         $bridge = new TelegramBridge(
-            botToken: 'my-token',
+            botToken: '123456789:ABCdefGHIjklMNOpqrsTUVwxyz',
             chatId: '12345',
             parseMode: 'Markdown',
             disableNotification: true,
@@ -116,7 +116,7 @@ class TelegramBridgeTest extends TestCase
         $request = $this->httpClient->getLastRequest();
         $this->assertNotNull($request);
         $this->assertEquals('POST', $request['method']);
-        $this->assertStringContainsString('api.telegram.org/bottest-bot-token/sendMessage', $request['url']);
+        $this->assertStringContainsString('api.telegram.org/bot123456789:ABCdefGHIjklMNOpqrsTUVwxyz/sendMessage', $request['url']);
         $this->assertEquals('123456789', $request['data']['chat_id']);
         $this->assertStringContainsString('Hello, World!', $request['data']['text']);
     }
