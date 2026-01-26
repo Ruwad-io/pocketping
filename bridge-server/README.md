@@ -3,16 +3,34 @@
 A **standalone server** for PocketPing that handles bidirectional messaging with Telegram, Discord, and Slack.
 Deploy with Docker, configure your tokens, and you're done - no code to write.
 
+> **Quick setup:** Use the CLI wizard for guided setup: `npx @pocketping/cli init`
+
 ## Architecture
 
 The bridge-server is one of three ways to run PocketPing:
 
 ```
-Widget  ◀──────────────▶  bridge-server  ◀──────────────▶  Telegram/Discord/Slack
-              (SSE)        (this server)       (HTTP)
+┌─────────┐         ┌──────────────┐         ┌──────────────────────┐
+│  Widget │ ◀─SSE─▶ │ bridge-server│ ◀─HTTP─▶│ Telegram/Discord/Slack│
+└─────────┘         └──────────────┘         └──────────────────────┘
+                           │
+                           │ Webhook (optional)
+                           ▼
+                    ┌────────────┐
+                    │ Your Backend│
+                    └────────────┘
 ```
 
 **Uses sdk-go internally** for the core logic (WebhookHandler, message handling, etc.).
+
+### When to use bridge-server vs SDKs
+
+| Use Case | Solution |
+|----------|----------|
+| **You have a backend** (Node, Python, Go, PHP, Ruby) | Use the SDK for your language |
+| **No backend / Static site / Serverless** | Use bridge-server |
+| **Want maximum control** | Use SDK |
+| **Want zero code** | Use bridge-server |
 
 ## Features
 
@@ -103,6 +121,49 @@ BRIDGE_TEST_BOT_IDS=SLACK_BOT_ID,DISCORD_BOT_ID
 - `operator_typing` - Operator is typing
 - `session_closed` - Session closed from bridge
 
+## Reply Behavior
+
+Each bridge handles replies differently:
+
+| Bridge | Reply Style |
+|--------|-------------|
+| **Telegram** | Native reply (with preview of original message) |
+| **Discord** | Native reply in channel |
+| **Slack** | Quoted block with left border (Slack doesn't support message-level replies) |
+
+## Receiving Operator Replies
+
+To receive replies from operators, configure `BACKEND_WEBHOOK_URL`:
+
+```env
+BACKEND_WEBHOOK_URL=https://your-backend.com/api/bridge-events
+```
+
+The bridge-server will POST events like:
+
+```json
+{
+  "type": "operator_message",
+  "session_id": "sess_123",
+  "content": "Hello! How can I help?",
+  "operator_name": "John",
+  "source_bridge": "telegram",
+  "bridge_message_ids": {
+    "telegram_message_id": 12345
+  }
+}
+```
+
+### Webhook Event Types
+
+| Event | Description |
+|-------|-------------|
+| `operator_message` | Operator sent a reply |
+| `operator_message_edited` | Operator edited their message |
+| `operator_message_deleted` | Operator deleted their message |
+| `operator_typing` | Operator is typing |
+| `session_closed` | Session closed from bridge |
+
 ## Docker
 
 ```bash
@@ -111,6 +172,27 @@ make docker
 
 # Run
 make docker-run
+```
+
+### Docker Compose Example
+
+```yaml
+version: '3.8'
+services:
+  bridge-server:
+    image: pocketping/bridge-server:latest
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
+      - BACKEND_WEBHOOK_URL=${BACKEND_WEBHOOK_URL}
+    restart: unless-stopped
 ```
 
 ## Development
