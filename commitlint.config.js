@@ -9,6 +9,7 @@ module.exports = {
       'sdk-go',
       'sdk-php',
       'sdk-ruby',
+      'cli',
       'bridge',
       'docs',
       'ci',

@@ -1,0 +1,49 @@
+{
+  "name": "@pocketping/cli",
+  "version": "0.1.0",
+  "description": "CLI tool for setting up PocketPing bridges",
+  "type": "module",
+  "bin": {
+    "pocketping": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts --format esm --watch",
+    "lint": "eslint src/",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "pocketping",
+    "cli",
+    "discord",
+    "slack",
+    "telegram",
+    "chat",
+    "support"
+  ],
+  "author": "PocketPing",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pocketping/pocketping.git",
+    "directory": "packages/cli"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.7.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "open": "^10.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsup": "^8.1.0",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
