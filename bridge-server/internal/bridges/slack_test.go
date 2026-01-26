@@ -21,7 +21,10 @@ func TestNewSlackBridge(t *testing.T) {
 			IconEmoji: ":robot:",
 		}
 
-		bridge := NewSlackBridge(cfg)
+		bridge, err := NewSlackBridge(cfg)
+		if err != nil {
+			t.Fatalf("NewSlackBridge error: %v", err)
+		}
 
 		if bridge.Name() != "slack" {
 			t.Errorf("expected name 'slack', got %q", bridge.Name())
@@ -43,7 +46,10 @@ func TestNewSlackBridge(t *testing.T) {
 			Username:   "WebhookBot",
 		}
 
-		bridge := NewSlackBridge(cfg)
+		bridge, err := NewSlackBridge(cfg)
+		if err != nil {
+			t.Fatalf("NewSlackBridge error: %v", err)
+		}
 
 		if bridge.isBotMode() {
 			t.Error("expected bot mode to be false")
@@ -602,7 +608,10 @@ func TestSlackBridge_Timeout(t *testing.T) {
 		BotToken:  "token",
 		ChannelID: "channel",
 	}
-	bridge := NewSlackBridge(cfg)
+	bridge, err := NewSlackBridge(cfg)
+		if err != nil {
+			t.Fatalf("NewSlackBridge error: %v", err)
+		}
 
 	if bridge.client.Timeout != 30*time.Second {
 		t.Errorf("expected 30s timeout, got %v", bridge.client.Timeout)
@@ -615,7 +624,10 @@ func TestSlackBridge_UsernameAndIcon(t *testing.T) {
 		Username:   "CustomBot",
 		IconEmoji:  ":fire:",
 	}
-	bridge := NewSlackBridge(cfg)
+	bridge, err := NewSlackBridge(cfg)
+		if err != nil {
+			t.Fatalf("NewSlackBridge error: %v", err)
+		}
 
 	if bridge.username != "CustomBot" {
 		t.Errorf("username mismatch")

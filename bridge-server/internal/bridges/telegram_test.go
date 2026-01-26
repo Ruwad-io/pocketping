@@ -18,7 +18,10 @@ func TestNewTelegramBridge(t *testing.T) {
 		ChatID:   "-1001234567890",
 	}
 
-	bridge := NewTelegramBridge(cfg)
+	bridge, err := NewTelegramBridge(cfg)
+	if err != nil {
+		t.Fatalf("NewTelegramBridge error: %v", err)
+	}
 
 	if bridge.Name() != "telegram" {
 		t.Errorf("expected name 'telegram', got %q", bridge.Name())
