@@ -21,7 +21,10 @@ func TestNewDiscordBridge(t *testing.T) {
 			AvatarURL: "https://example.com/avatar.png",
 		}
 
-		bridge := NewDiscordBridge(cfg)
+		bridge, err := NewDiscordBridge(cfg)
+		if err != nil {
+			t.Fatalf("NewDiscordBridge error: %v", err)
+		}
 
 		if bridge.Name() != "discord" {
 			t.Errorf("expected name 'discord', got %q", bridge.Name())
@@ -43,7 +46,10 @@ func TestNewDiscordBridge(t *testing.T) {
 			Username:   "WebhookBot",
 		}
 
-		bridge := NewDiscordBridge(cfg)
+		bridge, err := NewDiscordBridge(cfg)
+		if err != nil {
+			t.Fatalf("NewDiscordBridge error: %v", err)
+		}
 
 		if bridge.isBotMode() {
 			t.Error("expected bot mode to be false")
@@ -571,7 +577,10 @@ func TestDiscordBridge_Timeout(t *testing.T) {
 		BotToken:  "token",
 		ChannelID: "channel",
 	}
-	bridge := NewDiscordBridge(cfg)
+	bridge, err := NewDiscordBridge(cfg)
+		if err != nil {
+			t.Fatalf("NewDiscordBridge error: %v", err)
+		}
 
 	if bridge.client.Timeout != 30*time.Second {
 		t.Errorf("expected 30s timeout, got %v", bridge.client.Timeout)
