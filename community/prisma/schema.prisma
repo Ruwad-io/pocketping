@@ -24,6 +24,12 @@ model Project {
   primaryColor   String  @default("#6366f1")
   welcomeMessage String? @default("Hello! How can we help you today?")
 
+  // Theme-aware colors (can be string or { light: string, dark: string })
+  headerColor    Json?   // Header background color
+  footerColor    Json?   // Footer/input area background color
+  chatBackground Json?   // Chat background: 'whatsapp' | 'dots' | 'plain' | URL | ThemeColor
+  toggleColor    Json?   // Toggle button color
+
   // API Keys
   publicKey String @unique @default(cuid())
   secretKey String @unique @default(cuid())

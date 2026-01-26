@@ -1,5 +1,69 @@
-export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
+/** Theme-aware color type */
+export type ThemeColorValue = string | { light: string; dark: string };
+
+export interface StyleOptions {
+  primaryColor: string;
+  theme: 'light' | 'dark';
+  headerColor?: ThemeColorValue;
+  footerColor?: ThemeColorValue;
+  chatBackground?: ThemeColorValue;
+  toggleColor?: ThemeColorValue;
+}
+
+/** Resolve a theme-aware color to a single value */
+function resolveThemeColor(
+  color: ThemeColorValue | undefined,
+  isDark: boolean,
+  defaultLight: string,
+  defaultDark: string
+): string {
+  if (!color) {
+    return isDark ? defaultDark : defaultLight;
+  }
+  if (typeof color === 'string') {
+    return color;
+  }
+  return isDark ? color.dark : color.light;
+}
+
+export function styles(options: StyleOptions): string {
+  const { primaryColor, theme, headerColor, footerColor, chatBackground, toggleColor } = options;
   const isDark = theme === 'dark';
+
+  // Resolved colors with defaults (theme-aware)
+  const resolvedHeaderColor = resolveThemeColor(headerColor, isDark, '#008069', '#202c33');
+  const resolvedFooterColor = resolveThemeColor(footerColor, isDark, '#f0f2f5', '#202c33');
+  const resolvedToggleColor = resolveThemeColor(toggleColor, isDark, '#25d366', '#25d366');
+  const resolvedToggleHoverColor = resolvedToggleColor !== '#25d366'
+    ? adjustBrightness(resolvedToggleColor, -10)
+    : '#22c55e';
+
+  // Background patterns
+  const whatsappPattern = isDark
+    ? 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.03\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")'
+    : 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23000000\' fill-opacity=\'0.03\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")';
+
+  const dotsPattern = isDark
+    ? 'url("data:image/svg+xml,%3Csvg width=\'20\' height=\'20\' viewBox=\'0 0 20 20\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Ccircle cx=\'10\' cy=\'10\' r=\'1\' fill=\'%23ffffff\' fill-opacity=\'0.05\'/%3E%3C/svg%3E")'
+    : 'url("data:image/svg+xml,%3Csvg width=\'20\' height=\'20\' viewBox=\'0 0 20 20\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Ccircle cx=\'10\' cy=\'10\' r=\'1\' fill=\'%23000000\' fill-opacity=\'0.05\'/%3E%3C/svg%3E")';
+
+  // Resolve chat background (theme-aware)
+  const resolvedChatBg = resolveThemeColor(chatBackground, isDark, 'whatsapp', 'whatsapp');
+  const chatBgColor = isDark ? '#0b141a' : '#e5ddd5';
+  let chatBgImage = whatsappPattern;
+  let chatBgSize = 'auto';
+
+  if (resolvedChatBg === 'plain') {
+    chatBgImage = 'none';
+  } else if (resolvedChatBg === 'dots') {
+    chatBgImage = dotsPattern;
+  } else if (resolvedChatBg === 'whatsapp' || !resolvedChatBg) {
+    chatBgImage = whatsappPattern;
+  } else if (resolvedChatBg.startsWith('http') || resolvedChatBg.startsWith('/') || resolvedChatBg.startsWith('data:')) {
+    // Custom image URL
+    chatBgImage = `url("${resolvedChatBg}")`;
+    chatBgSize = 'cover';
+  }
 
   const colors = {
     bg: isDark ? '#1f2937' : '#ffffff',
@@ -9,6 +73,15 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     border: isDark ? '#4b5563' : '#e5e7eb',
     messageBg: isDark ? '#374151' : '#f3f4f6',
   };
+
+// Helper function to adjust color brightness
+function adjustBrightness(hex: string, percent: number): string {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = Math.min(255, Math.max(0, (num >> 16) + percent));
+  const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + percent));
+  const b = Math.min(255, Math.max(0, (num & 0x0000ff) + percent));
+  return '#' + (0x1000000 + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
 
   return `
     #pocketping-container {
@@ -31,29 +104,34 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
 
     .pp-toggle {
       position: fixed;
-      width: 56px;
-      height: 56px;
+      width: 60px;
+      height: 60px;
       border-radius: 50%;
-      background: ${primaryColor};
+      background: ${resolvedToggleColor};
       color: white;
       border: none;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
       z-index: 9999;
     }
 
     .pp-toggle:hover {
-      transform: scale(1.05);
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+      transform: scale(1.08);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2), 0 2px 6px rgba(0, 0, 0, 0.15);
+      background: ${resolvedToggleHoverColor};
+    }
+
+    .pp-toggle:active {
+      transform: scale(0.95);
     }
 
     .pp-toggle svg {
-      width: 24px;
-      height: 24px;
+      width: 28px;
+      height: 28px;
     }
 
     .pp-toggle.pp-bottom-right {
@@ -104,13 +182,13 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
 
     .pp-window {
       position: fixed;
-      width: 380px;
-      height: 520px;
+      width: 375px;
+      height: 550px;
       max-height: calc(100vh - 100px);
       max-height: calc(100dvh - 100px);
-      background: ${colors.bg};
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      background: ${isDark ? '#111b21' : '#ffffff'};
+      border-radius: 12px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2), 0 4px 10px rgba(0, 0, 0, 0.15);
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -119,12 +197,12 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-window.pp-bottom-right {
-      bottom: 88px;
+      bottom: 20px;
       right: 20px;
     }
 
     .pp-window.pp-bottom-left {
-      bottom: 88px;
+      bottom: 20px;
       left: 20px;
     }
 
@@ -133,9 +211,9 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
         width: calc(100vw - 20px);
         height: auto;
         min-height: 300px;
-        max-height: calc(100vh - 100px);
-        max-height: calc(100svh - 100px); /* svh = small viewport, excludes keyboard */
-        bottom: 80px;
+        max-height: calc(100vh - 40px);
+        max-height: calc(100svh - 40px); /* svh = small viewport, excludes keyboard */
+        bottom: 10px;
         right: 10px;
         left: 10px;
         border-radius: 12px;
@@ -153,35 +231,38 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 14px;
-      background: ${primaryColor};
+      padding: 10px 16px;
+      background: ${resolvedHeaderColor};
       color: white;
     }
 
     .pp-header-info {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
     }
 
     .pp-avatar {
-      width: 36px;
-      height: 36px;
+      width: 40px;
+      height: 40px;
       border-radius: 50%;
       object-fit: cover;
+      border: 2px solid rgba(255, 255, 255, 0.2);
     }
 
     .pp-header-title {
-      font-weight: 600;
-      font-size: 15px;
+      font-weight: 500;
+      font-size: 16px;
+      letter-spacing: 0.1px;
     }
 
     .pp-header-status {
-      font-size: 11px;
-      opacity: 0.85;
+      font-size: 13px;
+      opacity: 0.9;
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 5px;
+      font-weight: 400;
     }
 
     .pp-status-dot {
@@ -192,7 +273,8 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-status-dot.pp-online {
-      background: #22c55e;
+      background: #25d366;
+      box-shadow: 0 0 0 2px rgba(37, 211, 102, 0.3);
     }
 
     .pp-close-btn {
@@ -200,13 +282,13 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       border: none;
       color: white;
       cursor: pointer;
-      padding: 4px;
-      border-radius: 4px;
-      opacity: 0.8;
-      transition: opacity 0.2s;
+      padding: 8px;
+      border-radius: 50%;
+      opacity: 0.9;
+      transition: opacity 0.2s, background 0.2s;
       flex-shrink: 0;
-      width: 28px;
-      height: 28px;
+      width: 36px;
+      height: 36px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -214,47 +296,59 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
 
     .pp-close-btn:hover {
       opacity: 1;
+      background: rgba(255, 255, 255, 0.1);
     }
 
     .pp-close-btn svg {
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
     }
 
     .pp-messages {
       flex: 1;
       overflow-y: auto;
-      padding: 32px 12px 12px 12px;
+      padding: 16px 12px;
       display: flex;
       flex-direction: column;
-      gap: 3px;
+      gap: 2px;
       overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
-      /* Ensure proper stacking context for positioned elements */
       position: relative;
+      background: ${chatBgColor};
+      background-image: ${chatBgImage};
+      background-size: ${chatBgSize};
+      background-position: center;
     }
 
     .pp-welcome {
       text-align: center;
-      color: ${colors.textSecondary};
-      padding: 24px;
-      font-size: 13px;
+      color: ${isDark ? '#8696a0' : '#667781'};
+      padding: 32px 24px;
+      font-size: 14px;
+      line-height: 1.5;
+      background: ${isDark ? 'rgba(17, 27, 33, 0.9)' : 'rgba(255, 255, 255, 0.95)'};
+      margin: 12px;
+      border-radius: 8px;
+      box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
     }
 
     .pp-date-separator {
       display: flex;
       align-items: center;
       justify-content: center;
-      margin: 16px 0 12px;
+      margin: 12px 0;
     }
 
     .pp-date-separator span {
-      background: ${colors.bgSecondary};
-      color: ${colors.textSecondary};
-      font-size: 11px;
-      padding: 4px 12px;
-      border-radius: 12px;
-      font-weight: 500;
+      background: ${isDark ? 'rgba(17, 27, 33, 0.9)' : 'rgba(255, 255, 255, 0.95)'};
+      color: ${isDark ? '#8696a0' : '#54656f'};
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-weight: 400;
+      box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
     }
 
     /* Swipe container for mobile actions */
@@ -276,25 +370,32 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
 
     .pp-swipe-actions {
       position: absolute;
-      right: 0;
       top: 0;
       bottom: 0;
-      display: flex;
+      display: none; /* Hidden by default - only show on mobile with touch */
       align-items: center;
       gap: 4px;
-      padding-right: 8px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Only show swipe actions on touch devices */
+    @media (hover: none) and (pointer: coarse) {
+      .pp-swipe-actions {
+        display: flex;
+      }
     }
 
     .pp-swipe-left .pp-swipe-actions {
-      right: 0;
+      right: -80px; /* Hidden off-screen to the right */
       left: auto;
+      padding-right: 8px;
     }
 
     .pp-swipe-right .pp-swipe-actions {
-      left: 0;
+      left: -80px; /* Hidden off-screen to the left */
       right: auto;
       padding-left: 8px;
-      padding-right: 0;
     }
 
     .pp-swipe-action {
@@ -327,122 +428,67 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-message {
-      max-width: 85%;
-      padding: 6px 10px;
-      border-radius: 12px;
+      max-width: 80%;
+      padding: 6px 8px 6px 9px;
+      border-radius: 8px;
       word-wrap: break-word;
+      overflow-wrap: break-word;
       position: relative;
       user-select: text;
       -webkit-user-select: text;
-      font-size: 14px;
-      line-height: 1.35;
-      display: flex;
-      flex-direction: column;
+      font-size: 14.2px;
+      line-height: 1.4;
+      display: block; /* Block for proper float behavior */
       will-change: transform;
-    }
-
-    /* Hover actions container - positioned above message (Slack style) */
-    .pp-message-actions {
-      position: absolute;
-      top: -32px;
-      display: flex;
-      gap: 2px;
-      background: ${colors.bg};
-      border: 1px solid ${colors.border};
-      border-radius: 6px;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-      padding: 2px;
-      opacity: 0;
-      animation: pp-actions-fade-in 0.12s ease forwards;
-      z-index: 10;
-      /* Reset color inheritance from message */
-      color: ${colors.textSecondary};
-      /* Ensure actions don't interfere with layout */
-      pointer-events: auto;
-    }
-
-    @keyframes pp-actions-fade-in {
-      from { opacity: 0; transform: translateY(4px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Visitor messages: actions aligned right */
-    .pp-actions-left {
-      right: 0;
-    }
-
-    /* Operator messages: actions aligned left */
-    .pp-actions-right {
-      left: 0;
-    }
-
-    .pp-message-actions .pp-action-btn {
-      width: 24px;
-      height: 24px;
-      border: none;
-      background: transparent;
-      border-radius: 4px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: ${colors.textSecondary} !important;
-      transition: background 0.1s, color 0.1s;
-    }
-
-    .pp-message-actions .pp-action-btn:hover {
-      background: ${colors.bgSecondary};
-      color: ${colors.text} !important;
-    }
-
-    .pp-message-actions .pp-action-btn svg {
-      width: 14px;
-      height: 14px;
-      stroke: ${colors.textSecondary};
-    }
-
-    .pp-message-actions .pp-action-btn:hover svg {
-      stroke: ${colors.text};
-    }
-
-    .pp-message-actions .pp-action-delete:hover {
-      background: #fef2f2;
-    }
-
-    .pp-message-actions .pp-action-delete:hover svg {
-      stroke: #ef4444;
-    }
-
-    .pp-theme-dark .pp-message-actions .pp-action-delete:hover {
-      background: #7f1d1d;
-    }
-
-    .pp-theme-dark .pp-message-actions .pp-action-delete:hover svg {
-      stroke: #fca5a5;
-    }
-
-    /* Hide hover actions on mobile */
-    @media (hover: none) and (pointer: coarse) {
-      .pp-message-actions {
-        display: none;
-      }
+      box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
     }
 
     .pp-message-visitor {
       align-self: flex-end;
-      background: ${primaryColor};
-      color: white;
-      border-bottom-right-radius: 3px;
-      margin-left: 32px;
+      background: ${isDark ? '#005c4b' : '#d9fdd3'};
+      color: ${isDark ? '#e9edef' : '#111b21'};
+      border-top-right-radius: 8px;
+      border-top-left-radius: 8px;
+      border-bottom-left-radius: 8px;
+      border-bottom-right-radius: 0;
+      margin-left: 48px;
+    }
+
+    /* WhatsApp-style tail for visitor messages */
+    .pp-message-visitor::after {
+      content: '';
+      position: absolute;
+      right: -7px;
+      bottom: 0;
+      width: 8px;
+      height: 13px;
+      background: ${isDark ? '#005c4b' : '#d9fdd3'};
+      clip-path: path('M 0 0 L 0 13 L 8 13 Q 2 10 0 0');
     }
 
     .pp-message-operator,
     .pp-message-ai {
       align-self: flex-start;
-      background: ${colors.messageBg};
-      color: ${colors.text};
-      border-bottom-left-radius: 3px;
-      margin-right: 32px;
+      background: ${isDark ? '#202c33' : '#ffffff'};
+      color: ${isDark ? '#e9edef' : '#111b21'};
+      border-top-right-radius: 8px;
+      border-top-left-radius: 8px;
+      border-bottom-right-radius: 8px;
+      border-bottom-left-radius: 0;
+      margin-right: 48px;
+    }
+
+    /* WhatsApp-style tail for operator messages */
+    .pp-message-operator::after,
+    .pp-message-ai::after {
+      content: '';
+      position: absolute;
+      left: -7px;
+      bottom: 0;
+      width: 8px;
+      height: 13px;
+      background: ${isDark ? '#202c33' : '#ffffff'};
+      clip-path: path('M 8 0 L 8 13 L 0 13 Q 6 10 8 0');
     }
 
     /* Add spacing between different senders */
@@ -454,27 +500,41 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-message-content {
-      display: block;
-      flex: 1;
+      display: inline;
     }
 
+    /* WhatsApp-style inline timestamp - floats to the right */
     .pp-message-time {
-      font-size: 10px;
-      opacity: 0.6;
-      display: flex;
+      font-size: 11px;
+      display: inline-flex;
       align-items: center;
       gap: 3px;
+      float: right;
+      margin: 3px 0 0 12px;
+      color: ${isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.45)'};
+      white-space: nowrap;
+    }
+
+    .pp-message-visitor .pp-message-time {
+      color: ${isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.45)'};
+    }
+
+    /* Timestamp for attachment-only messages */
+    .pp-attachment-time {
+      float: none;
+      display: flex;
       justify-content: flex-end;
-      margin-top: 8px;
-      flex-shrink: 0;
+      margin-top: 4px;
     }
 
     .pp-ai-badge {
-      background: rgba(0, 0, 0, 0.1);
-      padding: 1px 4px;
+      background: ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0, 0, 0, 0.08)'};
+      padding: 2px 5px;
       border-radius: 4px;
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
     }
 
     .pp-status {
@@ -490,11 +550,11 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
 
     .pp-check,
     .pp-check-double {
-      stroke: rgba(255, 255, 255, 0.7);
+      stroke: ${isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.35)'};
     }
 
     .pp-check-read {
-      stroke: #34b7f1;
+      stroke: #53bdeb;
     }
 
     .pp-status-sending .pp-check {
@@ -503,14 +563,15 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
 
     .pp-typing {
       display: flex;
-      gap: 3px;
-      padding: 8px 12px;
+      gap: 4px;
+      padding: 12px 14px;
+      align-items: center;
     }
 
     .pp-typing span {
-      width: 6px;
-      height: 6px;
-      background: ${colors.textSecondary};
+      width: 7px;
+      height: 7px;
+      background: ${isDark ? '#8696a0' : '#667781'};
       border-radius: 50%;
       animation: pp-bounce 1.4s infinite ease-in-out both;
     }
@@ -525,57 +586,56 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
 
     .pp-input-form {
       display: flex;
-      padding: 10px 12px;
+      padding: 8px 10px;
       gap: 8px;
-      border-top: 1px solid ${colors.border};
+      background: ${resolvedFooterColor};
       align-items: center;
     }
 
     .pp-input {
       flex: 1;
       min-width: 0;
-      height: 40px;
-      line-height: 40px;
-      padding: 0 16px;
-      border: 1px solid ${colors.border};
-      border-radius: 20px;
-      background: ${colors.bg};
-      color: ${colors.text};
-      font-size: 14px;
+      height: 42px;
+      line-height: 42px;
+      padding: 0 14px;
+      border: none;
+      border-radius: 8px;
+      background: ${isDark ? '#2a3942' : '#ffffff'};
+      color: ${isDark ? '#e9edef' : '#111b21'};
+      font-size: 15px;
       outline: none;
-      transition: border-color 0.2s;
       box-sizing: border-box;
       margin: 0;
     }
 
     .pp-input:focus {
-      border-color: ${primaryColor};
+      outline: none;
     }
 
     .pp-input::placeholder {
-      color: ${colors.textSecondary};
+      color: ${isDark ? '#8696a0' : '#667781'};
     }
 
     .pp-send-btn {
-      width: 40px;
-      height: 40px;
-      min-width: 40px;
+      width: 42px;
+      height: 42px;
+      min-width: 42px;
       border-radius: 50%;
-      background: ${primaryColor};
+      background: #00a884;
       color: white;
       border: none;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: opacity 0.2s, transform 0.1s;
+      transition: background 0.2s, transform 0.1s;
       flex-shrink: 0;
       margin: 0;
       padding: 0;
     }
 
     .pp-send-btn:not(:disabled):hover {
-      transform: scale(1.05);
+      background: #008f72;
     }
 
     .pp-send-btn:not(:disabled):active {
@@ -583,27 +643,27 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-send-btn:disabled {
-      opacity: 0.5;
+      background: ${isDark ? '#3b4a54' : '#b3b3b3'};
       cursor: not-allowed;
     }
 
     .pp-send-btn svg {
-      width: 18px;
-      height: 18px;
+      width: 20px;
+      height: 20px;
     }
 
     .pp-footer {
       text-align: center;
-      padding: 8px;
-      font-size: 11px;
-      color: ${colors.textSecondary};
-      border-top: 1px solid ${colors.border};
-      opacity: 0.7;
+      padding: 6px 8px;
+      font-size: 10px;
+      color: ${isDark ? '#8696a0' : '#667781'};
+      background: ${resolvedFooterColor};
     }
 
     .pp-footer a {
-      color: ${primaryColor};
+      color: ${isDark ? '#00a884' : '#008069'};
       text-decoration: none;
+      font-weight: 500;
     }
 
     .pp-footer a:hover {
@@ -625,26 +685,26 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-attach-btn {
-      width: 40px;
-      height: 40px;
-      min-width: 40px;
+      width: 42px;
+      height: 42px;
+      min-width: 42px;
       border-radius: 50%;
       background: transparent;
-      color: ${colors.textSecondary};
-      border: 1px solid ${colors.border};
+      color: ${isDark ? '#8696a0' : '#54656f'};
+      border: none;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       margin: 0;
       padding: 0;
-      transition: color 0.2s, border-color 0.2s;
+      transition: color 0.2s, background 0.2s;
       flex-shrink: 0;
     }
 
     .pp-attach-btn:hover:not(:disabled) {
-      color: ${primaryColor};
-      border-color: ${primaryColor};
+      color: ${isDark ? '#aebac1' : '#3b4a54'};
+      background: ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'};
     }
 
     .pp-attach-btn:disabled {
@@ -653,28 +713,27 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-attach-btn svg {
-      width: 18px;
-      height: 18px;
+      width: 22px;
+      height: 22px;
     }
 
     .pp-attachments-preview {
       display: flex;
       gap: 8px;
-      padding: 8px 12px;
-      border-top: 1px solid ${colors.border};
+      padding: 10px 12px;
       overflow-x: auto;
-      background: ${colors.bgSecondary};
+      background: ${resolvedFooterColor};
     }
 
     .pp-attachment-preview {
       position: relative;
-      width: 60px;
-      height: 60px;
-      border-radius: 8px;
+      width: 64px;
+      height: 64px;
+      border-radius: 10px;
       overflow: hidden;
       flex-shrink: 0;
-      background: ${colors.bg};
-      border: 1px solid ${colors.border};
+      background: ${isDark ? '#2a3942' : '#ffffff'};
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     }
 
     .pp-preview-img {
@@ -868,69 +927,74 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     .pp-drop-overlay {
       position: absolute;
       inset: 0;
-      background: ${isDark ? 'rgba(0,0,0,0.9)' : 'rgba(255,255,255,0.95)'};
+      background: ${isDark ? 'rgba(17, 27, 33, 0.95)' : 'rgba(255,255,255,0.97)'};
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 12px;
+      gap: 16px;
       z-index: 100;
-      border: 3px dashed ${primaryColor};
-      border-radius: 16px;
+      border: 3px dashed #00a884;
+      border-radius: 12px;
       margin: 4px;
       pointer-events: none;
     }
 
     .pp-drop-icon svg {
-      width: 48px;
-      height: 48px;
-      color: ${primaryColor};
+      width: 56px;
+      height: 56px;
+      color: #00a884;
     }
 
     .pp-drop-text {
-      font-size: 16px;
+      font-size: 17px;
       font-weight: 500;
-      color: ${colors.text};
+      color: ${isDark ? '#e9edef' : '#111b21'};
     }
 
     /* Message Context Menu */
     .pp-message-menu {
       position: fixed;
-      background: ${colors.bg};
-      border: 1px solid ${colors.border};
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      padding: 4px;
+      background: ${isDark ? '#233138' : '#ffffff'};
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.1);
+      padding: 6px;
       z-index: 200;
-      min-width: 120px;
+      min-width: 140px;
     }
 
     .pp-message-menu button {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       width: 100%;
-      padding: 8px 12px;
+      padding: 10px 14px;
       border: none;
       background: transparent;
-      color: ${colors.text};
-      font-size: 13px;
+      color: ${isDark ? '#e9edef' : '#111b21'};
+      font-size: 14px;
       cursor: pointer;
-      border-radius: 4px;
+      border-radius: 8px;
       text-align: left;
+      transition: background 0.15s;
     }
 
     .pp-message-menu button:hover {
-      background: ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'};
+      background: ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'};
     }
 
     .pp-message-menu button svg {
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
     }
 
     .pp-menu-delete {
       color: #ef4444 !important;
+    }
+
+    .pp-menu-delete:hover {
+      background: ${isDark ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.08)'} !important;
     }
 
     /* Edit Modal */
@@ -939,10 +1003,10 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       bottom: 80px;
       left: 12px;
       right: 12px;
-      background: ${colors.bg};
-      border: 1px solid ${colors.border};
+      background: ${isDark ? '#233138' : '#ffffff'};
+      border: none;
       border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      box-shadow: 0 8px 28px rgba(0,0,0,0.25), 0 2px 8px rgba(0,0,0,0.1);
       z-index: 150;
       overflow: hidden;
     }
@@ -951,17 +1015,24 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px 16px;
-      border-bottom: 1px solid ${colors.border};
+      padding: 14px 16px;
+      border-bottom: 1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'};
       font-weight: 500;
+      color: ${isDark ? '#e9edef' : '#111b21'};
     }
 
     .pp-edit-header button {
       background: transparent;
       border: none;
-      color: ${colors.textSecondary};
+      color: ${isDark ? '#8696a0' : '#667781'};
       cursor: pointer;
-      padding: 4px;
+      padding: 6px;
+      border-radius: 50%;
+      transition: background 0.15s;
+    }
+
+    .pp-edit-header button:hover {
+      background: ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'};
     }
 
     .pp-edit-header button svg {
@@ -971,46 +1042,62 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
 
     .pp-edit-input {
       width: 100%;
-      padding: 12px 16px;
+      padding: 14px 16px;
       border: none;
       background: transparent;
-      color: ${colors.text};
-      font-size: 14px;
+      color: ${isDark ? '#e9edef' : '#111b21'};
+      font-size: 15px;
       resize: none;
       min-height: 80px;
       outline: none;
+      line-height: 1.5;
+    }
+
+    .pp-edit-input::placeholder {
+      color: ${isDark ? '#8696a0' : '#667781'};
     }
 
     .pp-edit-actions {
       display: flex;
       justify-content: flex-end;
-      gap: 8px;
+      gap: 10px;
       padding: 12px 16px;
-      border-top: 1px solid ${colors.border};
+      border-top: 1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'};
     }
 
     .pp-edit-cancel {
-      padding: 8px 16px;
-      border: 1px solid ${colors.border};
-      border-radius: 6px;
-      background: transparent;
-      color: ${colors.text};
-      font-size: 13px;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      background: ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'};
+      color: ${isDark ? '#e9edef' : '#111b21'};
+      font-size: 14px;
       cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .pp-edit-cancel:hover {
+      background: ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)'};
     }
 
     .pp-edit-save {
-      padding: 8px 16px;
+      padding: 10px 20px;
       border: none;
-      border-radius: 6px;
-      background: ${primaryColor};
+      border-radius: 8px;
+      background: #00a884;
       color: white;
-      font-size: 13px;
+      font-size: 14px;
+      font-weight: 500;
       cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .pp-edit-save:hover:not(:disabled) {
+      background: #008f72;
     }
 
     .pp-edit-save:disabled {
-      opacity: 0.5;
+      background: ${isDark ? '#3b4a54' : '#b3b3b3'};
       cursor: not-allowed;
     }
 
@@ -1018,11 +1105,10 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     .pp-reply-preview {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       padding: 8px 12px;
-      background: ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'};
-      border-top: 1px solid ${colors.border};
-      border-left: 3px solid ${primaryColor};
+      background: ${resolvedFooterColor};
+      border-left: 4px solid #00a884;
     }
 
     .pp-reply-preview-content {
@@ -1032,55 +1118,56 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
 
     .pp-reply-label {
       display: block;
-      font-size: 11px;
-      color: ${primaryColor};
+      font-size: 12px;
+      color: #00a884;
       font-weight: 500;
       margin-bottom: 2px;
     }
 
     .pp-reply-text {
       display: block;
-      font-size: 12px;
-      color: ${colors.textSecondary};
+      font-size: 13px;
+      color: ${isDark ? '#8696a0' : '#667781'};
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .pp-reply-cancel {
-      background: ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'};
+      background: transparent;
       border: none;
       border-radius: 50%;
-      color: ${colors.textSecondary};
+      color: ${isDark ? '#8696a0' : '#667781'};
       cursor: pointer;
       padding: 0;
-      width: 24px;
-      height: 24px;
-      min-width: 24px;
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      transition: background 0.15s;
+      transition: background 0.15s, color 0.15s;
     }
 
     .pp-reply-cancel:hover {
-      background: ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)'};
+      background: ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'};
+      color: ${isDark ? '#aebac1' : '#3b4a54'};
     }
 
     .pp-reply-cancel svg {
-      width: 14px;
-      height: 14px;
+      width: 16px;
+      height: 16px;
     }
 
     /* Reply Quote in Message */
     .pp-reply-quote {
-      background: ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'};
-      border-left: 2px solid ${primaryColor};
-      padding: 4px 8px;
-      margin-bottom: 6px;
-      border-radius: 0 4px 4px 0;
-      font-size: 12px;
+      background: ${isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)'};
+      border-left: 3px solid #00a884;
+      padding: 6px 10px;
+      margin-bottom: 4px;
+      border-radius: 0 6px 6px 0;
+      font-size: 13px;
       position: relative;
       z-index: 1;
     }
@@ -1088,13 +1175,14 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     .pp-reply-sender {
       display: block;
       font-weight: 500;
-      color: ${primaryColor};
+      color: #00a884;
       margin-bottom: 2px;
+      font-size: 12px;
     }
 
     .pp-reply-content {
       display: block;
-      color: ${colors.textSecondary};
+      color: ${isDark ? '#8696a0' : '#667781'};
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1103,30 +1191,33 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     /* Clickable reply quote */
     .pp-reply-quote-clickable {
       cursor: pointer;
-      transition: background 0.15s, transform 0.1s;
+      transition: background 0.15s;
     }
 
     .pp-reply-quote-clickable:hover {
-      background: ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)'};
+      background: ${isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.08)'};
     }
 
     .pp-reply-quote-clickable:active {
-      transform: scale(0.98);
+      transform: scale(0.99);
     }
 
     /* Reply quote in visitor message bubble needs higher contrast */
     .pp-message-visitor .pp-reply-quote {
-      background: rgba(255, 255, 255, 0.18);
-      border-left-color: rgba(255, 255, 255, 0.7);
+      background: ${isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.08)'};
+      border-left-color: ${isDark ? 'rgba(255,255,255,0.5)' : '#00a884'};
     }
 
     .pp-message-visitor .pp-reply-quote-clickable:hover {
-      background: rgba(255, 255, 255, 0.25);
+      background: ${isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.12)'};
     }
 
-    .pp-message-visitor .pp-reply-sender,
+    .pp-message-visitor .pp-reply-sender {
+      color: ${isDark ? 'rgba(255,255,255,0.9)' : '#00a884'};
+    }
+
     .pp-message-visitor .pp-reply-content {
-      color: rgba(255, 255, 255, 0.9);
+      color: ${isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)'};
     }
 
     /* Message highlight animation (when scrolling to a message) */
@@ -1136,13 +1227,13 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
 
     @keyframes pp-highlight-pulse {
       0% {
-        box-shadow: 0 0 0 0 ${primaryColor}80;
+        box-shadow: 0 0 0 0 rgba(0, 168, 132, 0.5);
       }
       30% {
-        box-shadow: 0 0 0 6px ${primaryColor}40;
+        box-shadow: 0 0 0 6px rgba(0, 168, 132, 0.25);
       }
       100% {
-        box-shadow: 0 0 0 0 ${primaryColor}00;
+        box-shadow: 0 0 0 0 rgba(0, 168, 132, 0);
       }
     }
 
@@ -1166,9 +1257,9 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     /* Edited Badge */
     .pp-edited-badge {
       font-size: 10px;
-      color: ${colors.textSecondary};
       margin-left: 4px;
       font-style: italic;
+      opacity: 0.7;
     }
 
     /* Pre-Chat Form */
@@ -1178,19 +1269,21 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
       flex-direction: column;
       padding: 24px 20px;
       overflow-y: auto;
+      background: ${isDark ? '#111b21' : '#ffffff'};
     }
 
     .pp-prechat-title {
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 600;
       margin-bottom: 8px;
-      color: ${colors.text};
+      color: ${isDark ? '#e9edef' : '#111b21'};
     }
 
     .pp-prechat-subtitle {
-      font-size: 13px;
-      color: ${colors.textSecondary};
+      font-size: 14px;
+      color: ${isDark ? '#8696a0' : '#667781'};
       margin-bottom: 24px;
+      line-height: 1.5;
     }
 
     .pp-prechat-tabs {
@@ -1397,20 +1490,20 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
 
     .pp-prechat-submit {
       width: 100%;
-      height: 44px;
-      margin-top: 8px;
+      height: 48px;
+      margin-top: 12px;
       border: none;
       border-radius: 8px;
-      background: ${primaryColor};
+      background: #00a884;
       color: white;
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 500;
       cursor: pointer;
-      transition: opacity 0.2s, transform 0.1s;
+      transition: background 0.2s, transform 0.1s;
     }
 
     .pp-prechat-submit:hover:not(:disabled) {
-      opacity: 0.9;
+      background: #008f72;
     }
 
     .pp-prechat-submit:active:not(:disabled) {
@@ -1418,24 +1511,24 @@ export function styles(primaryColor: string, theme: 'light' | 'dark'): string {
     }
 
     .pp-prechat-submit:disabled {
-      opacity: 0.5;
+      background: ${isDark ? '#3b4a54' : '#b3b3b3'};
       cursor: not-allowed;
     }
 
     .pp-prechat-skip {
       width: 100%;
-      padding: 12px;
+      padding: 14px;
       margin-top: 8px;
       border: none;
       background: transparent;
-      color: ${colors.textSecondary};
-      font-size: 13px;
+      color: ${isDark ? '#8696a0' : '#667781'};
+      font-size: 14px;
       cursor: pointer;
       transition: color 0.2s;
     }
 
     .pp-prechat-skip:hover {
-      color: ${colors.text};
+      color: ${isDark ? '#aebac1' : '#3b4a54'};
     }
   `;
 }

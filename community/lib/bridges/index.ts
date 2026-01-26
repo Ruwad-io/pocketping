@@ -343,3 +343,186 @@ export async function syncMessageDeleteToBridges(
     }
   }
 }
+
+/**
+ * Handle operator message - save to DB and sync to other bridges
+ */
+export async function handleOperatorMessage(params: {
+  sessionId: string
+  content: string
+  operatorName: string
+  sourceBridge: 'telegram' | 'discord' | 'slack'
+  attachments?: AttachmentData[]
+  replyToMessageId?: string
+}): Promise<void> {
+  const { sessionId, content, operatorName, sourceBridge, attachments = [], replyToMessageId } =
+    params
+
+  // Get session with project
+  const session = await prisma.session.findUnique({
+    where: { id: sessionId },
+    include: { project: true },
+  })
+
+  if (!session || !session.project) {
+    console.error('[Bridges] Session or project not found:', sessionId)
+    return
+  }
+
+  const project = session.project
+
+  // Save message to DB
+  const message = await prisma.message.create({
+    data: {
+      sessionId,
+      projectId: project.id,
+      content,
+      sender: 'OPERATOR',
+      operatorName,
+      sourceBridge,
+      replyToId: replyToMessageId,
+    },
+  })
+
+  // Update session lastActivity
+  await prisma.session.update({
+    where: { id: sessionId },
+    data: { lastActivity: new Date(), unreadCount: 0 },
+  })
+
+  // Fetch quoted message if replying
+  let quotedMessage: {
+    content: string
+    sender: string
+    attachments: Array<{ filename: string; mimeType: string }>
+  } | null = null
+  if (replyToMessageId) {
+    try {
+      const originalMessage = await prisma.message.findUnique({
+        where: { id: replyToMessageId },
+        select: {
+          content: true,
+          sender: true,
+          attachments: { select: { filename: true, mimeType: true } },
+        },
+      })
+      if (originalMessage) {
+        quotedMessage = originalMessage
+      }
+    } catch (error) {
+      console.error('[Bridges] Failed to fetch quoted message:', error)
+    }
+  }
+
+  // Format quote with attachment info
+  const formatQuote = (quote: {
+    content: string
+    sender: string
+    attachments: Array<{ filename: string; mimeType: string }>
+  }) => {
+    const sender = quote.sender === 'VISITOR' ? '👤 Visitor' : '💬 Operator'
+
+    // Build attachment summary
+    let attachmentSummary = ''
+    if (quote.attachments.length > 0) {
+      const imageCount = quote.attachments.filter((a) => a.mimeType.startsWith('image/')).length
+      const fileCount = quote.attachments.length - imageCount
+      const parts: string[] = []
+      if (imageCount > 0) parts.push(`🖼️ ${imageCount} image${imageCount > 1 ? 's' : ''}`)
+      if (fileCount > 0) parts.push(`📎 ${fileCount} file${fileCount > 1 ? 's' : ''}`)
+      attachmentSummary = ` [${parts.join(', ')}]`
+    }
+
+    // Handle empty content (attachment-only message)
+    let displayContent = quote.content
+    if (!displayContent && quote.attachments.length > 0) {
+      displayContent = '(attachment)'
+    }
+
+    const truncated =
+      displayContent.length > 100 ? displayContent.slice(0, 100) + '...' : displayContent
+    return `> ${sender}${attachmentSummary}: ${truncated}`
+  }
+
+  // Format attachment links for cross-bridge sync
+  const formatAttachmentLinks = (
+    atts: AttachmentData[],
+    format: 'telegram' | 'discord' | 'slack'
+  ) => {
+    if (atts.length === 0) return ''
+    const links = atts.map((att) => {
+      const emoji = att.mimeType.startsWith('image/') ? '🖼️' : '📎'
+      if (format === 'telegram') {
+        return `${emoji} [${att.filename}](${att.url})`
+      } else if (format === 'discord') {
+        return `${emoji} [${att.filename}](${att.url})`
+      } else {
+        return `${emoji} <${att.url}|${att.filename}>`
+      }
+    })
+    return '\n\n' + links.join('\n')
+  }
+
+  // Sync to Telegram if source is not Telegram
+  if (
+    sourceBridge !== 'telegram' &&
+    project.telegramBotToken &&
+    project.telegramChatId &&
+    session.telegramTopicId
+  ) {
+    try {
+      const quoteBlock = quotedMessage ? `${formatQuote(quotedMessage)}\n\n` : ''
+      const attachmentLinks = formatAttachmentLinks(attachments, 'telegram')
+      const text = `📨 *${operatorName}* _via ${sourceBridge}_\n\n${quoteBlock}${content}${attachmentLinks}`
+      await telegram.sendMessageToTopic(
+        { botToken: project.telegramBotToken, chatId: project.telegramChatId },
+        parseInt(session.telegramTopicId),
+        text
+      )
+    } catch (error) {
+      console.error('[Bridges] Telegram sync error:', error)
+    }
+  }
+
+  // Sync to Discord if source is not Discord
+  if (sourceBridge !== 'discord' && project.discordChannelId && session.discordThreadId) {
+    const botToken = process.env.DISCORD_BOT_TOKEN
+    if (botToken) {
+      try {
+        const quoteBlock = quotedMessage ? `${formatQuote(quotedMessage)}\n\n` : ''
+        const attachmentLinks = formatAttachmentLinks(attachments, 'discord')
+        const text = `📨 **${operatorName}** _via ${sourceBridge}_\n\n${quoteBlock}${content}${attachmentLinks}`
+        await discord.sendMessageToThread(
+          { botToken, channelId: project.discordChannelId },
+          session.discordThreadId,
+          text
+        )
+      } catch (error) {
+        console.error('[Bridges] Discord sync error:', error)
+      }
+    }
+  }
+
+  // Sync to Slack if source is not Slack
+  if (
+    sourceBridge !== 'slack' &&
+    project.slackBotToken &&
+    project.slackChannelId &&
+    session.slackThreadTs
+  ) {
+    try {
+      const quoteBlock = quotedMessage ? `${formatQuote(quotedMessage)}\n\n` : ''
+      const attachmentLinks = formatAttachmentLinks(attachments, 'slack')
+      const text = `📨 *${operatorName}* _via ${sourceBridge}_\n\n${quoteBlock}${content}${attachmentLinks}`
+      await slack.sendMessageToThread(
+        { botToken: project.slackBotToken, channelId: project.slackChannelId },
+        session.slackThreadTs,
+        text
+      )
+    } catch (error) {
+      console.error('[Bridges] Slack sync error:', error)
+    }
+  }
+
+  console.log(`[Bridges] Operator message from ${sourceBridge} synced to other bridges`)
+}

@@ -103,6 +103,18 @@ export class PocketPingClient {
     if (response.primaryColor) {
       this.config.primaryColor = response.primaryColor;
     }
+    if (response.headerColor) {
+      this.config.headerColor = response.headerColor;
+    }
+    if (response.footerColor) {
+      this.config.footerColor = response.footerColor;
+    }
+    if (response.chatBackground) {
+      this.config.chatBackground = response.chatBackground;
+    }
+    if (response.toggleColor) {
+      this.config.toggleColor = response.toggleColor;
+    }
     if (response.welcomeMessage) {
       this.config.welcomeMessage = response.welcomeMessage;
     }
@@ -112,6 +124,10 @@ export class PocketPingClient {
       operatorName: this.config.operatorName,
       operatorAvatar: this.config.operatorAvatar,
       primaryColor: this.config.primaryColor,
+      headerColor: this.config.headerColor,
+      footerColor: this.config.footerColor,
+      chatBackground: this.config.chatBackground,
+      toggleColor: this.config.toggleColor,
       welcomeMessage: this.config.welcomeMessage,
     });
 

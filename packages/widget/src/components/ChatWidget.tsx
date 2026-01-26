@@ -64,8 +64,6 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
   const [editContent, setEditContent] = useState('');
   const [messageMenu, setMessageMenu] = useState<{ message: Message; x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
-  const [longPressTimer, setLongPressTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   // Swipe state for mobile
   const [swipedMessageId, setSwipedMessageId] = useState<string | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -566,6 +564,16 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
   // Action icon color (matches styles.ts textSecondary)
   const actionIconColor = theme === 'dark' ? '#9ca3af' : '#6b7280';
 
+  // Style options for customizable colors
+  const styleOptions = {
+    primaryColor,
+    theme,
+    headerColor: config.headerColor,
+    footerColor: config.footerColor,
+    chatBackground: config.chatBackground,
+    toggleColor: config.toggleColor,
+  };
+
   // Determine if we should show the pre-chat form
   const shouldShowPreChat = preChatForm
     && preChatForm.enabled
@@ -580,25 +588,23 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
 
   return (
     <Fragment>
-      <style>{styles(primaryColor, theme)}</style>
+      <style>{styles(styleOptions)}</style>
 
-      {/* Toggle Button */}
-      <button
-        class={`pp-toggle pp-${position}`}
-        onClick={() => client.toggleOpen()}
-        aria-label={isOpen ? 'Close chat' : 'Open chat'}
-      >
-        {isOpen ? (
-          <CloseIcon />
-        ) : (
+      {/* Toggle Button - Hidden when chat is open (close via header X button) */}
+      {!isOpen && (
+        <button
+          class={`pp-toggle pp-${position}`}
+          onClick={() => client.toggleOpen()}
+          aria-label="Open chat"
+        >
           <ChatIcon />
-        )}
-        {/* Show unread badge when there are unread messages, otherwise show online dot */}
-        {!isOpen && unreadCount > 0 && (
-          <span class="pp-unread-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
-        )}
-        {!isOpen && unreadCount === 0 && operatorOnline && <span class="pp-online-dot" />}
-      </button>
+          {/* Show unread badge when there are unread messages, otherwise show online dot */}
+          {unreadCount > 0 && (
+            <span class="pp-unread-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+          )}
+          {unreadCount === 0 && operatorOnline && <span class="pp-online-dot" />}
+        </button>
+      )}
 
       {/* Chat Window */}
       {isOpen && (
@@ -700,9 +706,6 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
                 }
               }
 
-              const isHovered = hoveredMessageId === msg.id;
-              const showActions = isHovered && !isDeleted;
-
               const isSwiped = swipedMessageId === msg.id;
               const msgSwipeOffset = isSwiped ? swipeOffset : 0;
 
@@ -744,43 +747,11 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
                       class={`pp-message pp-message-${msg.sender} ${isDeleted ? 'pp-message-deleted' : ''}`}
                       style={{ transform: `translateX(${msgSwipeOffset}px)`, transition: touchStartRef.current ? 'none' : 'transform 0.2s ease-out' }}
                       onContextMenu={(e) => handleMessageContextMenu(e, msg)}
-                      onMouseEnter={() => setHoveredMessageId(msg.id)}
-                      onMouseLeave={() => setHoveredMessageId(null)}
                       onTouchStart={(e) => handleTouchStart(e, msg)}
                       onTouchMove={(e) => handleTouchMove(e, msg)}
                       onTouchEnd={() => handleTouchEnd(msg)}
                       onTouchCancel={() => handleTouchEnd(msg)}
                     >
-                  {/* Hover actions (desktop) */}
-                  {showActions && (
-                    <div class={`pp-message-actions ${msg.sender === 'visitor' ? 'pp-actions-left' : 'pp-actions-right'}`}>
-                      <button
-                        class="pp-action-btn"
-                        onClick={() => handleReply(msg)}
-                        title="Reply"
-                      >
-                        <ReplyIcon color={actionIconColor} />
-                      </button>
-                      {msg.sender === 'visitor' && (
-                        <>
-                          <button
-                            class="pp-action-btn"
-                            onClick={() => handleStartEdit(msg)}
-                            title="Edit"
-                          >
-                            <EditIcon color={actionIconColor} />
-                          </button>
-                          <button
-                            class="pp-action-btn pp-action-delete"
-                            onClick={() => handleDelete(msg)}
-                            title="Delete"
-                          >
-                            <DeleteIcon color={actionIconColor} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
                   {/* Reply quote - clickable to scroll to original message */}
                   {replyData && (replyData.content || replyData.hasAttachment) && (
                     <div
@@ -815,26 +786,42 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
                     </div>
                   ) : (
                     <>
-                      {msg.content && <div class="pp-message-content">{msg.content}</div>}
+                      {msg.content && (
+                        <div class="pp-message-content">
+                          {msg.content}
+                          <span class="pp-message-time">
+                            {formatTime(msg.timestamp)}
+                            {isEdited && <span class="pp-edited-badge">edited</span>}
+                            {msg.sender === 'ai' && <span class="pp-ai-badge">AI</span>}
+                            {msg.sender === 'visitor' && (
+                              <span class={`pp-status pp-status-${msg.status ?? 'sent'}`}>
+                                <StatusIcon status={msg.status} />
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      )}
                       {msg.attachments && msg.attachments.length > 0 && (
                         <div class="pp-message-attachments">
                           {msg.attachments.map((att) => (
                             <AttachmentDisplay key={att.id} attachment={att} />
                           ))}
+                          {!msg.content && (
+                            <span class="pp-message-time pp-attachment-time">
+                              {formatTime(msg.timestamp)}
+                              {isEdited && <span class="pp-edited-badge">edited</span>}
+                              {msg.sender === 'ai' && <span class="pp-ai-badge">AI</span>}
+                              {msg.sender === 'visitor' && (
+                                <span class={`pp-status pp-status-${msg.status ?? 'sent'}`}>
+                                  <StatusIcon status={msg.status} />
+                                </span>
+                              )}
+                            </span>
+                          )}
                         </div>
                       )}
                     </>
                   )}
-                  <div class="pp-message-time">
-                    {formatTime(msg.timestamp)}
-                    {isEdited && !isDeleted && <span class="pp-edited-badge">edited</span>}
-                    {msg.sender === 'ai' && <span class="pp-ai-badge">AI</span>}
-                    {msg.sender === 'visitor' && !isDeleted && (
-                      <span class={`pp-status pp-status-${msg.status ?? 'sent'}`}>
-                        <StatusIcon status={msg.status} />
-                      </span>
-                    )}
-                  </div>
                     </div>
                   </div>
                 </Fragment>

@@ -81,6 +81,10 @@ export async function POST(request: NextRequest) {
         operatorAvatar: true,
         primaryColor: true,
         welcomeMessage: true,
+        headerColor: true,
+        footerColor: true,
+        chatBackground: true,
+        toggleColor: true,
         preChatFormEnabled: true,
         preChatFormRequired: true,
         preChatFormTiming: true,
@@ -109,6 +113,10 @@ export async function POST(request: NextRequest) {
         operatorAvatar: project?.operatorAvatar,
         primaryColor: project?.primaryColor,
         welcomeMessage: project?.welcomeMessage,
+        headerColor: project?.headerColor,
+        footerColor: project?.footerColor,
+        chatBackground: project?.chatBackground,
+        toggleColor: project?.toggleColor,
         preChatForm: project?.preChatFormEnabled
           ? {
               required: project.preChatFormRequired,
