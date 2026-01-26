@@ -188,6 +188,44 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
     }
   }, [isOpen]);
 
+  // Mobile: Handle virtual keyboard appearance using visualViewport API
+  // This ensures the header stays visible when the keyboard opens
+  const [viewportStyle, setViewportStyle] = useState<{ height: number; top: number } | null>(null);
+
+  useEffect(() => {
+    const isMobile = window.innerWidth <= 480;
+    if (!isOpen || !isMobile) {
+      setViewportStyle(null);
+      return;
+    }
+
+    // Check if visualViewport API is supported
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const handleViewportChange = () => {
+      // When keyboard appears:
+      // - visualViewport.height decreases (visible area shrinks)
+      // - visualViewport.offsetTop may increase (page scrolled up)
+      // We need to position the widget within the visible area
+      setViewportStyle({
+        height: vv.height,
+        top: vv.offsetTop,
+      });
+    };
+
+    // Initial value
+    handleViewportChange();
+
+    vv.addEventListener('resize', handleViewportChange);
+    vv.addEventListener('scroll', handleViewportChange);
+
+    return () => {
+      vv.removeEventListener('resize', handleViewportChange);
+      vv.removeEventListener('scroll', handleViewportChange);
+    };
+  }, [isOpen]);
+
 
   // Track unread messages (from operator/AI) when chat is closed
   useEffect(() => {
@@ -674,6 +712,12 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
       {isOpen && (
         <div
           class={`pp-window pp-${position} pp-theme-${theme} ${isDragging ? 'pp-dragging' : ''}`}
+          style={viewportStyle ? {
+            height: `${viewportStyle.height}px`,
+            maxHeight: `${viewportStyle.height}px`,
+            top: `${viewportStyle.top}px`,
+            bottom: 'auto'
+          } : undefined}
           onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}

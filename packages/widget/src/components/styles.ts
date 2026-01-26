@@ -210,25 +210,51 @@ function adjustBrightness(hex: string, percent: number): string {
     /* Mobile: fullscreen widget to prevent scroll issues */
     @media (max-width: 480px) {
       .pp-window {
-        position: fixed;
+        position: fixed !important;
+        /* No !important on top/bottom/height - controlled by JS for keyboard handling */
         top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: 100%;
-        height: 100%;
-        max-height: 100%;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: auto;
+        width: 100vw !important;
+        height: 100vh;
+        height: 100dvh;
+        max-width: 100vw !important;
+        max-height: 100vh;
         max-height: 100dvh;
-        min-height: 100%;
-        min-height: 100dvh;
-        border-radius: 0;
-        overflow: hidden;
-        touch-action: none; /* Prevent page scroll behind widget */
+        min-height: 0; /* Allow shrinking for keyboard */
+        border-radius: 0 !important;
+        overflow: hidden !important;
+        touch-action: manipulation; /* Allow scroll and touch, prevent double-tap zoom */
+        margin: 0 !important;
+        padding: 0 !important;
+        box-sizing: border-box !important;
       }
 
-      /* Prevent any horizontal scroll */
-      .pp-window * {
-        max-width: 100%;
+      /* Prevent any overflow */
+      .pp-window *,
+      .pp-window *::before,
+      .pp-window *::after {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      /* Ensure messages area scrolls properly */
+      .pp-messages {
+        max-width: 100vw !important;
+        min-height: 0 !important; /* Allow shrinking for scroll */
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        touch-action: pan-y !important; /* Enable vertical scrolling */
+        -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+      }
+
+      /* Allow touch on input area for typing */
+      .pp-input-form,
+      .pp-input,
+      .pp-send-btn,
+      .pp-attach-btn {
+        touch-action: manipulation !important;
       }
     }
 
@@ -239,6 +265,9 @@ function adjustBrightness(hex: string, percent: number): string {
       padding: 10px 16px;
       background: ${resolvedHeaderColor};
       color: white;
+      flex-shrink: 0; /* Never shrink - always visible */
+      position: relative;
+      z-index: 10; /* Stay above messages during any scroll issues */
     }
 
     .pp-header-info {
@@ -311,6 +340,7 @@ function adjustBrightness(hex: string, percent: number): string {
 
     .pp-messages {
       flex: 1;
+      min-height: 0; /* Critical: allows flex child to shrink and enable scrolling */
       overflow-y: auto;
       overflow-x: hidden;
       padding: 16px 12px;
@@ -337,6 +367,7 @@ function adjustBrightness(hex: string, percent: number): string {
       margin: 12px;
       border-radius: 8px;
       box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
+      flex-shrink: 0;
     }
 
     .pp-date-separator {
@@ -344,6 +375,7 @@ function adjustBrightness(hex: string, percent: number): string {
       align-items: center;
       justify-content: center;
       margin: 12px 0;
+      flex-shrink: 0;
     }
 
     .pp-date-separator span {
@@ -366,6 +398,7 @@ function adjustBrightness(hex: string, percent: number): string {
       overflow: hidden; /* Prevent horizontal overflow */
       touch-action: pan-y; /* Only vertical scroll */
       max-width: 100%;
+      flex-shrink: 0; /* Never shrink - maintain natural size for scrolling */
     }
 
     .pp-swipe-left {
@@ -449,6 +482,7 @@ function adjustBrightness(hex: string, percent: number): string {
       display: block; /* Block for proper float behavior */
       will-change: transform;
       box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
+      flex-shrink: 0; /* Never shrink - for typing indicator which is direct child */
     }
 
     .pp-message-visitor {
@@ -628,6 +662,7 @@ function adjustBrightness(hex: string, percent: number): string {
       gap: 8px;
       background: ${resolvedFooterColor};
       align-items: flex-end;
+      flex-shrink: 0; /* Never shrink */
     }
 
     .pp-input {
@@ -700,6 +735,7 @@ function adjustBrightness(hex: string, percent: number): string {
       font-size: 10px;
       color: ${isDark ? '#8696a0' : '#667781'};
       background: ${resolvedFooterColor};
+      flex-shrink: 0; /* Never shrink */
     }
 
     .pp-footer a {
