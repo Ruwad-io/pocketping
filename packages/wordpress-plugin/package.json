@@ -1,0 +1,29 @@
+{
+  "name": "@pocketping/wordpress-plugin",
+  "version": "1.0.0",
+  "description": "PocketPing Live Chat plugin for WordPress",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pocketping/pocketping.git",
+    "directory": "packages/wordpress-plugin"
+  },
+  "keywords": [
+    "pocketping",
+    "wordpress",
+    "live-chat",
+    "chat-widget",
+    "telegram",
+    "discord",
+    "slack"
+  ],
+  "author": "PocketPing <hello@pocketping.io>",
+  "license": "MIT",
+  "homepage": "https://pocketping.io",
+  "bugs": {
+    "url": "https://github.com/pocketping/pocketping/issues"
+  },
+  "scripts": {
+    "build": "zip -r pocketping.zip pocketping.php readme.txt -x '*.DS_Store'"
+  }
+}

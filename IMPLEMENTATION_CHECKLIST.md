@@ -282,6 +282,25 @@ Block bots and automated requests from creating chat sessions:
 
 ---
 
+## Platform Integrations
+
+Plugins and integrations for popular platforms:
+
+| Platform | Type | Package/Plugin | Features |
+|----------|------|----------------|----------|
+| WordPress | Plugin | `pocketping` | Settings page, auto-inject widget |
+| Shopify | App | TBD | Coming soon |
+| Webflow | Embed | Manual | CDN script |
+
+### Implementation Status
+
+| Platform | Settings UI | Widget Injection | User Auth | E-commerce |
+|----------|-------------|------------------|-----------|------------|
+| WordPress | ✅ | ✅ | ⬜ | ⬜ |
+| Shopify | ⬜ | ⬜ | ⬜ | ⬜ |
+
+---
+
 ## How to Add a New Feature
 
 1. **Update this checklist FIRST** - Add the feature to the relevant table
