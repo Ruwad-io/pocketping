@@ -10,7 +10,13 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Widget',
       collapsed: false,
-      items: ['widget/installation', 'widget/configuration', 'widget/customization'],
+      items: [
+        'widget/installation',
+        'widget/configuration',
+        'widget/customization',
+        'widget/wordpress',
+        'widget/customize',
+      ],
     },
     {
       type: 'category',
