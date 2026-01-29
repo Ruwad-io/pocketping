@@ -75,6 +75,9 @@ type Config struct {
 
 	// IpFilter configuration for IP filtering
 	IpFilter *IpFilterConfig
+
+	// UaFilter configuration for User-Agent filtering
+	UaFilter *UaFilterConfig
 }
 
 // PocketPing is the main struct for handling chat sessions.
