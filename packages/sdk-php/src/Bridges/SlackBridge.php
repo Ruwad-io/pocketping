@@ -131,9 +131,6 @@ class SlackBridge extends AbstractBridge implements BridgeWithEditDeleteInterfac
 
     public function onNewSession(Session $session): void
     {
-        $url = $session->metadata?->url ?? 'Unknown';
-        $visitorName = $this->getVisitorName($session);
-
         $blocks = [
             [
                 'type' => 'header',
@@ -143,22 +140,71 @@ class SlackBridge extends AbstractBridge implements BridgeWithEditDeleteInterfac
                     'emoji' => true,
                 ],
             ],
-            [
-                'type' => 'section',
-                'fields' => [
-                    [
-                        'type' => 'mrkdwn',
-                        'text' => "👤 *Visitor:*\n{$visitorName}",
-                    ],
-                    [
-                        'type' => 'mrkdwn',
-                        'text' => "📍 *URL:*\n{$url}",
-                    ],
-                ],
-            ],
         ];
 
+        // Contact info
+        $email = $session->identity?->email;
+        $phone = $session->userPhone;
+        $userAgent = $session->metadata?->userAgent;
+
+        $contactFields = [];
+        if ($email) {
+            $contactFields[] = ['type' => 'mrkdwn', 'text' => "*📧 Email:*\n{$email}"];
+        }
+        if ($phone) {
+            $contactFields[] = ['type' => 'mrkdwn', 'text' => "*📱 Phone:*\n{$phone}"];
+        }
+        if ($userAgent) {
+            $contactFields[] = ['type' => 'mrkdwn', 'text' => "*🌐 Device:*\n{$this->parseUserAgent($userAgent)}"];
+        }
+
+        if (!empty($contactFields)) {
+            $blocks[] = ['type' => 'section', 'fields' => $contactFields];
+        }
+
+        $url = $session->metadata?->url;
+        if ($url) {
+            $blocks[] = [
+                'type' => 'section',
+                'fields' => [
+                    ['type' => 'mrkdwn', 'text' => "*📍 Page:*\n{$url}"],
+                ],
+            ];
+        }
+
+        $visitorName = $email ?? $session->visitorId;
         $this->sendBlocks($blocks, "🆕 New chat session from {$visitorName}");
+    }
+
+    private function parseUserAgent(string $ua): string
+    {
+        $browser = 'Unknown';
+        if (str_contains($ua, 'Firefox/')) {
+            $browser = 'Firefox';
+        } elseif (str_contains($ua, 'Edg/')) {
+            $browser = 'Edge';
+        } elseif (str_contains($ua, 'Chrome/')) {
+            $browser = 'Chrome';
+        } elseif (str_contains($ua, 'Safari/') && !str_contains($ua, 'Chrome')) {
+            $browser = 'Safari';
+        } elseif (str_contains($ua, 'Opera') || str_contains($ua, 'OPR/')) {
+            $browser = 'Opera';
+        }
+
+        $os = 'Unknown';
+        if (str_contains($ua, 'Windows')) {
+            $os = 'Windows';
+        } elseif (str_contains($ua, 'Mac OS')) {
+            $os = 'macOS';
+        } elseif (str_contains($ua, 'Linux') && !str_contains($ua, 'Android')) {
+            $os = 'Linux';
+        } elseif (str_contains($ua, 'Android')) {
+            $os = 'Android';
+        } elseif (str_contains($ua, 'iPhone') || str_contains($ua, 'iPad')) {
+            $os = 'iOS';
+        }
+
+        return "{$browser}/{$os}";
     }
 
     public function onVisitorMessage(Message $message, Session $session): void

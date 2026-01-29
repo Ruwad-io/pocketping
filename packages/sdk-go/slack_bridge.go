@@ -89,15 +89,35 @@ func (s *SlackWebhookBridge) Init(ctx context.Context, pp *PocketPing) error {
 
 // OnNewSession sends a notification when a new session is created.
 func (s *SlackWebhookBridge) OnNewSession(ctx context.Context, session *Session) error {
-	visitorName := s.getVisitorName(session)
-	pageURL := ""
-	if session.Metadata != nil && session.Metadata.URL != "" {
-		pageURL = session.Metadata.URL
+	text := ":new: New chat session\n"
+
+	// Contact info
+	var email string
+	if session.Identity != nil && session.Identity.Email != "" {
+		email = session.Identity.Email
+	}
+	phone := session.UserPhone
+	var userAgent string
+	if session.Metadata != nil && session.Metadata.UserAgent != "" {
+		userAgent = session.Metadata.UserAgent
 	}
 
-	text := fmt.Sprintf(":new: New chat session\n:bust_in_silhouette: Visitor: %s", visitorName)
-	if pageURL != "" {
-		text += fmt.Sprintf("\n:round_pushpin: %s", pageURL)
+	if email != "" {
+		text += fmt.Sprintf("\n:email: %s", email)
+	}
+	if phone != "" {
+		text += fmt.Sprintf("\n:phone: %s", phone)
+	}
+	if userAgent != "" {
+		text += fmt.Sprintf("\n:globe_with_meridians: %s", parseUserAgent(userAgent))
+	}
+
+	if email != "" || phone != "" || userAgent != "" {
+		text += "\n"
+	}
+
+	if session.Metadata != nil && session.Metadata.URL != "" {
+		text += fmt.Sprintf("\n:round_pushpin: %s", session.Metadata.URL)
 	}
 
 	err := s.sendWebhookMessage(ctx, text)
@@ -312,15 +332,35 @@ func (s *SlackBotBridge) Init(ctx context.Context, pp *PocketPing) error {
 
 // OnNewSession sends a notification when a new session is created.
 func (s *SlackBotBridge) OnNewSession(ctx context.Context, session *Session) error {
-	visitorName := s.getVisitorName(session)
-	pageURL := ""
-	if session.Metadata != nil && session.Metadata.URL != "" {
-		pageURL = session.Metadata.URL
+	text := ":new: New chat session\n"
+
+	// Contact info
+	var email string
+	if session.Identity != nil && session.Identity.Email != "" {
+		email = session.Identity.Email
+	}
+	phone := session.UserPhone
+	var userAgent string
+	if session.Metadata != nil && session.Metadata.UserAgent != "" {
+		userAgent = session.Metadata.UserAgent
 	}
 
-	text := fmt.Sprintf(":new: New chat session\n:bust_in_silhouette: Visitor: %s", visitorName)
-	if pageURL != "" {
-		text += fmt.Sprintf("\n:round_pushpin: %s", pageURL)
+	if email != "" {
+		text += fmt.Sprintf("\n:email: %s", email)
+	}
+	if phone != "" {
+		text += fmt.Sprintf("\n:phone: %s", phone)
+	}
+	if userAgent != "" {
+		text += fmt.Sprintf("\n:globe_with_meridians: %s", parseUserAgent(userAgent))
+	}
+
+	if email != "" || phone != "" || userAgent != "" {
+		text += "\n"
+	}
+
+	if session.Metadata != nil && session.Metadata.URL != "" {
+		text += fmt.Sprintf("\n:round_pushpin: %s", session.Metadata.URL)
 	}
 
 	_, err := s.postMessage(ctx, text)

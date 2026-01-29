@@ -409,9 +409,10 @@ export async function getFileUrl(botToken: string, fileId: string): Promise<stri
 function buildSessionInfo(session: SessionInfo): string {
   let text = `🆕 *New conversation*\n\n`
 
-  if (session.userEmail || session.userPhone) {
+  if (session.userEmail || session.userPhone || session.userAgent) {
     if (session.userEmail) text += `📧 ${escapeMarkdown(session.userEmail)}\n`
     if (session.userPhone) text += `📱 ${escapeMarkdown(session.userPhone)}\n`
+    if (session.userAgent) text += `🌐 ${escapeMarkdown(parseUserAgent(session.userAgent))}\n`
     text += '\n'
   }
 
@@ -420,6 +421,24 @@ function buildSessionInfo(session: SessionInfo): string {
   text += '\n\n_Reply here to communicate with the visitor._'
 
   return text
+}
+
+function parseUserAgent(ua: string): string {
+  let browser = 'Unknown'
+  if (ua.includes('Firefox/')) browser = 'Firefox'
+  else if (ua.includes('Edg/')) browser = 'Edge'
+  else if (ua.includes('Chrome/')) browser = 'Chrome'
+  else if (ua.includes('Safari/') && !ua.includes('Chrome')) browser = 'Safari'
+  else if (ua.includes('Opera') || ua.includes('OPR/')) browser = 'Opera'
+
+  let os = 'Unknown'
+  if (ua.includes('Windows')) os = 'Windows'
+  else if (ua.includes('Mac OS')) os = 'macOS'
+  else if (ua.includes('Linux') && !ua.includes('Android')) os = 'Linux'
+  else if (ua.includes('Android')) os = 'Android'
+  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS'
+
+  return `${browser}/${os}`
 }
 
 function escapeMarkdown(text: string): string {

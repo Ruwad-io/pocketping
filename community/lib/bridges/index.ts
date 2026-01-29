@@ -20,6 +20,7 @@ function toSessionInfo(session: Session): SessionInfo {
     visitorId: session.visitorId,
     userEmail: session.userEmail,
     userPhone: session.userPhone,
+    userAgent: session.userAgent,
     url: session.url,
     referrer: session.referrer,
     country: session.country,

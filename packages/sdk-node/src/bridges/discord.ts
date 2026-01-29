@@ -163,14 +163,21 @@ export class DiscordBridge implements Bridge {
    */
   async onNewSession(session: Session): Promise<void> {
     const url = session.metadata?.url || 'Unknown page';
+    const email = session.identity?.email;
+    const phone = session.userPhone;
+    const userAgent = session.metadata?.userAgent;
+
+    const fields: { name: string; value: string; inline: boolean }[] = [];
+
+    if (email) fields.push({ name: '📧 Email', value: email, inline: true });
+    if (phone) fields.push({ name: '📱 Phone', value: phone, inline: true });
+    if (userAgent) fields.push({ name: '🌐 Device', value: this.parseUserAgent(userAgent), inline: true });
+    fields.push({ name: '📍 Page', value: url, inline: false });
 
     const embed = {
-      title: 'New chat session',
+      title: '🆕 New chat session',
       color: 0x5865f2, // Discord blurple
-      fields: [
-        { name: 'Visitor', value: session.visitorId, inline: true },
-        { name: 'Page', value: url, inline: false },
-      ],
+      fields,
       timestamp: new Date().toISOString(),
     };
 
@@ -179,6 +186,27 @@ export class DiscordBridge implements Bridge {
     } catch (error) {
       console.error('[DiscordBridge] Failed to send new session notification:', error);
     }
+  }
+
+  /**
+   * Parse user agent to readable format
+   */
+  private parseUserAgent(ua: string): string {
+    let browser = 'Unknown';
+    if (ua.includes('Firefox/')) browser = 'Firefox';
+    else if (ua.includes('Edg/')) browser = 'Edge';
+    else if (ua.includes('Chrome/')) browser = 'Chrome';
+    else if (ua.includes('Safari/') && !ua.includes('Chrome')) browser = 'Safari';
+    else if (ua.includes('Opera') || ua.includes('OPR/')) browser = 'Opera';
+
+    let os = 'Unknown';
+    if (ua.includes('Windows')) os = 'Windows';
+    else if (ua.includes('Mac OS')) os = 'macOS';
+    else if (ua.includes('Linux') && !ua.includes('Android')) os = 'Linux';
+    else if (ua.includes('Android')) os = 'Android';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+
+    return `${browser}/${os}`;
   }
 
   /**

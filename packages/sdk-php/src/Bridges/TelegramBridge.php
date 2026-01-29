@@ -66,14 +66,64 @@ class TelegramBridge extends AbstractBridge implements BridgeWithEditDeleteInter
 
     public function onNewSession(Session $session): void
     {
-        $url = $session->metadata?->url ?? 'Unknown';
-        $visitorName = $this->getVisitorName($session);
+        $text = "🆕 <b>New chat session</b>\n";
 
-        $text = "🆕 <b>New chat session</b>\n"
-            . "👤 Visitor: {$visitorName}\n"
-            . "📍 {$url}";
+        // Contact info
+        $email = $session->identity?->email;
+        $phone = $session->userPhone;
+        $userAgent = $session->metadata?->userAgent;
+
+        if ($email) {
+            $text .= "\n📧 " . $this->escapeHtml($email);
+        }
+        if ($phone) {
+            $text .= "\n📱 " . $this->escapeHtml($phone);
+        }
+        if ($userAgent) {
+            $text .= "\n🌐 " . $this->escapeHtml($this->parseUserAgent($userAgent));
+        }
+
+        if ($email || $phone || $userAgent) {
+            $text .= "\n";
+        }
+
+        $url = $session->metadata?->url;
+        if ($url) {
+            $text .= "\n📍 " . $this->escapeHtml($url);
+        }
 
         $this->sendMessage($text);
+    }
+
+    private function parseUserAgent(string $ua): string
+    {
+        $browser = 'Unknown';
+        if (str_contains($ua, 'Firefox/')) {
+            $browser = 'Firefox';
+        } elseif (str_contains($ua, 'Edg/')) {
+            $browser = 'Edge';
+        } elseif (str_contains($ua, 'Chrome/')) {
+            $browser = 'Chrome';
+        } elseif (str_contains($ua, 'Safari/') && !str_contains($ua, 'Chrome')) {
+            $browser = 'Safari';
+        } elseif (str_contains($ua, 'Opera') || str_contains($ua, 'OPR/')) {
+            $browser = 'Opera';
+        }
+
+        $os = 'Unknown';
+        if (str_contains($ua, 'Windows')) {
+            $os = 'Windows';
+        } elseif (str_contains($ua, 'Mac OS')) {
+            $os = 'macOS';
+        } elseif (str_contains($ua, 'Linux') && !str_contains($ua, 'Android')) {
+            $os = 'Linux';
+        } elseif (str_contains($ua, 'Android')) {
+            $os = 'Android';
+        } elseif (str_contains($ua, 'iPhone') || str_contains($ua, 'iPad')) {
+            $os = 'iOS';
+        }
+
+        return "{$browser}/{$os}";
     }
 
     public function onVisitorMessage(Message $message, Session $session): void

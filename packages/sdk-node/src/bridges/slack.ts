@@ -187,36 +187,63 @@ export class SlackBridge implements Bridge {
    */
   async onNewSession(session: Session): Promise<void> {
     const url = session.metadata?.url || 'Unknown page';
+    const email = session.identity?.email;
+    const phone = session.userPhone;
+    const userAgent = session.metadata?.userAgent;
 
-    const blocks = [
+    const contactFields: { type: string; text: string }[] = [];
+    if (email) contactFields.push({ type: 'mrkdwn', text: `*📧 Email:*\n${email}` });
+    if (phone) contactFields.push({ type: 'mrkdwn', text: `*📱 Phone:*\n${phone}` });
+    if (userAgent) contactFields.push({ type: 'mrkdwn', text: `*🌐 Device:*\n${this.parseUserAgent(userAgent)}` });
+
+    const blocks: Array<Record<string, unknown>> = [
       {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: 'New chat session',
+          text: '🆕 New chat session',
           emoji: true,
         },
       },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Visitor:*\n${session.visitorId}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Page:*\n${url}`,
-          },
-        ],
-      },
     ];
+
+    if (contactFields.length > 0) {
+      blocks.push({ type: 'section', fields: contactFields });
+    }
+
+    blocks.push({
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*📍 Page:*\n${url}` },
+      ],
+    });
 
     try {
       await this.sendBlocks(blocks);
     } catch (error) {
       console.error('[SlackBridge] Failed to send new session notification:', error);
     }
+  }
+
+  /**
+   * Parse user agent to readable format
+   */
+  private parseUserAgent(ua: string): string {
+    let browser = 'Unknown';
+    if (ua.includes('Firefox/')) browser = 'Firefox';
+    else if (ua.includes('Edg/')) browser = 'Edge';
+    else if (ua.includes('Chrome/')) browser = 'Chrome';
+    else if (ua.includes('Safari/') && !ua.includes('Chrome')) browser = 'Safari';
+    else if (ua.includes('Opera') || ua.includes('OPR/')) browser = 'Opera';
+
+    let os = 'Unknown';
+    if (ua.includes('Windows')) os = 'Windows';
+    else if (ua.includes('Mac OS')) os = 'macOS';
+    else if (ua.includes('Linux') && !ua.includes('Android')) os = 'Linux';
+    else if (ua.includes('Android')) os = 'Android';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+
+    return `${browser}/${os}`;
   }
 
   /**

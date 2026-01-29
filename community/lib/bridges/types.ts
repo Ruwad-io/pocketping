@@ -8,6 +8,7 @@ export interface SessionInfo {
   userName?: string | null
   userEmail?: string | null
   userPhone?: string | null
+  userAgent?: string | null
   url?: string | null
   referrer?: string | null
   country?: string | null

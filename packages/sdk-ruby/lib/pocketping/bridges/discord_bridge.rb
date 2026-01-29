@@ -63,10 +63,7 @@ module PocketPing
       # @param session [Session] The new session
       # @return [void]
       def on_new_session(session)
-        visitor_id = session.visitor_id || "Unknown"
-        url = session.metadata&.url || "No URL"
-
-        content = format_new_session_message(visitor_id, url)
+        content = format_new_session_message(session)
         send_webhook_message(content)
       rescue StandardError => e
         warn "[PocketPing] DiscordWebhookBridge error in on_new_session: #{e.message}"
@@ -134,12 +131,48 @@ module PocketPing
 
       private
 
-      def format_new_session_message(visitor_id, url)
-        [
+      def format_new_session_message(session)
+        visitor_id = session.visitor_id || "Unknown"
+        url = session.metadata&.url || "No URL"
+        email = session.metadata&.email
+        phone = session.metadata&.phone
+        user_agent = session.metadata&.user_agent
+
+        lines = [
           "\u{1F195} New chat session",
           "\u{1F464} Visitor: #{visitor_id}",
           "\u{1F4CD} #{url}"
-        ].join("\n")
+        ]
+
+        lines << "\u{1F4E7} #{email}" if email && !email.empty?
+        lines << "\u{1F4DE} #{phone}" if phone && !phone.empty?
+        lines << "\u{1F4F1} #{parse_user_agent(user_agent)}" if user_agent && !user_agent.empty?
+
+        lines.join("\n")
+      end
+
+      def parse_user_agent(ua)
+        return "Unknown" if ua.nil? || ua.empty?
+
+        browser = case ua
+                  when /Firefox/i then "Firefox"
+                  when /Edg/i then "Edge"
+                  when /Chrome/i then "Chrome"
+                  when /Safari/i then "Safari"
+                  when /Opera|OPR/i then "Opera"
+                  else "Browser"
+                  end
+
+        os = case ua
+             when /Windows/i then "Windows"
+             when /Macintosh|Mac OS/i then "macOS"
+             when /Linux/i then "Linux"
+             when /Android/i then "Android"
+             when /iPhone|iPad|iOS/i then "iOS"
+             else "Unknown"
+             end
+
+        "#{browser}/#{os}"
       end
 
       def format_visitor_message(visitor_id, content, edited: false)
@@ -256,10 +289,7 @@ module PocketPing
       # @param session [Session] The new session
       # @return [void]
       def on_new_session(session)
-        visitor_id = session.visitor_id || "Unknown"
-        url = session.metadata&.url || "No URL"
-
-        content = format_new_session_message(visitor_id, url)
+        content = format_new_session_message(session)
         send_message(content)
       rescue StandardError => e
         warn "[PocketPing] DiscordBotBridge error in on_new_session: #{e.message}"
@@ -343,12 +373,48 @@ module PocketPing
 
       private
 
-      def format_new_session_message(visitor_id, url)
-        [
+      def format_new_session_message(session)
+        visitor_id = session.visitor_id || "Unknown"
+        url = session.metadata&.url || "No URL"
+        email = session.metadata&.email
+        phone = session.metadata&.phone
+        user_agent = session.metadata&.user_agent
+
+        lines = [
           "\u{1F195} New chat session",
           "\u{1F464} Visitor: #{visitor_id}",
           "\u{1F4CD} #{url}"
-        ].join("\n")
+        ]
+
+        lines << "\u{1F4E7} #{email}" if email && !email.empty?
+        lines << "\u{1F4DE} #{phone}" if phone && !phone.empty?
+        lines << "\u{1F4F1} #{parse_user_agent(user_agent)}" if user_agent && !user_agent.empty?
+
+        lines.join("\n")
+      end
+
+      def parse_user_agent(ua)
+        return "Unknown" if ua.nil? || ua.empty?
+
+        browser = case ua
+                  when /Firefox/i then "Firefox"
+                  when /Edg/i then "Edge"
+                  when /Chrome/i then "Chrome"
+                  when /Safari/i then "Safari"
+                  when /Opera|OPR/i then "Opera"
+                  else "Browser"
+                  end
+
+        os = case ua
+             when /Windows/i then "Windows"
+             when /Macintosh|Mac OS/i then "macOS"
+             when /Linux/i then "Linux"
+             when /Android/i then "Android"
+             when /iPhone|iPad|iOS/i then "iOS"
+             else "Unknown"
+             end
+
+        "#{browser}/#{os}"
       end
 
       def format_visitor_message(visitor_id, content, edited: false)

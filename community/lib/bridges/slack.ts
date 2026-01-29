@@ -349,11 +349,12 @@ function buildSessionBlocks(session: SessionInfo): SlackBlock[] {
     text: { type: 'plain_text', text: '🆕 New conversation', emoji: true },
   })
 
-  if (session.userName || session.userEmail || session.userPhone) {
+  if (session.userName || session.userEmail || session.userPhone || session.userAgent) {
     const fields: { type: string; text: string }[] = []
     if (session.userName) fields.push({ type: 'mrkdwn', text: `*Name:*\n${session.userName}` })
     if (session.userEmail) fields.push({ type: 'mrkdwn', text: `*Email:*\n${session.userEmail}` })
     if (session.userPhone) fields.push({ type: 'mrkdwn', text: `*Phone:*\n${session.userPhone}` })
+    if (session.userAgent) fields.push({ type: 'mrkdwn', text: `*Device:*\n${parseUserAgent(session.userAgent)}` })
     blocks.push({ type: 'section', fields })
   }
 
@@ -378,6 +379,24 @@ function buildSessionBlocks(session: SessionInfo): SlackBlock[] {
   })
 
   return blocks
+}
+
+function parseUserAgent(ua: string): string {
+  let browser = 'Unknown'
+  if (ua.includes('Firefox/')) browser = 'Firefox'
+  else if (ua.includes('Edg/')) browser = 'Edge'
+  else if (ua.includes('Chrome/')) browser = 'Chrome'
+  else if (ua.includes('Safari/') && !ua.includes('Chrome')) browser = 'Safari'
+  else if (ua.includes('Opera') || ua.includes('OPR/')) browser = 'Opera'
+
+  let os = 'Unknown'
+  if (ua.includes('Windows')) os = 'Windows'
+  else if (ua.includes('Mac OS')) os = 'macOS'
+  else if (ua.includes('Linux') && !ua.includes('Android')) os = 'Linux'
+  else if (ua.includes('Android')) os = 'Android'
+  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS'
+
+  return `${browser}/${os}`
 }
 
 // Webhook types

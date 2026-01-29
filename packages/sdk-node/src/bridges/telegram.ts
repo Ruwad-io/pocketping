@@ -94,8 +94,7 @@ export class TelegramBridge implements Bridge {
    * Called when a new chat session is created
    */
   async onNewSession(session: Session): Promise<void> {
-    const url = session.metadata?.url || 'Unknown page';
-    const text = this.formatNewSession(session.visitorId, url);
+    const text = this.formatNewSession(session);
 
     try {
       await this.sendMessage(text);
@@ -328,19 +327,50 @@ export class TelegramBridge implements Bridge {
   /**
    * Format new session notification
    */
-  private formatNewSession(visitorId: string, url: string): string {
+  private formatNewSession(session: Session): string {
+    const url = session.metadata?.url || 'Unknown page';
+    const email = session.identity?.email;
+    const phone = session.userPhone;
+    const userAgent = session.metadata?.userAgent;
+
     if (this.parseMode === 'HTML') {
-      return (
-        `<b>New chat session</b>\n` +
-        `<b>Visitor:</b> ${this.escapeHtml(visitorId)}\n` +
-        `<b>Page:</b> ${this.escapeHtml(url)}`
-      );
+      let text = `<b>🆕 New chat session</b>\n\n`;
+      if (email) text += `📧 ${this.escapeHtml(email)}\n`;
+      if (phone) text += `📱 ${this.escapeHtml(phone)}\n`;
+      if (userAgent) text += `🌐 ${this.escapeHtml(this.parseUserAgent(userAgent))}\n`;
+      if (email || phone || userAgent) text += '\n';
+      text += `<b>Page:</b> ${this.escapeHtml(url)}`;
+      return text;
     }
-    return (
-      `*New chat session*\n` +
-      `*Visitor:* ${this.escapeMarkdown(visitorId)}\n` +
-      `*Page:* ${this.escapeMarkdown(url)}`
-    );
+
+    let text = `*🆕 New chat session*\n\n`;
+    if (email) text += `📧 ${this.escapeMarkdown(email)}\n`;
+    if (phone) text += `📱 ${this.escapeMarkdown(phone)}\n`;
+    if (userAgent) text += `🌐 ${this.escapeMarkdown(this.parseUserAgent(userAgent))}\n`;
+    if (email || phone || userAgent) text += '\n';
+    text += `*Page:* ${this.escapeMarkdown(url)}`;
+    return text;
+  }
+
+  /**
+   * Parse user agent to readable format
+   */
+  private parseUserAgent(ua: string): string {
+    let browser = 'Unknown';
+    if (ua.includes('Firefox/')) browser = 'Firefox';
+    else if (ua.includes('Edg/')) browser = 'Edge';
+    else if (ua.includes('Chrome/')) browser = 'Chrome';
+    else if (ua.includes('Safari/') && !ua.includes('Chrome')) browser = 'Safari';
+    else if (ua.includes('Opera') || ua.includes('OPR/')) browser = 'Opera';
+
+    let os = 'Unknown';
+    if (ua.includes('Windows')) os = 'Windows';
+    else if (ua.includes('Mac OS')) os = 'macOS';
+    else if (ua.includes('Linux') && !ua.includes('Android')) os = 'Linux';
+    else if (ua.includes('Android')) os = 'Android';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+
+    return `${browser}/${os}`;
   }
 
   /**

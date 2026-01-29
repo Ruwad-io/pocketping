@@ -343,25 +343,62 @@ class SlackBridge(Bridge):
         """Create a divider block."""
         return {"type": "divider"}
 
+    def _parse_user_agent(self, ua: str) -> str:
+        """Parse user agent to readable format."""
+        browser = "Unknown"
+        if "Firefox/" in ua:
+            browser = "Firefox"
+        elif "Edg/" in ua:
+            browser = "Edge"
+        elif "Chrome/" in ua:
+            browser = "Chrome"
+        elif "Safari/" in ua and "Chrome" not in ua:
+            browser = "Safari"
+        elif "Opera" in ua or "OPR/" in ua:
+            browser = "Opera"
+
+        os = "Unknown"
+        if "Windows" in ua:
+            os = "Windows"
+        elif "Mac OS" in ua:
+            os = "macOS"
+        elif "Linux" in ua and "Android" not in ua:
+            os = "Linux"
+        elif "Android" in ua:
+            os = "Android"
+        elif "iPhone" in ua or "iPad" in ua:
+            os = "iOS"
+
+        return f"{browser}/{os}"
+
     async def on_new_session(self, session: Session) -> None:
         """Send notification for new chat session."""
-        visitor_display = session.visitor_id[:8]
-        if session.identity:
-            if session.identity.name:
-                visitor_display = session.identity.name
-            elif session.identity.email:
-                visitor_display = session.identity.email
-
         blocks = [
-            self._create_header_block("New chat session"),
-            self._create_section_block(f"*Visitor:* {visitor_display}"),
+            self._create_header_block("🆕 New chat session"),
         ]
+
+        # Contact info
+        email = session.identity.email if session.identity else None
+        phone = session.user_phone
+        user_agent = session.metadata.user_agent if session.metadata else None
+
+        contact_parts = []
+        if email:
+            contact_parts.append(f"*📧 Email:* {email}")
+        if phone:
+            contact_parts.append(f"*📱 Phone:* {phone}")
+        if user_agent:
+            contact_parts.append(f"*🌐 Device:* {self._parse_user_agent(user_agent)}")
+
+        if contact_parts:
+            blocks.append(self._create_section_block("\n".join(contact_parts)))
 
         if session.metadata and session.metadata.url:
             blocks.append(
-                self._create_section_block(f"*Page:* {session.metadata.url}")
+                self._create_section_block(f"*📍 Page:* {session.metadata.url}")
             )
 
+        visitor_display = email or session.visitor_id[:8]
         await self._send_message(
             text=f"New chat session from {visitor_display}",
             blocks=blocks,

@@ -235,26 +235,58 @@ class TelegramBridge(Bridge):
             .replace(">", "&gt;")
         )
 
+    def _parse_user_agent(self, ua: str) -> str:
+        """Parse user agent to readable format."""
+        browser = "Unknown"
+        if "Firefox/" in ua:
+            browser = "Firefox"
+        elif "Edg/" in ua:
+            browser = "Edge"
+        elif "Chrome/" in ua:
+            browser = "Chrome"
+        elif "Safari/" in ua and "Chrome" not in ua:
+            browser = "Safari"
+        elif "Opera" in ua or "OPR/" in ua:
+            browser = "Opera"
+
+        os = "Unknown"
+        if "Windows" in ua:
+            os = "Windows"
+        elif "Mac OS" in ua:
+            os = "macOS"
+        elif "Linux" in ua and "Android" not in ua:
+            os = "Linux"
+        elif "Android" in ua:
+            os = "Android"
+        elif "iPhone" in ua or "iPad" in ua:
+            os = "iOS"
+
+        return f"{browser}/{os}"
+
     async def on_new_session(self, session: Session) -> None:
         """Send notification for new chat session."""
-        visitor_display = session.visitor_id[:8]
-        if session.identity:
-            if session.identity.name:
-                visitor_display = session.identity.name
-            elif session.identity.email:
-                visitor_display = session.identity.email
+        parts = ["<b>🆕 New chat session</b>\n"]
 
-        url_part = ""
+        # Contact info
+        email = session.identity.email if session.identity else None
+        phone = session.user_phone
+        user_agent = session.metadata.user_agent if session.metadata else None
+
+        if email:
+            parts.append(f"📧 {self._escape_html(email)}")
+        if phone:
+            parts.append(f"📱 {self._escape_html(phone)}")
+        if user_agent:
+            parts.append(f"🌐 {self._escape_html(self._parse_user_agent(user_agent))}")
+
+        if email or phone or user_agent:
+            parts.append("")
+
+        # Page info
         if session.metadata and session.metadata.url:
-            url_part = f"\n<b>Page:</b> {self._escape_html(session.metadata.url)}"
+            parts.append(f"<b>📍 Page:</b> {self._escape_html(session.metadata.url)}")
 
-        text = (
-            f"<b>New chat session</b>\n"
-            f"<b>Visitor:</b> {self._escape_html(visitor_display)}"
-            f"{url_part}"
-        )
-
-        await self._send_message(text)
+        await self._send_message("\n".join(parts))
 
     async def on_visitor_message(
         self, message: Message, session: Session

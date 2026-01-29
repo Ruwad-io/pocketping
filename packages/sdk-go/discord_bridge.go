@@ -89,15 +89,35 @@ func (d *DiscordWebhookBridge) Init(ctx context.Context, pp *PocketPing) error {
 
 // OnNewSession sends a notification when a new session is created.
 func (d *DiscordWebhookBridge) OnNewSession(ctx context.Context, session *Session) error {
-	visitorName := d.getVisitorName(session)
-	pageURL := ""
-	if session.Metadata != nil && session.Metadata.URL != "" {
-		pageURL = session.Metadata.URL
+	content := "🆕 New chat session\n"
+
+	// Contact info
+	var email string
+	if session.Identity != nil && session.Identity.Email != "" {
+		email = session.Identity.Email
+	}
+	phone := session.UserPhone
+	var userAgent string
+	if session.Metadata != nil && session.Metadata.UserAgent != "" {
+		userAgent = session.Metadata.UserAgent
 	}
 
-	content := fmt.Sprintf("🆕 New chat session\n👤 Visitor: %s", visitorName)
-	if pageURL != "" {
-		content += fmt.Sprintf("\n📍 %s", pageURL)
+	if email != "" {
+		content += fmt.Sprintf("\n📧 %s", email)
+	}
+	if phone != "" {
+		content += fmt.Sprintf("\n📱 %s", phone)
+	}
+	if userAgent != "" {
+		content += fmt.Sprintf("\n🌐 %s", parseUserAgent(userAgent))
+	}
+
+	if email != "" || phone != "" || userAgent != "" {
+		content += "\n"
+	}
+
+	if session.Metadata != nil && session.Metadata.URL != "" {
+		content += fmt.Sprintf("\n📍 %s", session.Metadata.URL)
 	}
 
 	_, err := d.sendWebhookMessage(ctx, content, "")
@@ -336,15 +356,35 @@ func (d *DiscordBotBridge) Init(ctx context.Context, pp *PocketPing) error {
 
 // OnNewSession sends a notification when a new session is created.
 func (d *DiscordBotBridge) OnNewSession(ctx context.Context, session *Session) error {
-	visitorName := d.getVisitorName(session)
-	pageURL := ""
-	if session.Metadata != nil && session.Metadata.URL != "" {
-		pageURL = session.Metadata.URL
+	content := "🆕 New chat session\n"
+
+	// Contact info
+	var email string
+	if session.Identity != nil && session.Identity.Email != "" {
+		email = session.Identity.Email
+	}
+	phone := session.UserPhone
+	var userAgent string
+	if session.Metadata != nil && session.Metadata.UserAgent != "" {
+		userAgent = session.Metadata.UserAgent
 	}
 
-	content := fmt.Sprintf("🆕 New chat session\n👤 Visitor: %s", visitorName)
-	if pageURL != "" {
-		content += fmt.Sprintf("\n📍 %s", pageURL)
+	if email != "" {
+		content += fmt.Sprintf("\n📧 %s", email)
+	}
+	if phone != "" {
+		content += fmt.Sprintf("\n📱 %s", phone)
+	}
+	if userAgent != "" {
+		content += fmt.Sprintf("\n🌐 %s", parseUserAgent(userAgent))
+	}
+
+	if email != "" || phone != "" || userAgent != "" {
+		content += "\n"
+	}
+
+	if session.Metadata != nil && session.Metadata.URL != "" {
+		content += fmt.Sprintf("\n📍 %s", session.Metadata.URL)
 	}
 
 	_, err := d.sendMessage(ctx, content, "")

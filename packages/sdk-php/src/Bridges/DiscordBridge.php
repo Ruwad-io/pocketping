@@ -134,20 +134,67 @@ class DiscordBridge extends AbstractBridge implements BridgeWithEditDeleteInterf
 
     public function onNewSession(Session $session): void
     {
-        $url = $session->metadata?->url ?? 'Unknown';
-        $visitorName = $this->getVisitorName($session);
+        $fields = [];
+
+        // Contact info
+        $email = $session->identity?->email;
+        $phone = $session->userPhone;
+        $userAgent = $session->metadata?->userAgent;
+
+        if ($email) {
+            $fields[] = ['name' => '📧 Email', 'value' => $email, 'inline' => true];
+        }
+        if ($phone) {
+            $fields[] = ['name' => '📱 Phone', 'value' => $phone, 'inline' => true];
+        }
+        if ($userAgent) {
+            $fields[] = ['name' => '🌐 Device', 'value' => $this->parseUserAgent($userAgent), 'inline' => true];
+        }
+
+        $url = $session->metadata?->url;
+        if ($url) {
+            $fields[] = ['name' => '📍 Page', 'value' => $url, 'inline' => false];
+        }
 
         $embed = [
             'title' => '🆕 New chat session',
             'color' => 0x5865F2, // Discord blurple
-            'fields' => [
-                ['name' => '👤 Visitor', 'value' => $visitorName, 'inline' => true],
-                ['name' => '📍 URL', 'value' => $url, 'inline' => false],
-            ],
+            'fields' => $fields,
             'timestamp' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
         ];
 
         $this->sendEmbed($embed);
+    }
+
+    private function parseUserAgent(string $ua): string
+    {
+        $browser = 'Unknown';
+        if (str_contains($ua, 'Firefox/')) {
+            $browser = 'Firefox';
+        } elseif (str_contains($ua, 'Edg/')) {
+            $browser = 'Edge';
+        } elseif (str_contains($ua, 'Chrome/')) {
+            $browser = 'Chrome';
+        } elseif (str_contains($ua, 'Safari/') && !str_contains($ua, 'Chrome')) {
+            $browser = 'Safari';
+        } elseif (str_contains($ua, 'Opera') || str_contains($ua, 'OPR/')) {
+            $browser = 'Opera';
+        }
+
+        $os = 'Unknown';
+        if (str_contains($ua, 'Windows')) {
+            $os = 'Windows';
+        } elseif (str_contains($ua, 'Mac OS')) {
+            $os = 'macOS';
+        } elseif (str_contains($ua, 'Linux') && !str_contains($ua, 'Android')) {
+            $os = 'Linux';
+        } elseif (str_contains($ua, 'Android')) {
+            $os = 'Android';
+        } elseif (str_contains($ua, 'iPhone') || str_contains($ua, 'iPad')) {
+            $os = 'iOS';
+        }
+
+        return "{$browser}/{$os}";
     }
 
     public function onVisitorMessage(Message $message, Session $session): void

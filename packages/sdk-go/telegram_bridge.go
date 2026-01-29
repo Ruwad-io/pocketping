@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -91,15 +92,35 @@ func (t *TelegramBridge) Init(ctx context.Context, pp *PocketPing) error {
 
 // OnNewSession sends a notification when a new session is created.
 func (t *TelegramBridge) OnNewSession(ctx context.Context, session *Session) error {
-	visitorName := t.getVisitorName(session)
-	pageURL := ""
-	if session.Metadata != nil && session.Metadata.URL != "" {
-		pageURL = session.Metadata.URL
+	text := "🆕 New chat session\n"
+
+	// Contact info
+	var email string
+	if session.Identity != nil && session.Identity.Email != "" {
+		email = session.Identity.Email
+	}
+	phone := session.UserPhone
+	var userAgent string
+	if session.Metadata != nil && session.Metadata.UserAgent != "" {
+		userAgent = session.Metadata.UserAgent
 	}
 
-	text := fmt.Sprintf("🆕 New chat session\n👤 Visitor: %s", visitorName)
-	if pageURL != "" {
-		text += fmt.Sprintf("\n📍 %s", pageURL)
+	if email != "" {
+		text += fmt.Sprintf("\n📧 %s", email)
+	}
+	if phone != "" {
+		text += fmt.Sprintf("\n📱 %s", phone)
+	}
+	if userAgent != "" {
+		text += fmt.Sprintf("\n🌐 %s", parseUserAgent(userAgent))
+	}
+
+	if email != "" || phone != "" || userAgent != "" {
+		text += "\n"
+	}
+
+	if session.Metadata != nil && session.Metadata.URL != "" {
+		text += fmt.Sprintf("\n📍 %s", session.Metadata.URL)
 	}
 
 	_, err := t.sendMessage(ctx, text, nil)
@@ -107,6 +128,37 @@ func (t *TelegramBridge) OnNewSession(ctx context.Context, session *Session) err
 		log.Printf("[TelegramBridge] OnNewSession error: %v", err)
 	}
 	return nil
+}
+
+// parseUserAgent parses user agent string to a readable format.
+func parseUserAgent(ua string) string {
+	browser := "Unknown"
+	if strings.Contains(ua, "Firefox/") {
+		browser = "Firefox"
+	} else if strings.Contains(ua, "Edg/") {
+		browser = "Edge"
+	} else if strings.Contains(ua, "Chrome/") {
+		browser = "Chrome"
+	} else if strings.Contains(ua, "Safari/") && !strings.Contains(ua, "Chrome") {
+		browser = "Safari"
+	} else if strings.Contains(ua, "Opera") || strings.Contains(ua, "OPR/") {
+		browser = "Opera"
+	}
+
+	os := "Unknown"
+	if strings.Contains(ua, "Windows") {
+		os = "Windows"
+	} else if strings.Contains(ua, "Mac OS") {
+		os = "macOS"
+	} else if strings.Contains(ua, "Linux") && !strings.Contains(ua, "Android") {
+		os = "Linux"
+	} else if strings.Contains(ua, "Android") {
+		os = "Android"
+	} else if strings.Contains(ua, "iPhone") || strings.Contains(ua, "iPad") {
+		os = "iOS"
+	}
+
+	return browser + "/" + os
 }
 
 // OnVisitorMessage sends a notification when a visitor sends a message.
