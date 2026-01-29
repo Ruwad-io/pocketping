@@ -208,13 +208,14 @@ class TelegramBridgeTest extends TestCase
             createdAt: new \DateTimeImmutable(),
             lastActivity: new \DateTimeImmutable(),
             metadata: new SessionMetadata(url: 'https://example.com/page'),
-            identity: new UserIdentity(id: 'user-1', name: 'John Doe'),
+            identity: new UserIdentity(id: 'user-1', email: 'john@example.com'),
         );
 
         $this->bridge->onNewSession($session);
 
         $request = $this->httpClient->getLastRequest();
-        $this->assertStringContainsString('John Doe', $request['data']['text']);
+        // New format shows email/phone/userAgent instead of name
+        $this->assertStringContainsString('john@example.com', $request['data']['text']);
         $this->assertStringContainsString('https://example.com/page', $request['data']['text']);
     }
 

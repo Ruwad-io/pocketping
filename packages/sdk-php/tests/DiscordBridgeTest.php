@@ -269,7 +269,7 @@ class DiscordBridgeTest extends TestCase
             createdAt: new \DateTimeImmutable(),
             lastActivity: new \DateTimeImmutable(),
             metadata: new SessionMetadata(url: 'https://example.com/page'),
-            identity: new UserIdentity(id: 'user-1', name: 'Jane Doe'),
+            identity: new UserIdentity(id: 'user-1', email: 'jane@example.com'),
         );
 
         $bridge->onNewSession($session);
@@ -277,9 +277,9 @@ class DiscordBridgeTest extends TestCase
         $request = $this->httpClient->getLastRequest();
         $embed = $request['data']['embeds'][0];
 
-        // Check fields contain visitor info
-        $visitorField = $embed['fields'][0];
-        $this->assertEquals('Jane Doe', $visitorField['value']);
+        // Check fields contain contact info (email)
+        $fieldValues = array_map(fn($f) => $f['value'], $embed['fields']);
+        $this->assertTrue(in_array('jane@example.com', $fieldValues));
     }
 
     // ─────────────────────────────────────────────────────────────────────

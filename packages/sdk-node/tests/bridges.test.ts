@@ -188,8 +188,7 @@ describe('TelegramBridge', () => {
       const callArgs = mockFetch.mock.calls[0];
       const body = JSON.parse(callArgs[1].body);
 
-      expect(body.text).toContain('New chat session');
-      expect(body.text).toContain('test-visitor');
+      expect(body.text).toContain('🆕 New chat session');
       expect(body.text).toContain('https://test.com/page');
     });
   });
@@ -630,11 +629,10 @@ describe('DiscordBridge', () => {
       const callArgs = mockFetch.mock.calls[0];
       const body = JSON.parse(callArgs[1].body);
 
-      expect(body.embeds[0].title).toBe('New chat session');
+      expect(body.embeds[0].title).toBe('🆕 New chat session');
       expect(body.embeds[0].fields).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ name: 'Visitor', value: 'test-visitor' }),
-          expect.objectContaining({ name: 'Page', value: 'https://test.com/page' }),
+          expect.objectContaining({ name: '📍 Page', value: 'https://test.com/page' }),
         ])
       );
     });
@@ -1156,13 +1154,12 @@ describe('SlackBridge', () => {
       const body = JSON.parse(callArgs[1].body);
 
       // Check header block
-      expect(body.blocks[0].text.text).toBe('New chat session');
+      expect(body.blocks[0].text.text).toBe('🆕 New chat session');
 
-      // Check section fields
+      // Check section fields (page URL)
       const fieldsBlock = body.blocks.find((b: any) => b.type === 'section' && b.fields);
       expect(fieldsBlock.fields).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ text: expect.stringContaining('test-visitor') }),
           expect.objectContaining({ text: expect.stringContaining('https://test.com/page') }),
         ])
       );

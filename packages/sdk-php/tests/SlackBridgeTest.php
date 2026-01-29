@@ -272,14 +272,14 @@ class SlackBridgeTest extends TestCase
             createdAt: new \DateTimeImmutable(),
             lastActivity: new \DateTimeImmutable(),
             metadata: new SessionMetadata(url: 'https://example.com/page'),
-            identity: new UserIdentity(id: 'user-1', name: 'Alice Smith'),
+            identity: new UserIdentity(id: 'user-1', email: 'alice@example.com'),
         );
 
         $bridge->onNewSession($session);
 
         $request = $this->httpClient->getLastRequest();
-        // Check that fallback text contains visitor name
-        $this->assertStringContainsString('Alice Smith', $request['data']['text']);
+        // Check that fallback text contains email (used as visitor display)
+        $this->assertStringContainsString('alice@example.com', $request['data']['text']);
     }
 
     // ─────────────────────────────────────────────────────────────────────

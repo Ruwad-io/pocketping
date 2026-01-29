@@ -226,8 +226,9 @@ class TestTelegramBridgeOnNewSession:
 
             call_args = mock_post.call_args
             text = call_args[1]["json"]["text"]
-            assert "John Doe" in text
-            assert "Visitor" in text
+            # New format shows email/phone/userAgent instead of visitorId
+            assert "john@example.com" in text
+            assert "New chat session" in text
 
 
 class TestTelegramBridgeOnMessageEdit:
@@ -549,7 +550,9 @@ class TestDiscordBridgeOnNewSession:
 
             call_args = mock_post.call_args
             embeds = call_args[1]["json"]["embeds"]
-            assert "John Doe" in embeds[0]["description"]
+            # New format shows email in description
+            description = embeds[0].get("description", "")
+            assert "john@example.com" in description
 
 
 class TestDiscordBridgeOnMessageEdit:
@@ -909,7 +912,11 @@ class TestSlackBridgeOnNewSession:
             blocks = call_args[1]["json"]["blocks"]
             section_block = next((b for b in blocks if b["type"] == "section"), None)
             assert section_block is not None
-            assert "John Doe" in section_block["text"]["text"]
+            # New format uses fields with email/phone instead of name
+            section_text = str(section_block.get("text", {}).get("text", ""))
+            section_fields = section_block.get("fields", [])
+            all_text = section_text + " ".join(str(f.get("text", "")) for f in section_fields)
+            assert "john@example.com" in all_text
 
 
 class TestSlackBridgeOnMessageEdit:

@@ -329,7 +329,7 @@ func TestTelegramBridge_OnNewSession_FormatsSessionInfoCorrectly(t *testing.T) {
 	session := createTestSession(
 		"sess-1",
 		"visitor-123",
-		&UserIdentity{ID: "user-1", Name: "John Doe"},
+		&UserIdentity{ID: "user-1", Email: "john@example.com"},
 		&SessionMetadata{URL: "https://example.com/pricing"},
 	)
 
@@ -342,8 +342,9 @@ func TestTelegramBridge_OnNewSession_FormatsSessionInfoCorrectly(t *testing.T) {
 	defer mu.Unlock()
 
 	bodyStr := string(receivedBody)
-	if !strings.Contains(bodyStr, "John+Doe") && !strings.Contains(bodyStr, "John Doe") {
-		t.Error("expected visitor name in message")
+	// New format shows email instead of name
+	if !strings.Contains(bodyStr, "john%40example.com") && !strings.Contains(bodyStr, "john@example.com") {
+		t.Error("expected email in message")
 	}
 	if !strings.Contains(bodyStr, "example.com") {
 		t.Error("expected page URL in message")
@@ -1616,7 +1617,7 @@ func TestSlackBotBridge_OnNewSession_FormatsSessionInfoCorrectly(t *testing.T) {
 	session := createTestSession(
 		"sess-1",
 		"visitor-123",
-		&UserIdentity{ID: "user-1", Name: "Jane Smith"},
+		&UserIdentity{ID: "user-1", Email: "jane@example.com"},
 		&SessionMetadata{URL: "https://example.com/contact"},
 	)
 
@@ -1635,8 +1636,9 @@ func TestSlackBotBridge_OnNewSession_FormatsSessionInfoCorrectly(t *testing.T) {
 	if !ok {
 		t.Fatal("expected text field in payload")
 	}
-	if !strings.Contains(text, "Jane Smith") {
-		t.Error("expected visitor name in message")
+	// New format shows email instead of name
+	if !strings.Contains(text, "jane@example.com") {
+		t.Error("expected email in message")
 	}
 	if !strings.Contains(text, "example.com") {
 		t.Error("expected page URL in message")

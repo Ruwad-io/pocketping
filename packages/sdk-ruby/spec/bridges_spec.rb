@@ -114,8 +114,9 @@ RSpec.describe PocketPing::Bridge::TelegramBridge do
       expect(WebMock).to have_requested(:post, "https://api.telegram.org/bot#{bot_token}/sendMessage")
         .with { |request|
           body = JSON.parse(request.body)
+          # New format shows 🆕 emoji and URL, no longer shows visitor_id
           body["text"].include?("New chat session") &&
-            body["text"].include?(session.visitor_id)
+            body["text"].include?("example.com")
         }
     end
   end
@@ -318,8 +319,9 @@ RSpec.describe PocketPing::Bridge::DiscordWebhookBridge do
       expect(WebMock).to have_requested(:post, webhook_url)
         .with { |request|
           body = JSON.parse(request.body)
+          # New format shows 🆕 emoji and URL, no longer shows visitor_id
           body["content"].include?("New chat session") &&
-            body["content"].include?(session.visitor_id)
+            body["content"].include?("example.com")
         }
     end
   end
@@ -508,8 +510,9 @@ RSpec.describe PocketPing::Bridge::DiscordBotBridge do
       expect(WebMock).to have_requested(:post, "#{api_base}/channels/#{channel_id}/messages")
         .with { |request|
           body = JSON.parse(request.body)
+          # New format shows 🆕 emoji and URL, no longer shows visitor_id
           body["content"].include?("New chat session") &&
-            body["content"].include?(session.visitor_id)
+            body["content"].include?("example.com")
         }
     end
   end
@@ -708,8 +711,9 @@ RSpec.describe PocketPing::Bridge::SlackWebhookBridge do
       expect(WebMock).to have_requested(:post, webhook_url)
         .with { |request|
           body = JSON.parse(request.body)
+          # New format shows 🆕 emoji and URL, no longer shows visitor_id
           body["text"].include?("New chat session") &&
-            body["text"].include?(session.visitor_id)
+            body["text"].include?("example.com")
         }
     end
   end
@@ -870,8 +874,9 @@ RSpec.describe PocketPing::Bridge::SlackBotBridge do
       expect(WebMock).to have_requested(:post, "#{api_base}/chat.postMessage")
         .with { |request|
           body = JSON.parse(request.body)
+          # New format shows 🆕 emoji and URL, no longer shows visitor_id
           body["text"].include?("New chat session") &&
-            body["text"].include?(session.visitor_id)
+            body["text"].include?("example.com")
         }
     end
   end

@@ -155,21 +155,18 @@ module PocketPing
       private
 
       def format_new_session_message(session)
-        visitor_id = session.visitor_id || "Unknown"
         url = session.metadata&.url || "No URL"
-        email = session.metadata&.email
-        phone = session.metadata&.phone
+        email = session.identity&.email
+        phone = session.user_phone
         user_agent = session.metadata&.user_agent
 
-        lines = [
-          "\u{1F195} New chat session",
-          "\u{1F464} Visitor: #{escape_html(visitor_id)}",
-          "\u{1F4CD} #{escape_html(url)}"
-        ]
+        lines = ["\u{1F195} New chat session", ""]
 
         lines << "\u{1F4E7} #{escape_html(email)}" if email && !email.empty?
         lines << "\u{1F4DE} #{escape_html(phone)}" if phone && !phone.empty?
-        lines << "\u{1F4F1} #{escape_html(parse_user_agent(user_agent))}" if user_agent && !user_agent.empty?
+        lines << "\u{1F310} #{escape_html(parse_user_agent(user_agent))}" if user_agent && !user_agent.empty?
+        lines << "" if email || phone || user_agent
+        lines << "\u{1F4CD} #{escape_html(url)}"
 
         lines.join("\n")
       end
