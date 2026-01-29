@@ -2,8 +2,17 @@ import type { AIProvider } from './ai/types';
 import type { Bridge } from './bridges/types';
 import type { Storage } from './storage/types';
 import type { IpFilterConfig } from './utils/ip-filter';
+import type { UaFilterConfig } from './utils/user-agent-filter';
 
 export type { IpFilterConfig, IpFilterLogEvent, IpFilterMode } from './utils/ip-filter';
+export type {
+  UaFilterConfig,
+  UaFilterLogEvent,
+  UaFilterMode,
+  UaFilterReason,
+  UaFilterResult,
+} from './utils/user-agent-filter';
+export { DEFAULT_BOT_PATTERNS, isBot } from './utils/user-agent-filter';
 
 export interface PocketPingConfig {
   /** Storage adapter for sessions and messages */
@@ -68,6 +77,13 @@ export interface PocketPingConfig {
 
   /** IP filtering configuration (allowlist/blocklist) */
   ipFilter?: IpFilterConfig;
+
+  // ─────────────────────────────────────────────────────────────────
+  // User-Agent Filtering
+  // ─────────────────────────────────────────────────────────────────
+
+  /** User-Agent filtering configuration (block bots/crawlers) */
+  uaFilter?: UaFilterConfig;
 }
 
 export interface AIConfig {

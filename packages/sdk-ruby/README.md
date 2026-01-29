@@ -224,6 +224,65 @@ use PocketPing::Middleware::IpFilterMiddleware, PocketPing::IpFilterConfig.new(
 run MyApp
 ```
 
+## User-Agent Filtering
+
+Block bots and automated requests from creating chat sessions:
+
+```ruby
+pp = PocketPing::Client.new(
+  ua_filter: PocketPing::UaFilterConfig.new(
+    enabled: true,
+    mode: :blocklist,  # :blocklist | :allowlist | :both
+    use_default_bots: true,  # Include ~50 default bot patterns
+    blocklist: ['my-custom-scraper', '/spam-\d+/'],  # Custom patterns
+    allowlist: ['my-monitoring-bot'],  # Always allow these
+    log_blocked: true
+  )
+)
+```
+
+### Filter Modes
+
+| Mode | Behavior |
+|------|----------|
+| `:blocklist` | Block matching UAs, allow all others |
+| `:allowlist` | Only allow matching UAs, block all others |
+| `:both` | Allowlist takes precedence, then blocklist is applied |
+
+### Pattern Matching
+
+- **Substring**: `googlebot` matches any UA containing "googlebot" (case-insensitive)
+- **Regex**: `/bot-\d+/` - wrap pattern in `/` for regex matching
+
+### Manual UA Check
+
+```ruby
+require 'pocketping/user_agent_filter'
+
+# Quick bot check
+if PocketPing::UserAgentFilter.bot?(request.user_agent)
+  render json: { error: 'Bots not allowed' }, status: :forbidden
+  return
+end
+
+# Full filter check
+result = PocketPing::UserAgentFilter.check_ua_filter(
+  request.user_agent,
+  PocketPing::UaFilterConfig.new(enabled: true, use_default_bots: true),
+  { path: request.path }
+)
+# UaFilterResult with: allowed?, reason, matched_pattern
+```
+
+### Rack Middleware (UA Filter)
+
+```ruby
+use PocketPing::Middleware::UaFilterMiddleware, PocketPing::UaFilterConfig.new(
+  enabled: true,
+  use_default_bots: true
+)
+```
+
 ## Custom Events
 
 PocketPing supports bidirectional custom events between your website and backend.

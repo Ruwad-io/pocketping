@@ -365,6 +365,99 @@ The `customFilter` function allows dynamic IP filtering:
 - Return `false` to block
 - Return `null/undefined` to defer to list-based filtering
 
+### 11b. User-Agent Filtering
+
+Block bots and automated requests from creating chat sessions.
+
+```
+// Configuration
+UaFilterConfig {
+  enabled?: boolean           // Default: false
+  mode?: 'blocklist' | 'allowlist' | 'both'  // Default: 'blocklist'
+  allowlist?: string[]        // UA patterns to allow
+  blocklist?: string[]        // UA patterns to block
+  useDefaultBots?: boolean    // Default: true - include ~50 known bot patterns
+  customFilter?: (ua, request) -> boolean | null  // Custom filter function
+  logBlocked?: boolean        // Default: true
+  blockedStatusCode?: number  // Default: 403
+  blockedMessage?: string     // Default: 'Forbidden'
+}
+
+// Filter result
+UaFilterResult {
+  allowed: boolean
+  reason: 'blocklist' | 'allowlist' | 'not_in_allowlist' | 'default_bot' | 'custom' | 'default'
+  matchedPattern?: string
+}
+
+// Functions
+check_ua_filter(userAgent: string, config: UaFilterConfig) -> UaFilterResult
+matches_any_pattern(userAgent: string, patterns: string[]) -> string | null
+is_bot(userAgent: string) -> boolean  // Quick check against default patterns
+```
+
+#### UA Filter Modes
+
+| Mode | Behavior |
+|------|----------|
+| `blocklist` | Block matching user-agents, allow all others |
+| `allowlist` | Only allow matching user-agents, block all others |
+| `both` | Allowlist takes precedence, then blocklist is applied |
+
+#### Pattern Matching
+
+- **Substring match**: `googlebot` matches `Mozilla/5.0 (compatible; Googlebot/2.1)`
+- **Regex match**: `/bot-\d+/` matches `custom-bot-123` (patterns wrapped in `/` are regex)
+- All matching is case-insensitive
+
+#### Default Bot Patterns (~50 patterns)
+
+All SDKs MUST include these default patterns when `useDefaultBots` is true:
+
+```
+// Search Engine Crawlers
+'googlebot', 'bingbot', 'slurp', 'duckduckbot', 'baiduspider',
+'yandexbot', 'sogou', 'exabot', 'facebot', 'ia_archiver',
+
+// SEO/Analytics Tools
+'semrushbot', 'ahrefsbot', 'mj12bot', 'dotbot', 'rogerbot',
+'screaming frog', 'seokicks', 'sistrix', 'linkdexbot', 'blexbot',
+
+// Generic Bot Indicators
+'bot/', 'crawler', 'spider', 'scraper', 'headless',
+'phantomjs', 'selenium', 'puppeteer', 'playwright', 'webdriver',
+
+// Monitoring/Uptime Services
+'pingdom', 'uptimerobot', 'statuscake', 'site24x7', 'newrelic',
+'datadog', 'gtmetrix', 'pagespeed',
+
+// Social Media Crawlers
+'twitterbot', 'linkedinbot', 'pinterestbot', 'telegrambot',
+'whatsapp', 'slackbot', 'discordbot', 'applebot',
+
+// AI/LLM Crawlers
+'gptbot', 'chatgpt-user', 'anthropic-ai', 'claude-web',
+'perplexitybot', 'ccbot', 'bytespider', 'cohere-ai',
+
+// HTTP Libraries (automated requests)
+'curl/', 'wget/', 'httpie/', 'python-requests', 'python-urllib',
+'axios/', 'node-fetch', 'go-http-client', 'java/', 'okhttp',
+'libwww-perl', 'httpclient',
+
+// Archive/Research Bots
+'archive.org_bot', 'wayback', 'commoncrawl',
+
+// Security Scanners
+'nmap', 'nikto', 'sqlmap', 'masscan', 'zgrab',
+```
+
+#### Custom Filter
+
+The `customFilter` function allows dynamic UA filtering:
+- Return `true` to allow
+- Return `false` to block
+- Return `null/undefined` to defer to list-based filtering
+
 ### 12. Message Edit
 
 Visitors can edit their own messages. Edits are synced to connected bridges.
@@ -1099,6 +1192,12 @@ All SDKs must:
 ---
 
 ## Changelog
+
+- **v1.4** (2025-01): User-Agent Filtering
+  - Added User-Agent filtering specification (section 11b)
+  - Block bots and automated requests with ~50 default patterns
+  - Support for substring and regex pattern matching
+  - Three modes: blocklist, allowlist, both
 
 - **v1.3** (2025-01): Bidirectional Messaging (WebhookHandler)
   - Added WebhookHandler specification (section 18)

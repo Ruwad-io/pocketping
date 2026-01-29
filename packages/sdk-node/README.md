@@ -145,6 +145,62 @@ const clientIp = pp.getClientIp(request.headers);
 // Checks: CF-Connecting-IP, X-Real-IP, X-Forwarded-For
 ```
 
+## User-Agent Filtering
+
+Block bots and automated requests from creating chat sessions:
+
+```typescript
+const pp = new PocketPing({
+  uaFilter: {
+    enabled: true,
+    mode: 'blocklist',  // 'blocklist' | 'allowlist' | 'both'
+    useDefaultBots: true,  // Include ~50 default bot patterns
+    blocklist: ['my-custom-scraper', '/spam-\\d+/'],  // Custom patterns
+    allowlist: ['my-monitoring-bot'],  // Always allow these
+    logBlocked: true,
+  },
+});
+```
+
+### Filter Modes
+
+| Mode | Behavior |
+|------|----------|
+| `blocklist` | Block matching UAs, allow all others |
+| `allowlist` | Only allow matching UAs, block all others |
+| `both` | Allowlist takes precedence, then blocklist is applied |
+
+### Pattern Matching
+
+- **Substring**: `googlebot` matches any UA containing "googlebot" (case-insensitive)
+- **Regex**: `/bot-\d+/` - wrap pattern in `/` for regex matching
+
+### Default Bot Patterns (~50)
+
+When `useDefaultBots: true`, these are blocked automatically:
+- Search crawlers: GoogleBot, BingBot, DuckDuckBot, etc.
+- SEO tools: SEMrush, Ahrefs, Screaming Frog
+- HTTP libraries: curl, wget, Python-requests, axios
+- AI crawlers: GPTBot, ChatGPT-User, Anthropic-AI
+
+### Manual UA Check
+
+```typescript
+import { checkUaFilter, isBot, DEFAULT_BOT_PATTERNS } from '@pocketping/sdk-node';
+
+// Quick bot check
+if (isBot(req.headers['user-agent'])) {
+  return res.status(403).json({ error: 'Bots not allowed' });
+}
+
+// Full filter check
+const result = checkUaFilter(req.headers['user-agent'], {
+  enabled: true,
+  useDefaultBots: true,
+});
+// result: { allowed: boolean, reason: string, matchedPattern?: string }
+```
+
 ## Built-in Bridges
 
 The SDK includes built-in bridges for Telegram, Discord, and Slack. No external libraries required - all communication uses HTTP APIs directly.

@@ -3,6 +3,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	pocketping "github.com/Ruwad-io/pocketping/sdk-go"
 	"github.com/pocketping/bridge-server/internal/bridges"
 	"github.com/pocketping/bridge-server/internal/config"
 	"github.com/pocketping/bridge-server/internal/types"
@@ -43,19 +45,21 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health", s.handleHealth)
 
 	// Main event endpoint (incoming from app/SDK)
-	mux.HandleFunc("POST /api/events", s.authMiddleware(s.handleEvents))
+	// UA filter is applied to block bot traffic before processing
+	mux.HandleFunc("POST /api/events", s.uaFilterMiddleware(s.authMiddleware(s.handleEvents)))
 
 	// Convenience endpoints
-	mux.HandleFunc("POST /api/sessions", s.authMiddleware(s.handleNewSession))
-	mux.HandleFunc("POST /api/messages", s.authMiddleware(s.handleMessage))
+	mux.HandleFunc("POST /api/sessions", s.uaFilterMiddleware(s.authMiddleware(s.handleNewSession)))
+	mux.HandleFunc("POST /api/messages", s.uaFilterMiddleware(s.authMiddleware(s.handleMessage)))
 	mux.HandleFunc("POST /api/operator/status", s.authMiddleware(s.handleOperatorStatus))
-	mux.HandleFunc("POST /api/custom-events", s.authMiddleware(s.handleCustomEvent))
+	mux.HandleFunc("POST /api/custom-events", s.uaFilterMiddleware(s.authMiddleware(s.handleCustomEvent)))
 
 	// SSE stream (outgoing to app/SDK)
 	mux.HandleFunc("GET /api/events/stream", s.authMiddleware(s.handleSSEStream))
 
 	// Bridge webhooks (incoming from Telegram/Slack/Discord)
 	// These receive operator messages and forward them via SSE/webhook
+	// Note: These are not UA-filtered as they come from trusted bridge platforms
 	mux.HandleFunc("POST /webhooks/telegram", s.handleTelegramWebhook)
 	mux.HandleFunc("POST /webhooks/slack", s.handleSlackWebhook)
 	mux.HandleFunc("POST /webhooks/discord", s.handleDiscordWebhook)
@@ -71,6 +75,35 @@ func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}
+		next(w, r)
+	}
+}
+
+// uaFilterMiddleware checks User-Agent against configured filters
+func (s *Server) uaFilterMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.config.UaFilter == nil || !s.config.UaFilter.Enabled {
+			next(w, r)
+			return
+		}
+
+		userAgent := r.UserAgent()
+		result := pocketping.CheckUAFilter(context.Background(), userAgent, s.config.UaFilter, map[string]interface{}{
+			"path":   r.URL.Path,
+			"method": r.Method,
+		})
+
+		if !result.Allowed {
+			if s.config.UaFilter.LogBlocked {
+				log.Printf("[UA Filter] Blocked: %s (reason: %s, pattern: %s, path: %s)",
+					userAgent, result.Reason, result.MatchedPattern, r.URL.Path)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`{"error":"Forbidden"}`))
+			return
+		}
+
 		next(w, r)
 	}
 }

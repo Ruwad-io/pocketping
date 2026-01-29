@@ -32,6 +32,7 @@ import type {
   WebhookPayload,
 } from './types';
 import { checkIpFilter, type IpFilterLogEvent } from './utils/ip-filter';
+import { checkUaFilter, type UaFilterLogEvent } from './utils/user-agent-filter';
 
 // ─────────────────────────────────────────────────────────────────
 // IP & User Agent Helpers
@@ -207,6 +208,47 @@ export class PocketPing {
           res.end(
             JSON.stringify({
               error: this.config.ipFilter.blockedMessage ?? 'Forbidden',
+            })
+          );
+          return;
+        }
+      }
+
+      // User-Agent Filtering - block bots before processing
+      if (this.config.uaFilter?.enabled) {
+        const userAgent = req.headers['user-agent'];
+        const uaFilterResult = await checkUaFilter(userAgent, this.config.uaFilter, {
+          path: path,
+        });
+
+        if (!uaFilterResult.allowed) {
+          // Log blocked request
+          if (this.config.uaFilter.logBlocked !== false) {
+            const logEvent: UaFilterLogEvent = {
+              type: 'blocked',
+              userAgent: userAgent ?? 'unknown',
+              reason: uaFilterResult.reason,
+              matchedPattern: uaFilterResult.matchedPattern,
+              path: path,
+              timestamp: new Date(),
+            };
+
+            if (this.config.uaFilter.logger) {
+              this.config.uaFilter.logger(logEvent);
+            } else {
+              console.log(
+                `[PocketPing] UA blocked: ${userAgent} - reason: ${uaFilterResult.reason}${
+                  uaFilterResult.matchedPattern ? ` (matched: ${uaFilterResult.matchedPattern})` : ''
+                }`
+              );
+            }
+          }
+
+          res.statusCode = this.config.uaFilter.blockedStatusCode ?? 403;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(
+            JSON.stringify({
+              error: this.config.uaFilter.blockedMessage ?? 'Forbidden',
             })
           );
           return;

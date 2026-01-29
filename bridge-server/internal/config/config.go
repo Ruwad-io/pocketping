@@ -5,6 +5,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	pocketping "github.com/Ruwad-io/pocketping/sdk-go"
 )
 
 // TelegramConfig holds Telegram bridge configuration
@@ -53,6 +55,9 @@ type Config struct {
 	EventsWebhookSecret string
 
 	TestBotIDs []string
+
+	// User-Agent Filtering
+	UaFilter *pocketping.UaFilterConfig
 }
 
 // Load reads configuration from environment variables
@@ -122,6 +127,48 @@ func Load() *Config {
 			WebhookURL: webhook,
 			Username:   os.Getenv("SLACK_USERNAME"),
 			IconEmoji:  os.Getenv("SLACK_ICON_EMOJI"),
+		}
+	}
+
+	// User-Agent Filtering config
+	uaFilterEnabled := os.Getenv("UA_FILTER_ENABLED") == "true" || os.Getenv("UA_FILTER_ENABLED") == "1"
+	if uaFilterEnabled {
+		useDefaultBots := os.Getenv("UA_FILTER_USE_DEFAULT_BOTS") != "false" && os.Getenv("UA_FILTER_USE_DEFAULT_BOTS") != "0"
+		logBlocked := os.Getenv("UA_FILTER_LOG_BLOCKED") != "false" && os.Getenv("UA_FILTER_LOG_BLOCKED") != "0"
+
+		mode := pocketping.UaFilterModeBlocklist
+		switch strings.ToLower(os.Getenv("UA_FILTER_MODE")) {
+		case "allowlist":
+			mode = pocketping.UaFilterModeAllowlist
+		case "both":
+			mode = pocketping.UaFilterModeBoth
+		}
+
+		var blocklist, allowlist []string
+		if bl := os.Getenv("UA_FILTER_BLOCKLIST"); bl != "" {
+			for _, pattern := range strings.Split(bl, ",") {
+				pattern = strings.TrimSpace(pattern)
+				if pattern != "" {
+					blocklist = append(blocklist, pattern)
+				}
+			}
+		}
+		if al := os.Getenv("UA_FILTER_ALLOWLIST"); al != "" {
+			for _, pattern := range strings.Split(al, ",") {
+				pattern = strings.TrimSpace(pattern)
+				if pattern != "" {
+					allowlist = append(allowlist, pattern)
+				}
+			}
+		}
+
+		cfg.UaFilter = &pocketping.UaFilterConfig{
+			Enabled:        true,
+			Mode:           mode,
+			Blocklist:      blocklist,
+			Allowlist:      allowlist,
+			UseDefaultBots: useDefaultBots,
+			LogBlocked:     logBlocked,
 		}
 	}
 

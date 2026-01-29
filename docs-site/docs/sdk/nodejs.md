@@ -777,6 +777,119 @@ const pp = new PocketPing(config);
 
 ---
 
+## User-Agent Filtering
+
+Block bots and automated requests from creating chat sessions to prevent spam and reduce noise.
+
+### Quick Setup
+
+```javascript
+const pp = new PocketPing({
+  bridgeUrl: process.env.BRIDGE_URL,
+  uaFilter: {
+    enabled: true,
+    // Automatically blocks ~50 known bot patterns (GoogleBot, curl, etc.)
+    useDefaultBots: true,
+  },
+});
+```
+
+### Configuration Options
+
+```javascript
+const pp = new PocketPing({
+  bridgeUrl: process.env.BRIDGE_URL,
+  uaFilter: {
+    enabled: true,
+    mode: 'blocklist',  // 'blocklist' | 'allowlist' | 'both'
+    useDefaultBots: true,  // Include ~50 default bot patterns
+    blocklist: [
+      'my-custom-scraper',
+      'bad-bot',
+      '/spam-\\d+/',  // Regex pattern
+    ],
+    allowlist: [
+      'my-monitoring-bot',
+      '/internal-.*/',  // Regex: allow internal tools
+    ],
+    logBlocked: true,
+    blockedStatusCode: 403,
+    blockedMessage: 'Forbidden',
+  },
+});
+```
+
+### Filter Modes
+
+| Mode | Behavior |
+|------|----------|
+| `blocklist` | Block matching user-agents, allow all others |
+| `allowlist` | Only allow matching user-agents, block all others |
+| `both` | Allowlist takes precedence, then blocklist is applied |
+
+### Pattern Types
+
+- **Substring**: `googlebot` matches any UA containing "googlebot" (case-insensitive)
+- **Regex**: `/bot-\d+/` - wrap pattern in `/` for regex matching
+
+### Default Bot Patterns
+
+When `useDefaultBots: true`, these patterns are automatically blocked:
+
+- **Search Engines**: GoogleBot, BingBot, DuckDuckBot, YandexBot, etc.
+- **SEO Tools**: SEMrush, Ahrefs, Screaming Frog, etc.
+- **Monitoring**: Pingdom, UptimeRobot, NewRelic, Datadog, etc.
+- **HTTP Libraries**: curl, wget, Python-requests, axios, etc.
+- **AI Crawlers**: GPTBot, ChatGPT-User, Anthropic-AI, etc.
+
+### Manual Filtering
+
+```javascript
+import { checkUaFilter, isBot, DEFAULT_BOT_PATTERNS } from '@pocketping/sdk-node';
+
+// Quick bot check
+if (isBot(req.headers['user-agent'])) {
+  return res.status(403).json({ error: 'Bots not allowed' });
+}
+
+// Full filter check
+const result = checkUaFilter(req.headers['user-agent'], {
+  enabled: true,
+  mode: 'blocklist',
+  useDefaultBots: true,
+  blocklist: ['my-custom-bot'],
+});
+
+if (!result.allowed) {
+  console.log(`Blocked: ${result.reason}, pattern: ${result.matchedPattern}`);
+}
+```
+
+### Custom Filter Function
+
+For dynamic filtering logic:
+
+```javascript
+const pp = new PocketPing({
+  bridgeUrl: process.env.BRIDGE_URL,
+  uaFilter: {
+    enabled: true,
+    customFilter: (userAgent, requestInfo) => {
+      // Allow internal IPs regardless of UA
+      if (requestInfo.ip?.startsWith('10.')) return true;
+
+      // Block specific pattern
+      if (userAgent.includes('evil-bot')) return false;
+
+      // Return null to defer to list-based filtering
+      return null;
+    },
+  },
+});
+```
+
+---
+
 ## Next Steps
 
 - **[Python SDK](/sdk/python)** - Backend integration for Python

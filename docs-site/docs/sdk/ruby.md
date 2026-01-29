@@ -289,6 +289,72 @@ class PostgresStorage
 end
 ```
 
+## User-Agent Filtering
+
+Block bots and automated requests from creating chat sessions.
+
+### Quick Setup
+
+```ruby
+require 'pocketping'
+
+pp = PocketPing.new(
+  ua_filter: PocketPing::UaFilterConfig.new(
+    enabled: true,
+    use_default_bots: true  # Block ~50 known bot patterns
+  )
+)
+```
+
+### Configuration Options
+
+```ruby
+pp = PocketPing.new(
+  ua_filter: PocketPing::UaFilterConfig.new(
+    enabled: true,
+    mode: :blocklist,  # :blocklist | :allowlist | :both
+    use_default_bots: true,
+    blocklist: [
+      'my-custom-scraper',
+      'bad-bot',
+      '/spam-\d+/',  # Regex pattern
+    ],
+    allowlist: [
+      'my-monitoring-bot',
+      '/internal-.*/',  # Regex: allow internal tools
+    ],
+    log_blocked: true,
+    blocked_status_code: 403,
+    blocked_message: 'Forbidden'
+  )
+)
+```
+
+### Manual Filtering
+
+```ruby
+require 'pocketping/user_agent_filter'
+
+# Quick bot check
+if PocketPing::UserAgentFilter.bot?(request.user_agent)
+  render json: { error: 'Bots not allowed' }, status: :forbidden
+  return
+end
+
+# Full filter check
+result = PocketPing::UserAgentFilter.check_ua_filter(
+  request.user_agent,
+  PocketPing::UaFilterConfig.new(enabled: true, use_default_bots: true),
+  { path: request.path }
+)
+
+unless result.allowed
+  Rails.logger.warn "Blocked: #{result.reason}, pattern: #{result.matched_pattern}"
+end
+```
+
+---
+
 ## Next Steps
 
 - [Python SDK](/sdk/python) - Backend integration for Python

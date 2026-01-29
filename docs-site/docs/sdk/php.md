@@ -296,6 +296,78 @@ class PostgresStorage implements StorageInterface
 }
 ```
 
+## User-Agent Filtering
+
+Block bots and automated requests from creating chat sessions.
+
+### Quick Setup
+
+```php
+use PocketPing\PocketPing;
+use PocketPing\Utils\UaFilterConfig;
+
+$pp = new PocketPing([
+    'uaFilter' => new UaFilterConfig(
+        enabled: true,
+        useDefaultBots: true, // Block ~50 known bot patterns
+    ),
+]);
+```
+
+### Configuration Options
+
+```php
+use PocketPing\Utils\UaFilterConfig;
+use PocketPing\Utils\UaFilterMode;
+
+$pp = new PocketPing([
+    'uaFilter' => new UaFilterConfig(
+        enabled: true,
+        mode: UaFilterMode::BLOCKLIST, // BLOCKLIST | ALLOWLIST | BOTH
+        useDefaultBots: true,
+        blocklist: [
+            'my-custom-scraper',
+            'bad-bot',
+            '/spam-\\d+/', // Regex pattern
+        ],
+        allowlist: [
+            'my-monitoring-bot',
+            '/internal-.*/', // Regex: allow internal tools
+        ],
+        logBlocked: true,
+        blockedStatusCode: 403,
+        blockedMessage: 'Forbidden',
+    ),
+]);
+```
+
+### Manual Filtering
+
+```php
+use PocketPing\Utils\UserAgentFilter;
+use PocketPing\Utils\UaFilterConfig;
+
+// Quick bot check
+if (UserAgentFilter::isBot($_SERVER['HTTP_USER_AGENT'] ?? '')) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Bots not allowed']);
+    exit;
+}
+
+// Full filter check
+$result = UserAgentFilter::checkUaFilter(
+    $_SERVER['HTTP_USER_AGENT'] ?? null,
+    new UaFilterConfig(enabled: true, useDefaultBots: true),
+    ['path' => $_SERVER['REQUEST_URI']]
+);
+
+if (!$result->allowed) {
+    error_log("Blocked: {$result->reason->value}, pattern: {$result->matchedPattern}");
+}
+```
+
+---
+
 ## Next Steps
 
 - [Python SDK](/sdk/python) - Backend integration for Python

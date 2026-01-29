@@ -304,6 +304,57 @@ client_ip = pp.get_client_ip(request.headers)
 # Checks: CF-Connecting-IP, X-Real-IP, X-Forwarded-For
 ```
 
+## User-Agent Filtering
+
+Block bots and automated requests from creating chat sessions:
+
+```python
+from pocketping import PocketPing
+from pocketping.utils.user_agent_filter import UaFilterConfig, UaFilterMode
+
+pp = PocketPing(
+    ua_filter=UaFilterConfig(
+        enabled=True,
+        mode=UaFilterMode.BLOCKLIST,  # BLOCKLIST | ALLOWLIST | BOTH
+        use_default_bots=True,  # Include ~50 default bot patterns
+        blocklist=['my-custom-scraper', r'/spam-\d+/'],  # Custom patterns
+        allowlist=['my-monitoring-bot'],  # Always allow these
+        log_blocked=True,
+    )
+)
+```
+
+### Filter Modes
+
+| Mode | Behavior |
+|------|----------|
+| `BLOCKLIST` | Block matching UAs, allow all others |
+| `ALLOWLIST` | Only allow matching UAs, block all others |
+| `BOTH` | Allowlist takes precedence, then blocklist is applied |
+
+### Pattern Matching
+
+- **Substring**: `googlebot` matches any UA containing "googlebot" (case-insensitive)
+- **Regex**: `/bot-\d+/` - wrap pattern in `/` for regex matching
+
+### Manual UA Check
+
+```python
+from pocketping.utils.user_agent_filter import check_ua_filter, is_bot, DEFAULT_BOT_PATTERNS
+
+# Quick bot check
+if is_bot(request.headers.get('User-Agent', '')):
+    return {'error': 'Bots not allowed'}, 403
+
+# Full filter check
+result = check_ua_filter(
+    request.headers.get('User-Agent'),
+    UaFilterConfig(enabled=True, use_default_bots=True),
+    {'path': request.path}
+)
+# result: UaFilterResult(allowed=bool, reason=str, matched_pattern=str|None)
+```
+
 ## Presence Detection
 
 The `ai_takeover_delay` setting controls how long to wait before AI takes over:

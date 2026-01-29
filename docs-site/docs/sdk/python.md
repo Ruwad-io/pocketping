@@ -382,6 +382,72 @@ pp = PocketPing(
 )
 ```
 
+## User-Agent Filtering
+
+Block bots and automated requests from creating chat sessions.
+
+### Quick Setup
+
+```python
+from pocketping import PocketPing
+from pocketping.utils.user_agent_filter import UaFilterConfig, UaFilterMode
+
+pp = PocketPing(
+    ua_filter=UaFilterConfig(
+        enabled=True,
+        use_default_bots=True,  # Block ~50 known bot patterns
+    )
+)
+```
+
+### Configuration Options
+
+```python
+pp = PocketPing(
+    ua_filter=UaFilterConfig(
+        enabled=True,
+        mode=UaFilterMode.BLOCKLIST,  # BLOCKLIST | ALLOWLIST | BOTH
+        use_default_bots=True,
+        blocklist=[
+            "my-custom-scraper",
+            "bad-bot",
+            r"/spam-\d+/",  # Regex pattern
+        ],
+        allowlist=[
+            "my-monitoring-bot",
+            r"/internal-.*/",  # Regex: allow internal tools
+        ],
+        log_blocked=True,
+        blocked_status_code=403,
+        blocked_message="Forbidden",
+    )
+)
+```
+
+### Manual Filtering
+
+```python
+from pocketping.utils.user_agent_filter import (
+    check_ua_filter, is_bot, DEFAULT_BOT_PATTERNS, UaFilterConfig
+)
+
+# Quick bot check
+if is_bot(request.headers.get("User-Agent", "")):
+    return {"error": "Bots not allowed"}, 403
+
+# Full filter check
+result = check_ua_filter(
+    user_agent=request.headers.get("User-Agent"),
+    config=UaFilterConfig(enabled=True, use_default_bots=True),
+    request_info={"path": request.path}
+)
+
+if not result.allowed:
+    print(f"Blocked: {result.reason}, pattern: {result.matched_pattern}")
+```
+
+---
+
 ## Next Steps
 
 - [Node.js SDK](/sdk/nodejs) - Backend integration for Node.js

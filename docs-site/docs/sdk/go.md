@@ -284,6 +284,71 @@ func (s *PostgresStorage) CreateSession(ctx context.Context, session *pocketping
 // Implement other methods...
 ```
 
+## User-Agent Filtering
+
+Block bots and automated requests from creating chat sessions.
+
+### Quick Setup
+
+```go
+pp := pocketping.New(pocketping.Config{
+    UaFilter: &pocketping.UaFilterConfig{
+        Enabled:        true,
+        UseDefaultBots: true, // Block ~50 known bot patterns
+    },
+})
+```
+
+### Configuration Options
+
+```go
+pp := pocketping.New(pocketping.Config{
+    UaFilter: &pocketping.UaFilterConfig{
+        Enabled:        true,
+        Mode:           pocketping.UaFilterModeBlocklist, // Blocklist | Allowlist | Both
+        UseDefaultBots: true,
+        Blocklist: []string{
+            "my-custom-scraper",
+            "bad-bot",
+            `/spam-\d+/`, // Regex pattern
+        },
+        Allowlist: []string{
+            "my-monitoring-bot",
+            `/internal-.*/`, // Regex: allow internal tools
+        },
+        LogBlocked:        true,
+        BlockedStatusCode: 403,
+        BlockedMessage:    "Forbidden",
+    },
+})
+```
+
+### Manual Filtering
+
+```go
+import pocketping "github.com/pocketping/pocketping-go"
+
+// Quick bot check
+if pocketping.IsBot(r.UserAgent()) {
+    http.Error(w, `{"error":"Bots not allowed"}`, http.StatusForbidden)
+    return
+}
+
+// Full filter check
+result := pocketping.CheckUAFilter(ctx, r.UserAgent(), &pocketping.UaFilterConfig{
+    Enabled:        true,
+    UseDefaultBots: true,
+}, map[string]interface{}{
+    "path": r.URL.Path,
+})
+
+if !result.Allowed {
+    log.Printf("Blocked: %s, pattern: %s", result.Reason, result.MatchedPattern)
+}
+```
+
+---
+
 ## Next Steps
 
 - [Python SDK](/sdk/python) - Backend integration for Python

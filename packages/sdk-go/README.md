@@ -168,6 +168,53 @@ clientIP := pocketping.GetClientIP(request, &pocketping.IpFilterConfig{
 })
 ```
 
+## User-Agent Filtering
+
+Block bots and automated requests from creating chat sessions:
+
+```go
+pp := pocketping.New(pocketping.Config{
+    UaFilter: &pocketping.UaFilterConfig{
+        Enabled:        true,
+        Mode:           pocketping.UaFilterModeBlocklist, // Blocklist | Allowlist | Both
+        UseDefaultBots: true,  // Include ~50 default bot patterns
+        Blocklist:      []string{"my-custom-scraper", `/spam-\d+/`},  // Custom patterns
+        Allowlist:      []string{"my-monitoring-bot"},  // Always allow these
+        LogBlocked:     true,
+    },
+})
+```
+
+### Filter Modes
+
+| Mode | Behavior |
+|------|----------|
+| `UaFilterModeBlocklist` | Block matching UAs, allow all others |
+| `UaFilterModeAllowlist` | Only allow matching UAs, block all others |
+| `UaFilterModeBoth` | Allowlist takes precedence, then blocklist is applied |
+
+### Pattern Matching
+
+- **Substring**: `googlebot` matches any UA containing "googlebot" (case-insensitive)
+- **Regex**: `/bot-\d+/` - wrap pattern in `/` for regex matching
+
+### Manual UA Check
+
+```go
+// Quick bot check
+if pocketping.IsBot(r.UserAgent()) {
+    http.Error(w, `{"error":"Bots not allowed"}`, http.StatusForbidden)
+    return
+}
+
+// Full filter check
+result := pocketping.CheckUAFilter(ctx, r.UserAgent(), &pocketping.UaFilterConfig{
+    Enabled:        true,
+    UseDefaultBots: true,
+}, map[string]interface{}{"path": r.URL.Path})
+// result: UaFilterResult{Allowed: bool, Reason: string, MatchedPattern: string}
+```
+
 ## API Reference
 
 ### Session Management

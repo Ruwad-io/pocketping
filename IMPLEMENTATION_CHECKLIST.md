@@ -256,6 +256,32 @@ The widget supports extensive customization options:
 
 ---
 
+## User-Agent Filtering
+
+Block bots and automated requests from creating chat sessions:
+
+| Feature | Description |
+|---------|-------------|
+| Default bot patterns | ~50 patterns for known bots (GoogleBot, curl, etc.) |
+| Substring matching | Case-insensitive substring match |
+| Regex matching | Patterns wrapped in `/` are regex (e.g., `/bot-\d+/`) |
+| Three modes | `blocklist`, `allowlist`, `both` |
+| Custom filter | Callback function for dynamic filtering |
+
+### Implementation Status
+
+| Component | Enabled | Modes | DefaultBots | Regex | CustomFilter | Logging |
+|-----------|---------|-------|-------------|-------|--------------|---------|
+| SDK Node | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SDK Python | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SDK Go | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SDK PHP | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SDK Ruby | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Bridge Server | ✅ | ✅ | ✅ | ✅ | ⬜ | ✅ |
+| SaaS (pocketping-app) | ✅ | ✅ | ✅ | ✅ | ⬜ | ✅ |
+
+---
+
 ## How to Add a New Feature
 
 1. **Update this checklist FIRST** - Add the feature to the relevant table

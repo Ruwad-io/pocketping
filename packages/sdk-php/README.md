@@ -172,6 +172,61 @@ if (!$result->allowed) {
 }
 ```
 
+## User-Agent Filtering
+
+Block bots and automated requests from creating chat sessions:
+
+```php
+use PocketPing\PocketPing;
+use PocketPing\Utils\UaFilterConfig;
+use PocketPing\Utils\UaFilterMode;
+
+$pp = new PocketPing([
+    'uaFilter' => new UaFilterConfig(
+        enabled: true,
+        mode: UaFilterMode::BLOCKLIST,  // BLOCKLIST | ALLOWLIST | BOTH
+        useDefaultBots: true,  // Include ~50 default bot patterns
+        blocklist: ['my-custom-scraper', '/spam-\\d+/'],  // Custom patterns
+        allowlist: ['my-monitoring-bot'],  // Always allow these
+        logBlocked: true,
+    ),
+]);
+```
+
+### Filter Modes
+
+| Mode | Behavior |
+|------|----------|
+| `BLOCKLIST` | Block matching UAs, allow all others |
+| `ALLOWLIST` | Only allow matching UAs, block all others |
+| `BOTH` | Allowlist takes precedence, then blocklist is applied |
+
+### Pattern Matching
+
+- **Substring**: `googlebot` matches any UA containing "googlebot" (case-insensitive)
+- **Regex**: `/bot-\d+/` - wrap pattern in `/` for regex matching
+
+### Manual UA Check
+
+```php
+use PocketPing\Utils\UserAgentFilter;
+
+// Quick bot check
+if (UserAgentFilter::isBot($_SERVER['HTTP_USER_AGENT'] ?? '')) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Bots not allowed']);
+    exit;
+}
+
+// Full filter check
+$result = UserAgentFilter::checkUaFilter(
+    $_SERVER['HTTP_USER_AGENT'] ?? null,
+    new UaFilterConfig(enabled: true, useDefaultBots: true),
+    ['path' => $_SERVER['REQUEST_URI']]
+);
+// UaFilterResult with: allowed, reason, matchedPattern
+```
+
 ## API Reference
 
 ### Session Management

@@ -38,3 +38,20 @@ export type {
 } from './webhooks';
 // Webhook handlers for incoming operator messages
 export { WebhookHandler } from './webhooks';
+// IP Filtering utilities
+export type { IpFilterConfig, IpFilterLogEvent, IpFilterMode } from './utils/ip-filter';
+export { checkIpFilter, ipMatchesCidr, ipMatchesAny } from './utils/ip-filter';
+// User-Agent Filtering utilities
+export type {
+  UaFilterConfig,
+  UaFilterLogEvent,
+  UaFilterMode,
+  UaFilterReason,
+  UaFilterResult,
+} from './utils/user-agent-filter';
+export {
+  checkUaFilter,
+  DEFAULT_BOT_PATTERNS,
+  isBot,
+  matchesAnyPattern,
+} from './utils/user-agent-filter';
