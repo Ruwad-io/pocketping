@@ -1,10 +1,16 @@
 ---
 sidebar_position: 3
-title: Customization
-description: Style and theme the PocketPing widget
+title: CSS Customization
+description: Advanced CSS styling for the PocketPing widget
 ---
 
-# Widget Customization
+# CSS Customization
+
+Advanced CSS customization for the PocketPing widget.
+
+:::tip Visual Widget Builder
+For a visual customizer with live preview and code generation, use the **[Widget Builder](/widget/customize)** page.
+:::
 
 Customize the look and feel of the PocketPing widget to match your brand.
 

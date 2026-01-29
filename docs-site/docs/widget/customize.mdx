@@ -1,0 +1,199 @@
+---
+sidebar_position: 5
+title: Widget Builder
+description: Visual customizer for self-hosted PocketPing widget
+---
+
+import WidgetCustomizer from '@site/src/components/WidgetCustomizer';
+
+# Widget Builder
+
+Use this interactive builder to customize your self-hosted PocketPing widget and generate the installation code.
+
+:::tip For SaaS Users
+If you're using [app.pocketping.io](https://app.pocketping.io), you can customize your widget directly in the dashboard under **Project Settings > Widget**.
+:::
+
+<WidgetCustomizer />
+
+---
+
+## Manual Configuration
+
+If you prefer to write the configuration manually, here are all available options:
+
+### Basic Options
+
+```javascript
+PocketPing.init({
+  // Required for self-hosted
+  endpoint: 'https://yoursite.com/pocketping',
+
+  // Branding
+  operatorName: 'Support',
+  operatorAvatar: 'https://example.com/avatar.png',
+
+  // Appearance
+  primaryColor: '#6366f1',
+  position: 'bottom-right', // or 'bottom-left'
+  theme: 'auto', // 'light', 'dark', or 'auto'
+
+  // Behavior
+  welcomeMessage: 'Hi! How can we help?',
+  placeholder: 'Type a message...',
+  soundEnabled: true,
+});
+```
+
+### Advanced Color Options
+
+For more control, you can customize individual widget colors:
+
+```javascript
+PocketPing.init({
+  endpoint: 'https://yoursite.com/pocketping',
+
+  // Basic appearance
+  primaryColor: '#6366f1',
+
+  // Advanced colors
+  headerColor: '#008069',      // Header background
+  footerColor: '#f0f2f5',      // Input area background
+  toggleColor: '#25d366',      // Floating button color
+  chatBackground: 'whatsapp',  // 'whatsapp', 'dots', 'plain', or URL
+});
+```
+
+### Theme-Aware Colors
+
+For different colors in light and dark modes:
+
+```javascript
+PocketPing.init({
+  endpoint: 'https://yoursite.com/pocketping',
+
+  // Single color for both themes
+  primaryColor: '#6366f1',
+
+  // Or different colors per theme
+  headerColor: {
+    light: '#008069',
+    dark: '#202c33',
+  },
+  footerColor: {
+    light: '#f0f2f5',
+    dark: '#202c33',
+  },
+  toggleColor: {
+    light: '#25d366',
+    dark: '#00a884',
+  },
+});
+```
+
+### Chat Background Options
+
+| Value | Description |
+|-------|-------------|
+| `'whatsapp'` | WhatsApp-style pattern (default) |
+| `'dots'` | Subtle dots pattern |
+| `'plain'` | Solid background color |
+| `'https://...'` | Custom image URL |
+
+```javascript
+// WhatsApp pattern (default)
+PocketPing.init({
+  endpoint: '...',
+  chatBackground: 'whatsapp',
+});
+
+// Custom image
+PocketPing.init({
+  endpoint: '...',
+  chatBackground: 'https://yoursite.com/chat-bg.jpg',
+});
+
+// Plain color
+PocketPing.init({
+  endpoint: '...',
+  chatBackground: 'plain',
+});
+```
+
+---
+
+## Pre-Chat Form
+
+Collect visitor contact info before they start chatting:
+
+```javascript
+PocketPing.init({
+  endpoint: 'https://yoursite.com/pocketping',
+
+  preChatForm: {
+    enabled: true,
+    required: false,          // Allow skipping
+    timing: 'after_first',    // 'before_first' or 'after_first'
+    fields: 'email_only',     // See options below
+  },
+});
+```
+
+### Field Options
+
+| Value | Description |
+|-------|-------------|
+| `'email_only'` | Email field only |
+| `'phone_only'` | Phone field only |
+| `'email_or_phone'` | Visitor chooses one |
+| `'email_and_phone'` | Both required |
+
+---
+
+## Full Example
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>My Website</title>
+</head>
+<body>
+  <!-- Your website content -->
+
+  <!-- PocketPing Widget -->
+  <script src="https://cdn.pocketping.io/widget.js"></script>
+  <script>
+    PocketPing.init({
+      endpoint: 'https://yoursite.com/pocketping',
+      operatorName: 'Acme Support',
+      operatorAvatar: 'https://acme.com/support-avatar.png',
+      primaryColor: '#0ea5e9',
+      theme: 'auto',
+      position: 'bottom-right',
+      welcomeMessage: 'Hi! How can we help you today?',
+      headerColor: {
+        light: '#0ea5e9',
+        dark: '#0284c7',
+      },
+      chatBackground: 'whatsapp',
+      preChatForm: {
+        enabled: true,
+        required: false,
+        timing: 'after_first',
+        fields: 'email_only',
+      },
+    });
+  </script>
+</body>
+</html>
+```
+
+---
+
+## Next Steps
+
+- [Configuration Reference](/widget/configuration) - All configuration options
+- [Customization (CSS)](/widget/customization) - Advanced CSS customization
+- [Node.js SDK](/sdk/nodejs) - Backend integration

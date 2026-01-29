@@ -33,8 +33,6 @@ After activation:
 3. Customize appearance (optional)
 4. Click **Save Settings**
 
-![WordPress Settings](/img/wordpress-settings.png)
-
 ### Settings
 
 | Setting | Description |
