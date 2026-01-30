@@ -442,3 +442,50 @@ func (b *SlackBridge) OnVisitorMessageDeleted(sessionID, messageID string, bridg
 
 	return nil
 }
+
+// OnVisitorDisconnect sends a notification when visitor leaves the page
+func (b *SlackBridge) OnVisitorDisconnect(session *types.Session, message string) error {
+	if !b.isBotMode() || session.SlackThreadTS == "" {
+		return nil
+	}
+
+	data := map[string]interface{}{
+		"channel":   b.channelID,
+		"thread_ts": session.SlackThreadTS,
+		"text":      message,
+	}
+
+	body, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", slackAPIBase+"/chat.postMessage", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", b.botToken))
+
+	resp, err := b.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	var slackResp slackResponse
+	if err := json.Unmarshal(respBody, &slackResp); err != nil {
+		return err
+	}
+
+	if !slackResp.OK {
+		log.Printf("[SlackBridge] Disconnect notification failed: %s", slackResp.Error)
+	}
+
+	return nil
+}

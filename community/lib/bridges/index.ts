@@ -667,3 +667,64 @@ export async function sendAIMessageToBridges(
 
   console.log('[Bridges] AI message sent to bridges')
 }
+
+/**
+ * Notify all configured bridges when a visitor disconnects
+ */
+export async function notifyVisitorDisconnect(
+  session: Session & {
+    project?: {
+      telegramBotToken: string | null
+      telegramChatId: string | null
+      slackBotToken: string | null
+      slackChannelId: string | null
+      discordChannelId: string | null
+    } | null
+  },
+  message: string
+): Promise<void> {
+  const project = session.project || await prisma.project.findUnique({
+    where: { id: session.projectId },
+  })
+
+  if (!project) return
+
+  // Telegram
+  if (project.telegramBotToken && project.telegramChatId && session.telegramTopicId) {
+    try {
+      await telegram.sendMessageToTopic(
+        { botToken: project.telegramBotToken, chatId: project.telegramChatId },
+        parseInt(session.telegramTopicId),
+        message
+      )
+    } catch (error) {
+      console.error('[Bridges] Telegram disconnect notification error:', error)
+    }
+  }
+
+  // Slack
+  if (project.slackBotToken && project.slackChannelId && session.slackThreadTs) {
+    try {
+      await slack.sendMessageToThread(
+        { botToken: project.slackBotToken, channelId: project.slackChannelId },
+        session.slackThreadTs,
+        message
+      )
+    } catch (error) {
+      console.error('[Bridges] Slack disconnect notification error:', error)
+    }
+  }
+
+  // Discord
+  if (process.env.DISCORD_BOT_TOKEN && project.discordChannelId && session.discordThreadId) {
+    try {
+      await discord.sendMessageToThread(
+        { botToken: process.env.DISCORD_BOT_TOKEN, channelId: project.discordChannelId },
+        session.discordThreadId,
+        message
+      )
+    } catch (error) {
+      console.error('[Bridges] Discord disconnect notification error:', error)
+    }
+  }
+}

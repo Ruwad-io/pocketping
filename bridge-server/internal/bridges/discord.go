@@ -396,3 +396,37 @@ func (b *DiscordBridge) OnVisitorMessageDeleted(sessionID, messageID string, bri
 
 	return nil
 }
+
+// OnVisitorDisconnect sends a notification when visitor leaves the page
+func (b *DiscordBridge) OnVisitorDisconnect(session *types.Session, message string) error {
+	if !b.isBotMode() || session.DiscordThreadID == "" {
+		return nil
+	}
+
+	url := fmt.Sprintf("%s/channels/%s/messages", discordAPIBase, session.DiscordThreadID)
+
+	payload := map[string]string{"content": message}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bot %s", b.botToken))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := b.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		log.Printf("[DiscordBridge] Disconnect notification failed: %d", resp.StatusCode)
+	}
+
+	return nil
+}

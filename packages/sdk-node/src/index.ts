@@ -17,6 +17,8 @@ export type {
   CustomEventHandler,
   DeleteMessageRequest,
   DeleteMessageResponse,
+  DisconnectRequest,
+  DisconnectResponse,
   EditMessageRequest,
   EditMessageResponse,
   Message,
@@ -27,6 +29,8 @@ export type {
   Session,
   TrackedElement,
   TriggerOptions,
+  VisibilityRequest,
+  VisibilityResponse,
   WebhookPayload,
 } from './types';
 export type {

@@ -53,6 +53,7 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/messages", s.uaFilterMiddleware(s.authMiddleware(s.handleMessage)))
 	mux.HandleFunc("POST /api/operator/status", s.authMiddleware(s.handleOperatorStatus))
 	mux.HandleFunc("POST /api/custom-events", s.uaFilterMiddleware(s.authMiddleware(s.handleCustomEvent)))
+	mux.HandleFunc("POST /api/disconnect", s.uaFilterMiddleware(s.authMiddleware(s.handleDisconnect)))
 
 	// SSE stream (outgoing to app/SDK)
 	mux.HandleFunc("GET /api/events/stream", s.authMiddleware(s.handleSSEStream))
@@ -284,6 +285,37 @@ func (s *Server) handleCustomEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.processCustomEvent(event); err != nil {
 		log.Printf("[API] Error handling custom event: %v", err)
+	}
+
+	writeOK(w)
+}
+
+// handleDisconnect handles POST /api/disconnect
+// Notifies bridges when a visitor leaves the page
+func (s *Server) handleDisconnect(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Session  *types.Session `json:"session"`
+		Duration int            `json:"duration"` // seconds
+		Reason   string         `json:"reason"`   // page_unload, inactivity, manual
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, `{"error":"Invalid JSON"}`, http.StatusBadRequest)
+		return
+	}
+
+	if payload.Session == nil {
+		http.Error(w, `{"error":"session is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	event := &types.VisitorDisconnectEvent{
+		Type:     "visitor_disconnect",
+		Session:  payload.Session,
+		Duration: payload.Duration,
+		Reason:   payload.Reason,
+	}
+	if err := s.processDisconnect(event); err != nil {
+		log.Printf("[API] Error handling disconnect: %v", err)
 	}
 
 	writeOK(w)
@@ -593,6 +625,52 @@ func (s *Server) processVisitorMessageDeleted(event *types.VisitorMessageDeleted
 	for _, bridge := range s.bridges {
 		if err := bridge.OnVisitorMessageDeleted(event.SessionID, event.MessageID, bridgeIDs); err != nil {
 			log.Printf("[%s] OnVisitorMessageDeleted error: %v", bridge.Name(), err)
+		}
+	}
+	return nil
+}
+
+func (s *Server) processDisconnect(event *types.VisitorDisconnectEvent) error {
+	// Format duration for display
+	formatDuration := func(seconds int) string {
+		if seconds < 60 {
+			return fmt.Sprintf("%ds", seconds)
+		}
+		if seconds < 3600 {
+			return fmt.Sprintf("%d min", seconds/60)
+		}
+		hours := seconds / 3600
+		mins := (seconds % 3600) / 60
+		if mins > 0 {
+			return fmt.Sprintf("%dh %dmin", hours, mins)
+		}
+		return fmt.Sprintf("%dh", hours)
+	}
+
+	// Build disconnect message
+	visitorName := "Visitor"
+	if event.Session.Metadata != nil {
+		if name, ok := event.Session.Metadata["name"].(string); ok && name != "" {
+			visitorName = name
+		} else if email, ok := event.Session.Metadata["email"].(string); ok && email != "" {
+			// Use part before @ as name
+			if idx := len(email); idx > 0 {
+				for i, c := range email {
+					if c == '@' {
+						visitorName = email[:i]
+						break
+					}
+				}
+			}
+		}
+	}
+
+	message := fmt.Sprintf("👋 %s left (was here for %s)", visitorName, formatDuration(event.Duration))
+
+	// Notify all bridges
+	for _, bridge := range s.bridges {
+		if err := bridge.OnVisitorDisconnect(event.Session, message); err != nil {
+			log.Printf("[%s] OnVisitorDisconnect error: %v", bridge.Name(), err)
 		}
 	}
 	return nil

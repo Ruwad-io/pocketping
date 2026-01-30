@@ -11,6 +11,8 @@ import type {
   CustomEventHandler,
   DeleteMessageRequest,
   DeleteMessageResponse,
+  DisconnectRequest,
+  DisconnectResponse,
   EditMessageRequest,
   EditMessageResponse,
   GetMessagesRequest,
@@ -29,6 +31,8 @@ import type {
   TypingRequest,
   VersionCheckResult,
   VersionStatus,
+  VisibilityRequest,
+  VisibilityResponse,
   WebhookPayload,
 } from './types';
 import { checkIpFilter, type IpFilterLogEvent } from './utils/ip-filter';
@@ -334,6 +338,12 @@ export class PocketPing {
             break;
           case 'delete':
             result = await this.handleDeleteMessage(body as DeleteMessageRequest);
+            break;
+          case 'disconnect':
+            result = await this.handleDisconnect(body as DisconnectRequest);
+            break;
+          case 'visibility':
+            result = await this.handleVisibility(body as VisibilityRequest);
             break;
           default:
             if (next) {
@@ -751,6 +761,73 @@ export class PocketPing {
     this.forwardIdentityToWebhook(session);
 
     return { ok: true };
+  }
+
+  /**
+   * Handle visitor disconnect (page unload or inactivity)
+   * Notifies bridges and triggers callback
+   */
+  async handleDisconnect(request: DisconnectRequest): Promise<DisconnectResponse> {
+    const session = await this.storage.getSession(request.sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    // Format duration for display
+    const formatDuration = (seconds: number): string => {
+      if (seconds < 60) return `${seconds}s`;
+      if (seconds < 3600) return `${Math.floor(seconds / 60)} min`;
+      const hours = Math.floor(seconds / 3600);
+      const mins = Math.floor((seconds % 3600) / 60);
+      return mins > 0 ? `${hours}h ${mins}min` : `${hours}h`;
+    };
+
+    const visitorName =
+      session.identity?.name || session.identity?.email?.split('@')[0] || 'Visitor';
+    const durationText = formatDuration(request.duration);
+    const message = `👋 ${visitorName} left (was here for ${durationText})`;
+
+    // Notify all bridges
+    await this.notifyBridgesDisconnect(session, message);
+
+    // Trigger callback
+    await this.config.onVisitorDisconnect?.(session, request.duration);
+
+    return { ok: true };
+  }
+
+  /**
+   * Handle visibility change (tab focus/blur)
+   * Used for inactivity tracking
+   */
+  async handleVisibility(request: VisibilityRequest): Promise<VisibilityResponse> {
+    const session = await this.storage.getSession(request.sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    // Update session last activity when visitor becomes visible again
+    if (request.state === 'visible') {
+      session.lastActivity = new Date();
+      await this.storage.updateSession(session);
+    }
+
+    return { ok: true };
+  }
+
+  /**
+   * Notify all bridges when visitor disconnects
+   */
+  private async notifyBridgesDisconnect(session: Session, message: string): Promise<void> {
+    for (const bridge of this.bridges) {
+      try {
+        if ('notifyDisconnect' in bridge && typeof bridge.notifyDisconnect === 'function') {
+          await (bridge as { notifyDisconnect: (session: Session, message: string) => Promise<void> }).notifyDisconnect(session, message);
+        }
+      } catch (error) {
+        console.error(`[PocketPing] Bridge disconnect notification failed:`, error);
+      }
+    }
   }
 
   /**

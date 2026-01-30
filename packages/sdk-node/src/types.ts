@@ -30,6 +30,9 @@ export interface PocketPingConfig {
   /** Seconds of inactivity before AI takes over (default: 300) */
   aiTakeoverDelay?: number;
 
+  /** Seconds of visitor inactivity before notifying bridges (0 = disabled) */
+  visitorInactivityTimeout?: number;
+
   /** Callback when a new session is created */
   onNewSession?: (session: Session) => void | Promise<void>;
 
@@ -41,6 +44,9 @@ export interface PocketPingConfig {
 
   /** Callback when a user identifies themselves */
   onIdentify?: (session: Session) => void | Promise<void>;
+
+  /** Callback when a visitor disconnects (leaves the page or goes inactive) */
+  onVisitorDisconnect?: (session: Session, duration: number) => void | Promise<void>;
 
   // ─────────────────────────────────────────────────────────────────
   // Webhook Configuration (forward events to external services)
@@ -331,6 +337,26 @@ export interface IdentifyRequest {
 }
 
 export interface IdentifyResponse {
+  ok: boolean;
+}
+
+export interface DisconnectRequest {
+  sessionId: string;
+  duration: number; // seconds the visitor was on the page
+  reason: 'page_unload' | 'inactivity' | 'manual';
+}
+
+export interface DisconnectResponse {
+  ok: boolean;
+}
+
+export interface VisibilityRequest {
+  sessionId: string;
+  state: 'hidden' | 'visible';
+  timestamp: number;
+}
+
+export interface VisibilityResponse {
   ok: boolean;
 }
 

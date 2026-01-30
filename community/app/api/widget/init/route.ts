@@ -92,8 +92,16 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Calculate operator online status based on activity timeout (5 minutes)
+    const OPERATOR_ONLINE_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
+    const lastActivity = session.lastOperatorActivity
+    const operatorOnline = lastActivity
+      ? Date.now() - new Date(lastActivity).getTime() < OPERATOR_ONLINE_TIMEOUT_MS
+      : false
+
     return NextResponse.json({
       sessionId: session.id,
+      operatorOnline,
       messages: session.messages.map((m) => ({
         id: m.id,
         content: m.content,

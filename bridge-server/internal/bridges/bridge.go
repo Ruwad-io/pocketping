@@ -52,6 +52,9 @@ type Bridge interface {
 
 	// OnVisitorMessageDeleted is called when a visitor deletes a message
 	OnVisitorMessageDeleted(sessionID, messageID string, bridgeIDs *types.BridgeMessageIDs) error
+
+	// OnVisitorDisconnect is called when a visitor leaves the page
+	OnVisitorDisconnect(session *types.Session, message string) error
 }
 
 // BaseBridge provides common functionality for all bridges

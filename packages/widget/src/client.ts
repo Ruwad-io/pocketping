@@ -45,6 +45,10 @@ export class PocketPingClient {
   private currentTrackedElements: TrackedElement[] = [];
   private inspectorMode = false;
   private inspectorCleanup: (() => void) | null = null;
+  private connectedAt: number = 0;
+  private disconnectNotified = false;
+  private boundHandleUnload: (() => void) | null = null;
+  private boundHandleVisibilityChange: (() => void) | null = null;
 
   constructor(config: ResolvedPocketPingConfig) {
     this.config = config;
@@ -134,6 +138,13 @@ export class PocketPingClient {
     // Store session
     this.storeSessionId(response.sessionId);
 
+    // Track connection time for session duration
+    this.connectedAt = Date.now();
+    this.disconnectNotified = false;
+
+    // Setup page unload listeners to notify bridges when visitor leaves
+    this.setupUnloadListeners();
+
     // Connect real-time (WebSocket → SSE → Polling)
     this.connectRealtime();
 
@@ -153,6 +164,12 @@ export class PocketPingClient {
   }
 
   disconnect(): void {
+    // Notify backend about visitor leaving (if not already notified)
+    this.notifyDisconnect();
+
+    // Cleanup unload listeners
+    this.cleanupUnloadListeners();
+
     // Clear WebSocket handlers before closing
     if (this.ws) {
       this.ws.onclose = null;
@@ -1676,6 +1693,108 @@ export class PocketPingClient {
       this.pollingTimeout = null;
     }
     this.pollingFailures = 0;
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Visitor Disconnect Notification
+  // ─────────────────────────────────────────────────────────────────
+
+  private setupUnloadListeners(): void {
+    // Handle page unload (tab close, navigation away)
+    this.boundHandleUnload = () => this.notifyDisconnect();
+    window.addEventListener('beforeunload', this.boundHandleUnload);
+    window.addEventListener('pagehide', this.boundHandleUnload);
+
+    // Handle visibility change (tab switch, minimize)
+    // Only notify on hidden if the page stays hidden for a while (handled by backend inactivity timeout)
+    this.boundHandleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        // Send a ping to let backend know user might be leaving
+        // Backend will handle the actual timeout logic
+        this.sendVisibilityPing('hidden');
+      } else if (document.visibilityState === 'visible') {
+        // User came back - send ping to reset inactivity timer
+        this.sendVisibilityPing('visible');
+      }
+    };
+    document.addEventListener('visibilitychange', this.boundHandleVisibilityChange);
+  }
+
+  private cleanupUnloadListeners(): void {
+    if (this.boundHandleUnload) {
+      window.removeEventListener('beforeunload', this.boundHandleUnload);
+      window.removeEventListener('pagehide', this.boundHandleUnload);
+      this.boundHandleUnload = null;
+    }
+    if (this.boundHandleVisibilityChange) {
+      document.removeEventListener('visibilitychange', this.boundHandleVisibilityChange);
+      this.boundHandleVisibilityChange = null;
+    }
+  }
+
+  /**
+   * Notify backend that visitor is leaving
+   * Uses sendBeacon for reliability on page unload
+   */
+  private notifyDisconnect(): void {
+    if (this.disconnectNotified || !this.session) {
+      return;
+    }
+
+    this.disconnectNotified = true;
+    const sessionDuration = this.connectedAt ? Math.round((Date.now() - this.connectedAt) / 1000) : 0;
+
+    const url = this.config.endpoint.replace(/\/$/, '') + '/disconnect';
+    const data = JSON.stringify({
+      sessionId: this.session.sessionId,
+      duration: sessionDuration,
+      reason: 'page_unload',
+    });
+
+    // Use sendBeacon for reliability on page unload (doesn't wait for response)
+    if (navigator.sendBeacon) {
+      const blob = new Blob([data], { type: 'application/json' });
+      navigator.sendBeacon(url, blob);
+    } else {
+      // Fallback to sync XHR (less reliable but works)
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url, false); // Synchronous
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send(data);
+      } catch {
+        // Ignore errors on unload
+      }
+    }
+  }
+
+  /**
+   * Send visibility ping to backend (for inactivity tracking)
+   */
+  private sendVisibilityPing(state: 'hidden' | 'visible'): void {
+    if (!this.session) return;
+
+    const url = this.config.endpoint.replace(/\/$/, '') + '/visibility';
+    const data = JSON.stringify({
+      sessionId: this.session.sessionId,
+      state,
+      timestamp: Date.now(),
+    });
+
+    // Fire and forget - use sendBeacon for hidden state
+    if (state === 'hidden' && navigator.sendBeacon) {
+      const blob = new Blob([data], { type: 'application/json' });
+      navigator.sendBeacon(url, blob);
+    } else {
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: data,
+        keepalive: true,
+      }).catch(() => {
+        // Ignore errors
+      });
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────

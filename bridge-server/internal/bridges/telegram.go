@@ -288,3 +288,27 @@ func (b *TelegramBridge) OnVisitorMessageDeleted(sessionID, messageID string, br
 
 	return nil
 }
+
+// OnVisitorDisconnect sends a notification when visitor leaves the page
+func (b *TelegramBridge) OnVisitorDisconnect(session *types.Session, message string) error {
+	if session.TelegramTopicID == 0 {
+		return nil
+	}
+
+	data := map[string]interface{}{
+		"chat_id":           b.chatID,
+		"message_thread_id": session.TelegramTopicID,
+		"text":              message,
+	}
+
+	resp, err := b.callAPI("sendMessage", data)
+	if err != nil {
+		return err
+	}
+
+	if !resp.OK {
+		log.Printf("[TelegramBridge] Disconnect notification failed: %s", resp.Description)
+	}
+
+	return nil
+}

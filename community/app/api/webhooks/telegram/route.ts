@@ -69,10 +69,12 @@ export async function POST(request: NextRequest) {
       })
 
       // Update session
+      const now = new Date()
       await prisma.session.update({
         where: { id: session.id },
         data: {
-          lastActivity: new Date(),
+          lastActivity: now,
+          lastOperatorActivity: now,
           operatorOnline: true,
         },
       })

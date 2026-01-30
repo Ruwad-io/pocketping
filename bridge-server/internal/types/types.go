@@ -174,6 +174,14 @@ type VisitorMessageDeletedEvent struct {
 	DeletedAt time.Time `json:"deletedAt"`
 }
 
+// VisitorDisconnectEvent is sent when a visitor leaves the page
+type VisitorDisconnectEvent struct {
+	Type     string `json:"type"`
+	Session  *Session `json:"session"`
+	Duration int    `json:"duration"` // seconds visitor was on the page
+	Reason   string `json:"reason"`   // page_unload, inactivity, manual
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Outgoing Events (from bridge-server to backends)
 // ─────────────────────────────────────────────────────────────────

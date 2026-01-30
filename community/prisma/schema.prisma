@@ -103,10 +103,11 @@ model Session {
   userPhoneCountry String?
 
   // Status
-  status        SessionStatus @default(ACTIVE)
-  operatorOnline Boolean      @default(false)
-  aiActive      Boolean       @default(false)
-  unreadCount   Int           @default(0)
+  status               SessionStatus @default(ACTIVE)
+  operatorOnline       Boolean       @default(false)
+  aiActive             Boolean       @default(false)
+  unreadCount          Int           @default(0)
+  lastOperatorActivity DateTime?     // Last time operator interacted with this session
 
   // Bridge thread IDs
   telegramTopicId String?
