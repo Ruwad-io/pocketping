@@ -40,6 +40,10 @@ type Session struct {
 	Identity         *UserIdentity    `json:"identity,omitempty"`
 	UserPhone        string           `json:"userPhone,omitempty"`        // E.164 format: +33612345678
 	UserPhoneCountry string           `json:"userPhoneCountry,omitempty"` // ISO: FR, US, etc.
+	// Bridge thread/topic IDs for routing messages
+	TelegramTopicID int64  `json:"telegramTopicId,omitempty"`
+	DiscordThreadID string `json:"discordThreadId,omitempty"`
+	SlackThreadTS   string `json:"slackThreadTs,omitempty"`
 }
 
 // SenderType represents who sent a message
