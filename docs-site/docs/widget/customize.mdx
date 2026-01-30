@@ -47,7 +47,7 @@ PocketPing.init({
 
 ### Advanced Color Options
 
-For more control, you can customize individual widget colors:
+For more control, you can customize individual widget colors. Colors can be solid hex values or gradients:
 
 ```javascript
 PocketPing.init({
@@ -56,11 +56,34 @@ PocketPing.init({
   // Basic appearance
   primaryColor: '#6366f1',
 
-  // Advanced colors
-  headerColor: '#008069',      // Header background
+  // Advanced colors (solid)
+  headerColor: '#7c5cff',      // Header background
   footerColor: '#f0f2f5',      // Input area background
-  toggleColor: '#25d366',      // Floating button color
+  toggleColor: '#7c5cff',      // Floating button color
   chatBackground: 'whatsapp',  // 'whatsapp', 'dots', 'plain', or URL
+});
+```
+
+### Gradient Colors
+
+Header and toggle button support gradients:
+
+```javascript
+PocketPing.init({
+  endpoint: 'https://yoursite.com/pocketping',
+
+  // Gradient header (default: cyan → violet)
+  headerColor: {
+    from: '#36e3ff',
+    to: '#7c5cff',
+    direction: 'to right',  // optional, default: 'to right'
+  },
+
+  // Gradient toggle button
+  toggleColor: {
+    from: '#36e3ff',
+    to: '#7c5cff',
+  },
 });
 ```
 
@@ -75,18 +98,18 @@ PocketPing.init({
   // Single color for both themes
   primaryColor: '#6366f1',
 
-  // Or different colors per theme
+  // Different colors per theme (solid or gradient)
   headerColor: {
-    light: '#008069',
-    dark: '#202c33',
+    light: { from: '#36e3ff', to: '#7c5cff' },  // gradient in light mode
+    dark: '#202c33',                             // solid in dark mode
   },
   footerColor: {
     light: '#f0f2f5',
     dark: '#202c33',
   },
   toggleColor: {
-    light: '#25d366',
-    dark: '#00a884',
+    light: { from: '#36e3ff', to: '#7c5cff' },
+    dark: { from: '#36e3ff', to: '#7c5cff' },
   },
 });
 ```

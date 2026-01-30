@@ -244,7 +244,7 @@ export default function WidgetCustomizer(): JSX.Element {
               <div className={styles.colorRow}>
                 <input
                   type="color"
-                  value={config.headerColor || '#008069'}
+                  value={config.headerColor || '#7c5cff'}
                   onChange={(e) => handleChange('headerColor', e.target.value)}
                   className={styles.colorPicker}
                 />
@@ -252,10 +252,11 @@ export default function WidgetCustomizer(): JSX.Element {
                   type="text"
                   value={config.headerColor}
                   onChange={(e) => handleChange('headerColor', e.target.value)}
-                  placeholder="#008069"
+                  placeholder="#7c5cff"
                   className={styles.colorInput}
                 />
               </div>
+              <span className={styles.hint}>Default: gradient #36e3ff → #7c5cff</span>
             </div>
 
             <div className={styles.field}>
@@ -282,7 +283,7 @@ export default function WidgetCustomizer(): JSX.Element {
               <div className={styles.colorRow}>
                 <input
                   type="color"
-                  value={config.toggleColor || '#25d366'}
+                  value={config.toggleColor || '#7c5cff'}
                   onChange={(e) => handleChange('toggleColor', e.target.value)}
                   className={styles.colorPicker}
                 />
@@ -290,10 +291,11 @@ export default function WidgetCustomizer(): JSX.Element {
                   type="text"
                   value={config.toggleColor}
                   onChange={(e) => handleChange('toggleColor', e.target.value)}
-                  placeholder="#25d366"
+                  placeholder="#7c5cff"
                   className={styles.colorInput}
                 />
               </div>
+              <span className={styles.hint}>Default: gradient #36e3ff → #7c5cff</span>
             </div>
           </div>
         </div>
@@ -344,7 +346,7 @@ export default function WidgetCustomizer(): JSX.Element {
                     className={styles.chatHeader}
                     style={{
                       background:
-                        config.headerColor || (isDark ? '#202c33' : config.primaryColor),
+                        config.headerColor || (isDark ? '#202c33' : 'linear-gradient(to right, #36e3ff, #7c5cff)'),
                     }}
                   >
                     <div className={styles.chatHeaderContent}>
@@ -438,7 +440,7 @@ export default function WidgetCustomizer(): JSX.Element {
                     />
                     <button
                       className={styles.sendBtn}
-                      style={{ background: isDark ? '#00a884' : config.primaryColor }}
+                      style={{ background: isDark ? '#7c5cff' : config.primaryColor }}
                     >
                       <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
@@ -452,7 +454,7 @@ export default function WidgetCustomizer(): JSX.Element {
                   className={styles.toggleBtn}
                   style={{
                     background:
-                      config.toggleColor || (isDark ? '#00a884' : '#25d366'),
+                      config.toggleColor || 'linear-gradient(to right, #36e3ff, #7c5cff)',
                     [config.position === 'bottom-left' ? 'left' : 'right']: 0,
                   }}
                 >
