@@ -7,6 +7,31 @@ export interface ThemeColor {
   dark: string;
 }
 
+/**
+ * Gradient color value
+ * Creates a linear gradient between two colors
+ * @example { from: '#36e3ff', to: '#7c5cff', direction: 'to right' }
+ */
+export interface GradientColor {
+  from: string;
+  to: string;
+  /** CSS gradient direction (default: 'to right') */
+  direction?: 'to right' | 'to left' | 'to bottom' | 'to top' | string;
+}
+
+/**
+ * Color value that can be a solid color, gradient, or theme-aware
+ */
+export type ColorValue = string | GradientColor | ThemeColor | ThemeGradientColor;
+
+/**
+ * Theme-aware gradient - different gradients for light/dark themes
+ */
+export interface ThemeGradientColor {
+  light: string | GradientColor;
+  dark: string | GradientColor;
+}
+
 export interface PocketPingConfig {
   // ─────────────────────────────────────────────────────────────────
   // Required (one of endpoint or projectId)
@@ -57,11 +82,14 @@ export interface PocketPingConfig {
   primaryTextColor?: string;
 
   /**
-   * Header background color
-   * Can be a string (same for both themes) or object with light/dark values
-   * @example "#008069" or { light: "#008069", dark: "#202c33" }
+   * Header background color or gradient
+   * Can be a solid color, gradient, or theme-aware
+   * @example "#7c5cff"
+   * @example { from: '#36e3ff', to: '#7c5cff' }
+   * @example { light: "#7c5cff", dark: "#202c33" }
+   * @example { light: { from: '#36e3ff', to: '#7c5cff' }, dark: "#202c33" }
    */
-  headerColor?: string | ThemeColor;
+  headerColor?: ColorValue;
 
   /**
    * Footer/input area background color
@@ -81,11 +109,13 @@ export interface PocketPingConfig {
   chatBackground?: 'whatsapp' | 'dots' | 'plain' | string | ThemeColor;
 
   /**
-   * Toggle button background color
-   * Can be a string (same for both themes) or object with light/dark values
-   * @example "#25d366" or { light: "#25d366", dark: "#00a884" }
+   * Toggle button background color or gradient
+   * Can be a solid color, gradient, or theme-aware
+   * @example "#7c5cff"
+   * @example { from: '#36e3ff', to: '#7c5cff' }
+   * @example { light: "#7c5cff", dark: "#7c5cff" }
    */
-  toggleColor?: string | ThemeColor;
+  toggleColor?: ColorValue;
 
   /** Widget position */
   position?: 'bottom-right' | 'bottom-left';
@@ -260,14 +290,14 @@ export interface ConnectResponse {
   operatorAvatar?: string;
   /** Primary color from server */
   primaryColor?: string;
-  /** Header background color from server (string or theme-aware) */
-  headerColor?: string | ThemeColor;
+  /** Header background color/gradient from server */
+  headerColor?: ColorValue;
   /** Footer/input area background color from server (string or theme-aware) */
   footerColor?: string | ThemeColor;
   /** Chat background style from server (string or theme-aware) */
   chatBackground?: 'whatsapp' | 'dots' | 'plain' | string | ThemeColor;
-  /** Toggle button color from server (string or theme-aware) */
-  toggleColor?: string | ThemeColor;
+  /** Toggle button color/gradient from server */
+  toggleColor?: ColorValue;
   /** Pre-chat form configuration */
   preChatForm?: PreChatFormConfig;
 }

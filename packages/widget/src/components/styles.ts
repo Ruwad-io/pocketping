@@ -1,5 +1,13 @@
-/** Theme-aware color type */
-export type ThemeColorValue = string | { light: string; dark: string };
+/** Gradient color type */
+export interface GradientColor {
+  from: string;
+  to: string;
+  direction?: string;
+}
+
+/** Theme-aware color type (can include gradients) */
+export type ColorOrGradient = string | GradientColor;
+export type ThemeColorValue = ColorOrGradient | { light: ColorOrGradient; dark: ColorOrGradient };
 
 export interface StyleOptions {
   primaryColor: string;
@@ -10,20 +18,71 @@ export interface StyleOptions {
   toggleColor?: ThemeColorValue;
 }
 
-/** Resolve a theme-aware color to a single value */
+/** Default gradient from logo: cyan → violet */
+const DEFAULT_GRADIENT: GradientColor = { from: '#36e3ff', to: '#7c5cff', direction: 'to right' };
+
+/** Check if a value is a gradient object */
+function isGradient(value: unknown): value is GradientColor {
+  return typeof value === 'object' && value !== null && 'from' in value && 'to' in value;
+}
+
+/** Convert a color or gradient to a CSS value */
+function toCssColor(value: ColorOrGradient): string {
+  if (isGradient(value)) {
+    const direction = value.direction || 'to right';
+    return `linear-gradient(${direction}, ${value.from}, ${value.to})`;
+  }
+  return value;
+}
+
+/** Get the first color from a gradient (for hover states, etc.) */
+function getBaseColor(value: ColorOrGradient): string {
+  if (isGradient(value)) {
+    return value.to; // Use the 'to' color as the base
+  }
+  return value;
+}
+
+/** Resolve a theme-aware color to a CSS value */
 function resolveThemeColor(
   color: ThemeColorValue | undefined,
   isDark: boolean,
-  defaultLight: string,
-  defaultDark: string
+  defaultLight: ColorOrGradient,
+  defaultDark: ColorOrGradient
 ): string {
   if (!color) {
-    return isDark ? defaultDark : defaultLight;
+    return toCssColor(isDark ? defaultDark : defaultLight);
   }
   if (typeof color === 'string') {
     return color;
   }
-  return isDark ? color.dark : color.light;
+  if (isGradient(color)) {
+    return toCssColor(color);
+  }
+  // Theme-aware object
+  const resolved = isDark ? color.dark : color.light;
+  return toCssColor(resolved);
+}
+
+/** Resolve to base color (for hover states) */
+function resolveBaseColor(
+  color: ThemeColorValue | undefined,
+  isDark: boolean,
+  defaultLight: ColorOrGradient,
+  defaultDark: ColorOrGradient
+): string {
+  if (!color) {
+    return getBaseColor(isDark ? defaultDark : defaultLight);
+  }
+  if (typeof color === 'string') {
+    return color;
+  }
+  if (isGradient(color)) {
+    return getBaseColor(color);
+  }
+  // Theme-aware object
+  const resolved = isDark ? color.dark : color.light;
+  return getBaseColor(resolved);
 }
 
 export function styles(options: StyleOptions): string {
@@ -31,13 +90,16 @@ export function styles(options: StyleOptions): string {
   const isDark = theme === 'dark';
 
   // Resolved colors with defaults (theme-aware)
-  const resolvedHeaderColor = resolveThemeColor(headerColor, isDark, '#008069', '#202c33');
+  // Brand colors from logo: gradient #36e3ff → #7c5cff, pink #ff5fd4
+  const resolvedHeaderColor = resolveThemeColor(headerColor, isDark, DEFAULT_GRADIENT, '#202c33');
   const resolvedFooterColor = resolveThemeColor(footerColor, isDark, '#f0f2f5', '#202c33');
-  const resolvedToggleColor = resolveThemeColor(toggleColor, isDark, '#25d366', '#25d366');
-  const resolvedToggleHoverColor = resolvedToggleColor !== '#25d366'
-    ? adjustBrightness(resolvedToggleColor, -10)
-    : '#22c55e';
-  const resolvedSendButtonHoverColor = adjustBrightness(resolvedHeaderColor, -15);
+  const resolvedToggleColor = resolveThemeColor(toggleColor, isDark, DEFAULT_GRADIENT, DEFAULT_GRADIENT);
+
+  // For hover states, we need the base color (not gradient)
+  const headerBaseColor = resolveBaseColor(headerColor, isDark, DEFAULT_GRADIENT, '#202c33');
+  const toggleBaseColor = resolveBaseColor(toggleColor, isDark, DEFAULT_GRADIENT, DEFAULT_GRADIENT);
+  const resolvedToggleHoverColor = adjustBrightness(toggleBaseColor, -15);
+  const resolvedSendButtonHoverColor = adjustBrightness(headerBaseColor, -15);
 
   // Background patterns
   const whatsappPattern = isDark
@@ -151,7 +213,7 @@ function adjustBrightness(hex: string, percent: number): string {
       right: 4px;
       width: 12px;
       height: 12px;
-      background: #22c55e;
+      background: #ff5fd4;
       border-radius: 50%;
       border: 2px solid white;
     }
@@ -307,8 +369,8 @@ function adjustBrightness(hex: string, percent: number): string {
     }
 
     .pp-status-dot.pp-online {
-      background: #25d366;
-      box-shadow: 0 0 0 2px rgba(37, 211, 102, 0.3);
+      background: #ff5fd4;
+      box-shadow: 0 0 0 2px rgba(255, 95, 212, 0.3);
     }
 
     .pp-close-btn {
@@ -1012,7 +1074,7 @@ function adjustBrightness(hex: string, percent: number): string {
       justify-content: center;
       gap: 16px;
       z-index: 100;
-      border: 3px dashed #00a884;
+      border: 3px dashed #7c5cff;
       border-radius: 12px;
       margin: 4px;
       pointer-events: none;
@@ -1021,7 +1083,7 @@ function adjustBrightness(hex: string, percent: number): string {
     .pp-drop-icon svg {
       width: 56px;
       height: 56px;
-      color: #00a884;
+      color: #7c5cff;
     }
 
     .pp-drop-text {
@@ -1162,7 +1224,7 @@ function adjustBrightness(hex: string, percent: number): string {
       padding: 10px 20px;
       border: none;
       border-radius: 8px;
-      background: #00a884;
+      background: #7c5cff;
       color: white;
       font-size: 14px;
       font-weight: 500;
@@ -1171,7 +1233,7 @@ function adjustBrightness(hex: string, percent: number): string {
     }
 
     .pp-edit-save:hover:not(:disabled) {
-      background: #008f72;
+      background: #6a4ee6;
     }
 
     .pp-edit-save:disabled {
@@ -1186,7 +1248,7 @@ function adjustBrightness(hex: string, percent: number): string {
       gap: 10px;
       padding: 8px 12px;
       background: ${resolvedFooterColor};
-      border-left: 4px solid #00a884;
+      border-left: 4px solid #7c5cff;
     }
 
     .pp-reply-preview-content {
@@ -1197,7 +1259,7 @@ function adjustBrightness(hex: string, percent: number): string {
     .pp-reply-label {
       display: block;
       font-size: 12px;
-      color: #00a884;
+      color: #7c5cff;
       font-weight: 500;
       margin-bottom: 2px;
     }
@@ -1241,7 +1303,7 @@ function adjustBrightness(hex: string, percent: number): string {
     /* Reply Quote in Message */
     .pp-reply-quote {
       background: ${isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)'};
-      border-left: 3px solid #00a884;
+      border-left: 3px solid #7c5cff;
       padding: 6px 10px;
       margin-bottom: 4px;
       border-radius: 0 6px 6px 0;
@@ -1253,7 +1315,7 @@ function adjustBrightness(hex: string, percent: number): string {
     .pp-reply-sender {
       display: block;
       font-weight: 500;
-      color: #00a884;
+      color: #7c5cff;
       margin-bottom: 2px;
       font-size: 12px;
     }
@@ -1283,7 +1345,7 @@ function adjustBrightness(hex: string, percent: number): string {
     /* Reply quote in visitor message bubble needs higher contrast */
     .pp-message-visitor .pp-reply-quote {
       background: ${isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.08)'};
-      border-left-color: ${isDark ? 'rgba(255,255,255,0.5)' : '#00a884'};
+      border-left-color: ${isDark ? 'rgba(255,255,255,0.5)' : '#7c5cff'};
     }
 
     .pp-message-visitor .pp-reply-quote-clickable:hover {
@@ -1291,7 +1353,7 @@ function adjustBrightness(hex: string, percent: number): string {
     }
 
     .pp-message-visitor .pp-reply-sender {
-      color: ${isDark ? 'rgba(255,255,255,0.9)' : '#00a884'};
+      color: ${isDark ? 'rgba(255,255,255,0.9)' : '#7c5cff'};
     }
 
     .pp-message-visitor .pp-reply-content {
@@ -1305,13 +1367,13 @@ function adjustBrightness(hex: string, percent: number): string {
 
     @keyframes pp-highlight-pulse {
       0% {
-        box-shadow: 0 0 0 0 rgba(0, 168, 132, 0.5);
+        box-shadow: 0 0 0 0 rgba(124, 92, 255, 0.5);
       }
       30% {
-        box-shadow: 0 0 0 6px rgba(0, 168, 132, 0.25);
+        box-shadow: 0 0 0 6px rgba(124, 92, 255, 0.25);
       }
       100% {
-        box-shadow: 0 0 0 0 rgba(0, 168, 132, 0);
+        box-shadow: 0 0 0 0 rgba(124, 92, 255, 0);
       }
     }
 
@@ -1572,7 +1634,7 @@ function adjustBrightness(hex: string, percent: number): string {
       margin-top: 12px;
       border: none;
       border-radius: 8px;
-      background: #00a884;
+      background: #7c5cff;
       color: white;
       font-size: 15px;
       font-weight: 500;
@@ -1581,7 +1643,7 @@ function adjustBrightness(hex: string, percent: number): string {
     }
 
     .pp-prechat-submit:hover:not(:disabled) {
-      background: #008f72;
+      background: #6a4ee6;
     }
 
     .pp-prechat-submit:active:not(:disabled) {
