@@ -1,6 +1,14 @@
 import React, { useState, useCallback } from 'react'
 import styles from './styles.module.css'
 
+type ColorMode = 'solid' | 'gradient'
+
+interface GradientColor {
+  from: string
+  to: string
+  direction?: string
+}
+
 interface WidgetConfig {
   endpoint: string
   operatorName: string
@@ -9,10 +17,19 @@ interface WidgetConfig {
   welcomeMessage: string
   position: 'bottom-right' | 'bottom-left'
   theme: 'light' | 'dark' | 'auto'
-  headerColor: string
+  headerColorMode: ColorMode
+  headerColorSolid: string
+  headerColorGradient: GradientColor
   footerColor: string
-  toggleColor: string
+  toggleColorMode: ColorMode
+  toggleColorSolid: string
+  toggleColorGradient: GradientColor
   chatBackground: 'whatsapp' | 'dots' | 'plain' | string
+}
+
+const defaultGradient: GradientColor = {
+  from: '#36e3ff',
+  to: '#7c5cff',
 }
 
 const defaultConfig: WidgetConfig = {
@@ -23,9 +40,13 @@ const defaultConfig: WidgetConfig = {
   welcomeMessage: 'Hi! How can we help you today?',
   position: 'bottom-right',
   theme: 'auto',
-  headerColor: '',
+  headerColorMode: 'gradient',
+  headerColorSolid: '#7c5cff',
+  headerColorGradient: { ...defaultGradient },
   footerColor: '',
-  toggleColor: '',
+  toggleColorMode: 'gradient',
+  toggleColorSolid: '#7c5cff',
+  toggleColorGradient: { ...defaultGradient },
   chatBackground: 'whatsapp',
 }
 
@@ -40,6 +61,36 @@ export default function WidgetCustomizer(): JSX.Element {
     },
     []
   )
+
+  const handleGradientChange = useCallback(
+    (field: 'headerColorGradient' | 'toggleColorGradient', prop: keyof GradientColor, value: string) => {
+      setConfig((prev) => ({
+        ...prev,
+        [field]: { ...prev[field], [prop]: value },
+      }))
+    },
+    []
+  )
+
+  const getHeaderColorValue = (): string | GradientColor | undefined => {
+    if (config.headerColorMode === 'solid' && config.headerColorSolid) {
+      return config.headerColorSolid
+    }
+    if (config.headerColorMode === 'gradient') {
+      return config.headerColorGradient
+    }
+    return undefined
+  }
+
+  const getToggleColorValue = (): string | GradientColor | undefined => {
+    if (config.toggleColorMode === 'solid' && config.toggleColorSolid) {
+      return config.toggleColorSolid
+    }
+    if (config.toggleColorMode === 'gradient') {
+      return config.toggleColorGradient
+    }
+    return undefined
+  }
 
   const generateCode = useCallback((): string => {
     const options: Record<string, unknown> = {
@@ -64,15 +115,24 @@ export default function WidgetCustomizer(): JSX.Element {
     if (config.theme !== 'auto') {
       options.theme = config.theme
     }
-    if (config.headerColor) {
-      options.headerColor = config.headerColor
+
+    // Header color
+    const headerColor = getHeaderColorValue()
+    if (headerColor) {
+      options.headerColor = headerColor
     }
+
+    // Footer color (solid only)
     if (config.footerColor) {
       options.footerColor = config.footerColor
     }
-    if (config.toggleColor) {
-      options.toggleColor = config.toggleColor
+
+    // Toggle color
+    const toggleColor = getToggleColorValue()
+    if (toggleColor) {
+      options.toggleColor = toggleColor
     }
+
     if (config.chatBackground && config.chatBackground !== 'whatsapp') {
       options.chatBackground = config.chatBackground
     }
@@ -92,6 +152,25 @@ export default function WidgetCustomizer(): JSX.Element {
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }, [generateCode])
+
+  const getHeaderBackground = (isDark: boolean): string => {
+    if (isDark) {
+      return '#202c33'
+    }
+    if (config.headerColorMode === 'solid' && config.headerColorSolid) {
+      return config.headerColorSolid
+    }
+    const g = config.headerColorGradient
+    return `linear-gradient(to right, ${g.from}, ${g.to})`
+  }
+
+  const getToggleBackground = (): string => {
+    if (config.toggleColorMode === 'solid' && config.toggleColorSolid) {
+      return config.toggleColorSolid
+    }
+    const g = config.toggleColorGradient
+    return `linear-gradient(to right, ${g.from}, ${g.to})`
+  }
 
   const isDark = previewTheme === 'dark'
 
@@ -236,29 +315,83 @@ export default function WidgetCustomizer(): JSX.Element {
           </div>
 
           <div className={styles.card}>
-            <h3 className={styles.cardTitle}>Advanced Colors (Optional)</h3>
-            <span className={styles.hint}>Leave empty to use defaults</span>
+            <h3 className={styles.cardTitle}>Advanced Colors</h3>
 
+            {/* Header Color */}
             <div className={styles.field}>
               <label className={styles.label}>Header Color</label>
-              <div className={styles.colorRow}>
-                <input
-                  type="color"
-                  value={config.headerColor || '#7c5cff'}
-                  onChange={(e) => handleChange('headerColor', e.target.value)}
-                  className={styles.colorPicker}
-                />
-                <input
-                  type="text"
-                  value={config.headerColor}
-                  onChange={(e) => handleChange('headerColor', e.target.value)}
-                  placeholder="#7c5cff"
-                  className={styles.colorInput}
-                />
+              <div className={styles.colorModeToggle}>
+                <button
+                  onClick={() => handleChange('headerColorMode', 'solid')}
+                  className={`${styles.modeBtn} ${config.headerColorMode === 'solid' ? styles.modeBtnActive : ''}`}
+                >
+                  Solid
+                </button>
+                <button
+                  onClick={() => handleChange('headerColorMode', 'gradient')}
+                  className={`${styles.modeBtn} ${config.headerColorMode === 'gradient' ? styles.modeBtnActive : ''}`}
+                >
+                  Gradient
+                </button>
               </div>
-              <span className={styles.hint}>Default: gradient #36e3ff → #7c5cff</span>
+              {config.headerColorMode === 'solid' ? (
+                <div className={styles.colorRow}>
+                  <input
+                    type="color"
+                    value={config.headerColorSolid || '#7c5cff'}
+                    onChange={(e) => handleChange('headerColorSolid', e.target.value)}
+                    className={styles.colorPicker}
+                  />
+                  <input
+                    type="text"
+                    value={config.headerColorSolid}
+                    onChange={(e) => handleChange('headerColorSolid', e.target.value)}
+                    placeholder="#7c5cff"
+                    className={styles.colorInput}
+                  />
+                </div>
+              ) : (
+                <div className={styles.gradientRow}>
+                  <div className={styles.gradientColor}>
+                    <span className={styles.gradientLabel}>From</span>
+                    <input
+                      type="color"
+                      value={config.headerColorGradient.from}
+                      onChange={(e) => handleGradientChange('headerColorGradient', 'from', e.target.value)}
+                      className={styles.colorPicker}
+                    />
+                    <input
+                      type="text"
+                      value={config.headerColorGradient.from}
+                      onChange={(e) => handleGradientChange('headerColorGradient', 'from', e.target.value)}
+                      className={styles.colorInputSmall}
+                    />
+                  </div>
+                  <span className={styles.gradientArrow}>→</span>
+                  <div className={styles.gradientColor}>
+                    <span className={styles.gradientLabel}>To</span>
+                    <input
+                      type="color"
+                      value={config.headerColorGradient.to}
+                      onChange={(e) => handleGradientChange('headerColorGradient', 'to', e.target.value)}
+                      className={styles.colorPicker}
+                    />
+                    <input
+                      type="text"
+                      value={config.headerColorGradient.to}
+                      onChange={(e) => handleGradientChange('headerColorGradient', 'to', e.target.value)}
+                      className={styles.colorInputSmall}
+                    />
+                  </div>
+                </div>
+              )}
+              <div
+                className={styles.colorPreview}
+                style={{ background: getHeaderBackground(false) }}
+              />
             </div>
 
+            {/* Footer Color (solid only) */}
             <div className={styles.field}>
               <label className={styles.label}>Footer Color</label>
               <div className={styles.colorRow}>
@@ -272,30 +405,84 @@ export default function WidgetCustomizer(): JSX.Element {
                   type="text"
                   value={config.footerColor}
                   onChange={(e) => handleChange('footerColor', e.target.value)}
-                  placeholder="#f0f2f5"
+                  placeholder="#f0f2f5 (leave empty for default)"
                   className={styles.colorInput}
                 />
               </div>
             </div>
 
+            {/* Toggle Color */}
             <div className={styles.field}>
               <label className={styles.label}>Toggle Button Color</label>
-              <div className={styles.colorRow}>
-                <input
-                  type="color"
-                  value={config.toggleColor || '#7c5cff'}
-                  onChange={(e) => handleChange('toggleColor', e.target.value)}
-                  className={styles.colorPicker}
-                />
-                <input
-                  type="text"
-                  value={config.toggleColor}
-                  onChange={(e) => handleChange('toggleColor', e.target.value)}
-                  placeholder="#7c5cff"
-                  className={styles.colorInput}
-                />
+              <div className={styles.colorModeToggle}>
+                <button
+                  onClick={() => handleChange('toggleColorMode', 'solid')}
+                  className={`${styles.modeBtn} ${config.toggleColorMode === 'solid' ? styles.modeBtnActive : ''}`}
+                >
+                  Solid
+                </button>
+                <button
+                  onClick={() => handleChange('toggleColorMode', 'gradient')}
+                  className={`${styles.modeBtn} ${config.toggleColorMode === 'gradient' ? styles.modeBtnActive : ''}`}
+                >
+                  Gradient
+                </button>
               </div>
-              <span className={styles.hint}>Default: gradient #36e3ff → #7c5cff</span>
+              {config.toggleColorMode === 'solid' ? (
+                <div className={styles.colorRow}>
+                  <input
+                    type="color"
+                    value={config.toggleColorSolid || '#7c5cff'}
+                    onChange={(e) => handleChange('toggleColorSolid', e.target.value)}
+                    className={styles.colorPicker}
+                  />
+                  <input
+                    type="text"
+                    value={config.toggleColorSolid}
+                    onChange={(e) => handleChange('toggleColorSolid', e.target.value)}
+                    placeholder="#7c5cff"
+                    className={styles.colorInput}
+                  />
+                </div>
+              ) : (
+                <div className={styles.gradientRow}>
+                  <div className={styles.gradientColor}>
+                    <span className={styles.gradientLabel}>From</span>
+                    <input
+                      type="color"
+                      value={config.toggleColorGradient.from}
+                      onChange={(e) => handleGradientChange('toggleColorGradient', 'from', e.target.value)}
+                      className={styles.colorPicker}
+                    />
+                    <input
+                      type="text"
+                      value={config.toggleColorGradient.from}
+                      onChange={(e) => handleGradientChange('toggleColorGradient', 'from', e.target.value)}
+                      className={styles.colorInputSmall}
+                    />
+                  </div>
+                  <span className={styles.gradientArrow}>→</span>
+                  <div className={styles.gradientColor}>
+                    <span className={styles.gradientLabel}>To</span>
+                    <input
+                      type="color"
+                      value={config.toggleColorGradient.to}
+                      onChange={(e) => handleGradientChange('toggleColorGradient', 'to', e.target.value)}
+                      className={styles.colorPicker}
+                    />
+                    <input
+                      type="text"
+                      value={config.toggleColorGradient.to}
+                      onChange={(e) => handleGradientChange('toggleColorGradient', 'to', e.target.value)}
+                      className={styles.colorInputSmall}
+                    />
+                  </div>
+                </div>
+              )}
+              <div
+                className={styles.colorPreview}
+                style={{ background: getToggleBackground() }}
+              />
             </div>
           </div>
         </div>
@@ -345,8 +532,7 @@ export default function WidgetCustomizer(): JSX.Element {
                   <div
                     className={styles.chatHeader}
                     style={{
-                      background:
-                        config.headerColor || (isDark ? '#202c33' : 'linear-gradient(to right, #36e3ff, #7c5cff)'),
+                      background: getHeaderBackground(isDark),
                     }}
                   >
                     <div className={styles.chatHeaderContent}>
@@ -453,8 +639,7 @@ export default function WidgetCustomizer(): JSX.Element {
                 <div
                   className={styles.toggleBtn}
                   style={{
-                    background:
-                      config.toggleColor || 'linear-gradient(to right, #36e3ff, #7c5cff)',
+                    background: getToggleBackground(),
                     [config.position === 'bottom-left' ? 'left' : 'right']: 0,
                   }}
                 >

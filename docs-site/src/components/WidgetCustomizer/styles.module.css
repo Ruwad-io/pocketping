@@ -123,6 +123,85 @@
   font-size: 0.8rem;
 }
 
+.colorInputSmall {
+  width: 5rem;
+  padding: 0.5rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.375rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.75rem;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+}
+
+.colorInputSmall:focus {
+  outline: none;
+  border-color: var(--ifm-color-primary);
+}
+
+/* Color Mode Toggle (Solid/Gradient) */
+.colorModeToggle {
+  display: flex;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+
+.modeBtn {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  color: var(--ifm-color-emphasis-600);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+}
+
+.modeBtn:hover {
+  color: var(--ifm-font-color-base);
+}
+
+.modeBtnActive {
+  background: var(--ifm-color-primary);
+  color: white;
+}
+
+/* Gradient Row */
+.gradientRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.gradientColor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.gradientLabel {
+  font-size: 0.7rem;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.gradientArrow {
+  color: var(--ifm-color-emphasis-500);
+  font-weight: 500;
+  padding-top: 1rem;
+}
+
+/* Color Preview Bar */
+.colorPreview {
+  height: 1.5rem;
+  border-radius: 0.375rem;
+  margin-top: 0.5rem;
+  border: 1px solid var(--ifm-color-emphasis-200);
+}
+
 /* Preview */
 .previewHeader {
   display: flex;
