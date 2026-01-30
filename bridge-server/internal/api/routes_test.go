@@ -119,6 +119,13 @@ func (m *mockBridge) OnVisitorMessageDeleted(sessionID, messageID string, bridge
 	return nil
 }
 
+func (m *mockBridge) OnVisitorDisconnect(session *types.Session, message string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.lastSession = session
+	return nil
+}
+
 func setupTestServer(bridgeList []bridges.Bridge, cfg *config.Config) (*Server, *http.ServeMux) {
 	if cfg == nil {
 		cfg = &config.Config{}
