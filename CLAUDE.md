@@ -184,8 +184,11 @@ This monorepo contains:
 - `packages/sdk-go/` - Go SDK for self-hosted backends
 - `packages/sdk-php/` - PHP SDK for self-hosted backends
 - `packages/sdk-ruby/` - Ruby SDK for self-hosted backends
-- `packages/website/` - Documentation site
+- `packages/cli/` - CLI tool for PocketPing
+- `packages/wordpress-plugin/` - WordPress plugin
 - `bridge-server/` - Standalone Go server with HTTP-only bridges (alternative to SDK + custom backend)
+- `docs-site/` - Documentation site (Docusaurus) - docs.pocketping.io
+- `examples/` - Integration examples for various frameworks
 
 ## PR Workflow
 
@@ -338,7 +341,9 @@ All SDKs should implement the same interface as defined in `SDK_SPEC.md`:
 
 ## Documentation
 
-- SDK documentation lives in `pocketping-app/website/app/docs/sdk/`
+- Documentation site is in `docs-site/` (Docusaurus)
+- SDK documentation: `docs-site/docs/sdk/`
+- Widget documentation: `docs-site/docs/widget/`
 - Update docs when adding new features
 - Keep README files up to date
 
