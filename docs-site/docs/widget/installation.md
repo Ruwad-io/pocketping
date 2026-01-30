@@ -144,17 +144,12 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   useEffect(() => {
-    // Initialize on mount
     PocketPing.init({
       projectId: 'proj_xxxxxxxxxxxxx',
       operatorName: 'Support Team',
       primaryColor: '#6366f1',
     });
-
-    // Cleanup on unmount
-    return () => {
-      PocketPing.destroy();
-    };
+    // Note: Don't call destroy() in cleanup - the widget manages its own lifecycle
   }, []);
 
   return (
@@ -176,19 +171,25 @@ export default function App({ Component, pageProps }: AppProps) {
       projectId: 'proj_xxxxxxxxxxxxx',
       operatorName: 'Support Team',
     });
-
-    return () => PocketPing.destroy();
+    // Note: Don't call destroy() in cleanup - the widget manages its own lifecycle
   }, []);
 
   return <Component {...pageProps} />;
 }
 ```
 
+:::warning Don't call destroy() in React cleanup
+The widget uses `beforeunload` to send disconnect notifications when visitors leave. If you call `PocketPing.destroy()` in React's cleanup function, it may remove these listeners before the browser fires the event, preventing disconnect notifications from being sent.
+
+The widget manages its own lifecycle - just call `init()` once and let it handle cleanup automatically.
+:::
+```
+
 ### Vue.js / Nuxt
 
 ```vue title="App.vue (Vue 3)"
 <script setup>
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted } from 'vue';
 import PocketPing from '@pocketping/widget';
 
 onMounted(() => {
@@ -197,10 +198,7 @@ onMounted(() => {
     operatorName: 'Support Team',
     primaryColor: '#6366f1',
   });
-});
-
-onUnmounted(() => {
-  PocketPing.destroy();
+  // Note: Don't call destroy() in onUnmounted - the widget manages its own lifecycle
 });
 </script>
 ```
@@ -220,24 +218,21 @@ export default defineNuxtPlugin(() => {
 ### Angular
 
 ```typescript title="app.component.ts"
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import PocketPing from '@pocketping/widget';
 
 @Component({
   selector: 'app-root',
   template: '<router-outlet></router-outlet>',
 })
-export class AppComponent implements OnInit, OnDestroy {
+export class AppComponent implements OnInit {
   ngOnInit() {
     PocketPing.init({
       projectId: 'proj_xxxxxxxxxxxxx',
       operatorName: 'Support Team',
       primaryColor: '#6366f1',
     });
-  }
-
-  ngOnDestroy() {
-    PocketPing.destroy();
+    // Note: Don't call destroy() in ngOnDestroy - the widget manages its own lifecycle
   }
 }
 ```
@@ -246,7 +241,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
 ```svelte title="+layout.svelte"
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import PocketPing from '@pocketping/widget';
   import { browser } from '$app/environment';
 
@@ -256,12 +251,7 @@ export class AppComponent implements OnInit, OnDestroy {
         projectId: 'proj_xxxxxxxxxxxxx',
         operatorName: 'Support Team',
       });
-    }
-  });
-
-  onDestroy(() => {
-    if (browser) {
-      PocketPing.destroy();
+      // Note: Don't call destroy() in onDestroy - the widget manages its own lifecycle
     }
   });
 </script>
