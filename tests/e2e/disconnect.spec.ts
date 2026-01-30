@@ -2,7 +2,9 @@ import { test, expect } from '@playwright/test';
 
 const PROJECT_ID = 'proj_5d9f587cc6d6312cffbe3433b8580ada';
 
+// Skip in CI - these tests require local test.pocketping.test environment
 test.describe('Visitor Disconnect', () => {
+  test.skip(!!process.env.CI, 'Skipped in CI - requires local pocketping.test environment');
   test('should send disconnect notification when closing tab', async ({ page, context }) => {
     // Capture console logs
     const consoleLogs: string[] = [];
