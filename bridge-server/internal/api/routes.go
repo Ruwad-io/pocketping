@@ -649,17 +649,16 @@ func (s *Server) processDisconnect(event *types.VisitorDisconnectEvent) error {
 
 	// Build disconnect message
 	visitorName := "Visitor"
-	if event.Session.Metadata != nil {
-		if name, ok := event.Session.Metadata["name"].(string); ok && name != "" {
-			visitorName = name
-		} else if email, ok := event.Session.Metadata["email"].(string); ok && email != "" {
+	if event.Session.Identity != nil {
+		if event.Session.Identity.Name != "" {
+			visitorName = event.Session.Identity.Name
+		} else if event.Session.Identity.Email != "" {
 			// Use part before @ as name
-			if idx := len(email); idx > 0 {
-				for i, c := range email {
-					if c == '@' {
-						visitorName = email[:i]
-						break
-					}
+			email := event.Session.Identity.Email
+			for i, c := range email {
+				if c == '@' {
+					visitorName = email[:i]
+					break
 				}
 			}
 		}
