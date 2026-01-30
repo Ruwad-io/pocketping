@@ -1700,8 +1700,12 @@ export class PocketPingClient {
   // ─────────────────────────────────────────────────────────────────
 
   private setupUnloadListeners(): void {
+    console.log('[PocketPing] Setting up unload listeners');
     // Handle page unload (tab close, navigation away)
-    this.boundHandleUnload = () => this.notifyDisconnect();
+    this.boundHandleUnload = () => {
+      console.log('[PocketPing] beforeunload/pagehide fired');
+      this.notifyDisconnect();
+    };
     window.addEventListener('beforeunload', this.boundHandleUnload);
     window.addEventListener('pagehide', this.boundHandleUnload);
 
@@ -1737,7 +1741,14 @@ export class PocketPingClient {
    * Uses sendBeacon for reliability on page unload
    */
   private notifyDisconnect(): void {
+    console.log('[PocketPing] notifyDisconnect called', {
+      disconnectNotified: this.disconnectNotified,
+      hasSession: !!this.session,
+      sessionId: this.session?.sessionId,
+    });
+
     if (this.disconnectNotified || !this.session) {
+      console.log('[PocketPing] Skipping disconnect notification (already notified or no session)');
       return;
     }
 
@@ -1751,10 +1762,13 @@ export class PocketPingClient {
       reason: 'page_unload',
     });
 
+    console.log('[PocketPing] Sending disconnect beacon to:', url, 'data:', data);
+
     // Use sendBeacon for reliability on page unload (doesn't wait for response)
     if (navigator.sendBeacon) {
       const blob = new Blob([data], { type: 'application/json' });
-      navigator.sendBeacon(url, blob);
+      const success = navigator.sendBeacon(url, blob);
+      console.log('[PocketPing] sendBeacon result:', success);
     } else {
       // Fallback to sync XHR (less reliable but works)
       try {
