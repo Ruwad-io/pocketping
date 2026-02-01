@@ -2,11 +2,11 @@
 Contributors: pocketping
 Tags: live chat, chat widget, telegram, discord, slack, customer support
 Requires at least: 5.0
-Tested up to: 6.4
+Tested up to: 6.9
 Requires PHP: 7.4
 Stable tag: 1.0.0
-License: MIT
-License URI: https://opensource.org/licenses/MIT
+License: GPL-2.0-or-later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 Add a live chat widget to your WordPress site and reply to visitors from Telegram, Discord, or Slack.
 

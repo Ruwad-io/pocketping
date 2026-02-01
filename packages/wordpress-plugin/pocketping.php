@@ -1,15 +1,14 @@
 <?php
 /**
  * Plugin Name: PocketPing Live Chat
- * Plugin URI: https://pocketping.io
+ * Plugin URI: https://docs.pocketping.io/widget/wordpress
  * Description: Add PocketPing live chat widget to your WordPress site. Chat with visitors via Telegram, Discord, or Slack.
  * Version: 1.0.0
  * Author: PocketPing
  * Author URI: https://pocketping.io
- * License: MIT
- * License URI: https://opensource.org/licenses/MIT
- * Text Domain: pocketping
- * Domain Path: /languages
+ * License: GPL-2.0-or-later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain: pocketping-live-chat
  * Requires at least: 5.0
  * Requires PHP: 7.4
  */
@@ -88,8 +87,8 @@ class PocketPing {
      */
     public function add_admin_menu() {
         add_options_page(
-            __('PocketPing Settings', 'pocketping'),
-            __('PocketPing', 'pocketping'),
+            __('PocketPing Settings', 'pocketping-live-chat'),
+            __('PocketPing', 'pocketping-live-chat'),
             'manage_options',
             'pocketping',
             array($this, 'render_settings_page')
@@ -109,7 +108,7 @@ class PocketPing {
         // Main section
         add_settings_section(
             'pocketping_main_section',
-            __('Widget Configuration', 'pocketping'),
+            __('Widget Configuration', 'pocketping-live-chat'),
             array($this, 'render_main_section'),
             'pocketping'
         );
@@ -117,7 +116,7 @@ class PocketPing {
         // Project ID field
         add_settings_field(
             'project_id',
-            __('Project ID', 'pocketping'),
+            __('Project ID', 'pocketping-live-chat'),
             array($this, 'render_project_id_field'),
             'pocketping',
             'pocketping_main_section'
@@ -126,7 +125,7 @@ class PocketPing {
         // Enabled field
         add_settings_field(
             'enabled',
-            __('Enable Widget', 'pocketping'),
+            __('Enable Widget', 'pocketping-live-chat'),
             array($this, 'render_enabled_field'),
             'pocketping',
             'pocketping_main_section'
@@ -135,7 +134,7 @@ class PocketPing {
         // Appearance section
         add_settings_section(
             'pocketping_appearance_section',
-            __('Appearance', 'pocketping'),
+            __('Appearance', 'pocketping-live-chat'),
             null,
             'pocketping'
         );
@@ -143,7 +142,7 @@ class PocketPing {
         // Position field
         add_settings_field(
             'position',
-            __('Position', 'pocketping'),
+            __('Position', 'pocketping-live-chat'),
             array($this, 'render_position_field'),
             'pocketping',
             'pocketping_appearance_section'
@@ -152,7 +151,7 @@ class PocketPing {
         // Primary color field
         add_settings_field(
             'primary_color',
-            __('Primary Color', 'pocketping'),
+            __('Primary Color', 'pocketping-live-chat'),
             array($this, 'render_primary_color_field'),
             'pocketping',
             'pocketping_appearance_section'
@@ -161,7 +160,7 @@ class PocketPing {
         // Welcome message field
         add_settings_field(
             'welcome_message',
-            __('Welcome Message', 'pocketping'),
+            __('Welcome Message', 'pocketping-live-chat'),
             array($this, 'render_welcome_message_field'),
             'pocketping',
             'pocketping_appearance_section'
@@ -227,8 +226,8 @@ class PocketPing {
      * Render main section description
      */
     public function render_main_section() {
-        echo '<p>' . esc_html__('Connect your PocketPing project to enable live chat on your site.', 'pocketping') . '</p>';
-        echo '<p><a href="https://app.pocketping.io" target="_blank">' . esc_html__('Get your Project ID from the PocketPing dashboard', 'pocketping') . ' &rarr;</a></p>';
+        echo '<p>' . esc_html__('Connect your PocketPing project to enable live chat on your site.', 'pocketping-live-chat') . '</p>';
+        echo '<p><a href="https://app.pocketping.io" target="_blank">' . esc_html__('Get your Project ID from the PocketPing dashboard', 'pocketping-live-chat') . ' &rarr;</a></p>';
     }
 
     /**
@@ -244,7 +243,7 @@ class PocketPing {
                placeholder="proj_xxxxxxxxxxxxx"
         />
         <p class="description">
-            <?php esc_html_e('Your PocketPing Project ID. Find it in Settings > Installation.', 'pocketping'); ?>
+            <?php esc_html_e('Your PocketPing Project ID. Find it in Settings > Installation.', 'pocketping-live-chat'); ?>
         </p>
         <?php
     }
@@ -261,7 +260,7 @@ class PocketPing {
                    value="1"
                    <?php checked($settings['enabled']); ?>
             />
-            <?php esc_html_e('Show chat widget on your site', 'pocketping'); ?>
+            <?php esc_html_e('Show chat widget on your site', 'pocketping-live-chat'); ?>
         </label>
         <?php
     }
@@ -274,10 +273,10 @@ class PocketPing {
         ?>
         <select name="<?php echo esc_attr(self::OPTION_NAME); ?>[position]">
             <option value="bottom-right" <?php selected($settings['position'], 'bottom-right'); ?>>
-                <?php esc_html_e('Bottom Right', 'pocketping'); ?>
+                <?php esc_html_e('Bottom Right', 'pocketping-live-chat'); ?>
             </option>
             <option value="bottom-left" <?php selected($settings['position'], 'bottom-left'); ?>>
-                <?php esc_html_e('Bottom Left', 'pocketping'); ?>
+                <?php esc_html_e('Bottom Left', 'pocketping-live-chat'); ?>
             </option>
         </select>
         <?php
@@ -296,7 +295,7 @@ class PocketPing {
                data-default-color="#6366f1"
         />
         <p class="description">
-            <?php esc_html_e('Main color for the chat widget button and header.', 'pocketping'); ?>
+            <?php esc_html_e('Main color for the chat widget button and header.', 'pocketping-live-chat'); ?>
         </p>
         <?php
     }
@@ -310,10 +309,10 @@ class PocketPing {
         <textarea name="<?php echo esc_attr(self::OPTION_NAME); ?>[welcome_message]"
                   rows="3"
                   class="large-text"
-                  placeholder="<?php esc_attr_e('Hi! How can we help you today?', 'pocketping'); ?>"
+                  placeholder="<?php esc_attr_e('Hi! How can we help you today?', 'pocketping-live-chat'); ?>"
         ><?php echo esc_textarea($settings['welcome_message']); ?></textarea>
         <p class="description">
-            <?php esc_html_e('Optional message shown when visitors first open the chat.', 'pocketping'); ?>
+            <?php esc_html_e('Optional message shown when visitors first open the chat.', 'pocketping-live-chat'); ?>
         </p>
         <?php
     }
@@ -331,7 +330,7 @@ class PocketPing {
             add_settings_error(
                 'pocketping_messages',
                 'pocketping_message',
-                __('Settings saved.', 'pocketping'),
+                __('Settings saved.', 'pocketping-live-chat'),
                 'updated'
             );
         }
@@ -347,7 +346,7 @@ class PocketPing {
                         <?php
                         settings_fields('pocketping_settings_group');
                         do_settings_sections('pocketping');
-                        submit_button(__('Save Settings', 'pocketping'));
+                        submit_button(__('Save Settings', 'pocketping-live-chat'));
                         ?>
                     </form>
                 </div>
@@ -356,20 +355,20 @@ class PocketPing {
                     <div style="background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; padding: 20px;">
                         <h3 style="margin-top: 0;">
                             <span style="color: #6366f1;">&#9679;</span>
-                            <?php esc_html_e('Need Help?', 'pocketping'); ?>
+                            <?php esc_html_e('Need Help?', 'pocketping-live-chat'); ?>
                         </h3>
-                        <p><?php esc_html_e('Check out our documentation for setup guides and troubleshooting.', 'pocketping'); ?></p>
+                        <p><?php esc_html_e('Check out our documentation for setup guides and troubleshooting.', 'pocketping-live-chat'); ?></p>
                         <p>
                             <a href="https://pocketping.io/docs" target="_blank" class="button">
-                                <?php esc_html_e('View Documentation', 'pocketping'); ?>
+                                <?php esc_html_e('View Documentation', 'pocketping-live-chat'); ?>
                             </a>
                         </p>
                         <hr style="margin: 20px 0;">
-                        <h4 style="margin-bottom: 10px;"><?php esc_html_e('Quick Links', 'pocketping'); ?></h4>
+                        <h4 style="margin-bottom: 10px;"><?php esc_html_e('Quick Links', 'pocketping-live-chat'); ?></h4>
                         <ul style="margin: 0; padding-left: 20px;">
-                            <li><a href="https://app.pocketping.io" target="_blank"><?php esc_html_e('Dashboard', 'pocketping'); ?></a></li>
-                            <li><a href="https://pocketping.io/docs/widget" target="_blank"><?php esc_html_e('Widget Customization', 'pocketping'); ?></a></li>
-                            <li><a href="https://pocketping.io/docs/bridges" target="_blank"><?php esc_html_e('Setup Telegram/Discord/Slack', 'pocketping'); ?></a></li>
+                            <li><a href="https://app.pocketping.io" target="_blank"><?php esc_html_e('Dashboard', 'pocketping-live-chat'); ?></a></li>
+                            <li><a href="https://pocketping.io/docs/widget" target="_blank"><?php esc_html_e('Widget Customization', 'pocketping-live-chat'); ?></a></li>
+                            <li><a href="https://pocketping.io/docs/bridges" target="_blank"><?php esc_html_e('Setup Telegram/Discord/Slack', 'pocketping-live-chat'); ?></a></li>
                         </ul>
                     </div>
                 </div>
@@ -431,7 +430,7 @@ class PocketPing {
      * Add plugin action links
      */
     public function plugin_action_links($links) {
-        $settings_link = '<a href="' . admin_url('options-general.php?page=pocketping') . '">' . __('Settings', 'pocketping') . '</a>';
+        $settings_link = '<a href="' . admin_url('options-general.php?page=pocketping') . '">' . __('Settings', 'pocketping-live-chat') . '</a>';
         array_unshift($links, $settings_link);
         return $links;
     }
