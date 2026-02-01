@@ -14,11 +14,11 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@prisma/client": "^6.3.1",
+    "@prisma/client": "6.19.2",
+    "nanoid": "^5.0.9",
     "next": "^15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "nanoid": "^5.0.9",
     "ws": "^8.18.0",
     "zod": "^3.24.1"
   },
@@ -26,11 +26,11 @@
     "@types/node": "^22.10.7",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
-    "typescript": "^5.7.3",
-    "prisma": "^6.3.1",
-    "tailwindcss": "^3.4.17",
+    "autoprefixer": "^10.4.20",
     "postcss": "^8.5.1",
-    "autoprefixer": "^10.4.20"
+    "prisma": "^6.19.2",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3"
   },
   "engines": {
     "node": ">=20"

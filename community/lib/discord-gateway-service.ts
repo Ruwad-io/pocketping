@@ -251,10 +251,12 @@ async function handleDiscordMessage(
   })
 
   // Update session last activity
+  const now = new Date()
   await prisma.session.update({
     where: { id: session.id },
     data: {
-      lastActivity: new Date(),
+      lastActivity: now,
+      lastOperatorActivity: now,
       operatorOnline: true,
     },
   })
