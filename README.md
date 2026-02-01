@@ -140,6 +140,8 @@ Open your site, send a message, and watch it appear in Telegram!
 
 **That's it.** Widget talks to your backend. Backend pings your phone. You reply. Visitor sees your response instantly.
 
+For a short architecture overview and concepts, see `docs/ARCHITECTURE.md`.
+
 ---
 
 ## Setup Guides
@@ -330,6 +332,28 @@ SLACK_CHANNEL_ID=C0123456789
 
 The widget can connect to **3 different servers**. All three provide the **same features**:
 bidirectional messaging, file attachments, message edit/delete, read receipts, and more.
+
+Diagrams and use cases for each mode: see `docs/ARCHITECTURE.md`.
+
+```mermaid
+flowchart LR
+  V[Visitor Browser] --> W[Widget]
+  W -->|event| S{Server Mode}
+  S --> SAAS[pocketping.io\n(SaaS)]
+  S --> BR[bridge-server\n(Self-hosted)]
+  S --> SDK[Your backend + SDK\n(Self-hosted custom)]
+  SAAS --> C[Chat App]
+  BR --> C
+  SDK --> C
+```
+
+| Criteria | SaaS (pocketping.io) | Bridge Server (Self-hosted) | SDK Integration (Self-hosted custom) |
+|---|---|---|---|
+| Setup time | Minutes | ~30–60 minutes | Several hours+ |
+| Infra to manage | None | Bridge server only | Full backend stack |
+| Control / customization | Low | Medium | High |
+| Data residency | PocketPing cloud | Your server | Your server |
+| Best for | Fast launch | Self-hosted, no code | Full control / custom workflows |
 
 ```
 ┌────────────┐
