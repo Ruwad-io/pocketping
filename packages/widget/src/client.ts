@@ -24,6 +24,34 @@ import { VERSION } from './version';
 
 type Listener<T> = (data: T) => void;
 
+/**
+ * Detect headless browser signals
+ * Returns an object with bot detection signals
+ */
+function detectBotSignals(): {
+  webdriver: boolean;
+  plugins: boolean;
+  languages: boolean;
+  chrome: boolean;
+  permissions: boolean;
+} {
+  return {
+    // navigator.webdriver is true in Puppeteer/Selenium/Playwright
+    webdriver: !!(navigator as Navigator & { webdriver?: boolean }).webdriver,
+    // Headless browsers typically have no plugins
+    plugins: navigator.plugins.length === 0,
+    // Headless browsers may have empty languages
+    languages: navigator.languages.length === 0,
+    // HeadlessChrome doesn't have window.chrome
+    chrome:
+      /Chrome/.test(navigator.userAgent) &&
+      typeof (window as Window & { chrome?: unknown }).chrome === 'undefined',
+    // Notification permission in headless is often 'denied' by default
+    permissions:
+      typeof Notification !== 'undefined' && Notification.permission === 'denied',
+  };
+}
+
 export class PocketPingClient {
   private config: ResolvedPocketPingConfig;
   private session: Session | null = null;
@@ -81,6 +109,7 @@ export class PocketPingClient {
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           language: navigator.language,
           screenResolution: `${window.screen.width}x${window.screen.height}`,
+          botSignals: detectBotSignals(),
         },
         // Include stored identity if available
         identity: storedIdentity || undefined,
