@@ -720,7 +720,7 @@ function adjustBrightness(hex: string, percent: number): string {
 
     .pp-input-form {
       display: flex;
-      padding: 8px 10px;
+      padding: 12px 10px 6px;
       gap: 8px;
       background: ${resolvedFooterColor};
       align-items: flex-end;
