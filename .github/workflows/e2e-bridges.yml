@@ -18,7 +18,7 @@ jobs:
           - name: gateway-off
             platforms: slack
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
         with:
           version: 9
