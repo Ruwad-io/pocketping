@@ -2086,6 +2086,7 @@ export class PocketPingClient {
 
     try {
       // Capture only the visible viewport
+      // Using html2canvas-pro which supports modern CSS color functions (lab, lch, oklab, oklch)
       const canvas = await html2canvas(document.documentElement, {
         width: window.innerWidth,
         height: window.innerHeight,
@@ -2133,19 +2134,19 @@ export class PocketPingClient {
       return win.html2canvas;
     }
 
-    // Load from CDN
+    // Load html2canvas-pro from CDN (supports modern CSS color functions like lab, lch, oklab, oklch)
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      script.src = 'https://cdn.jsdelivr.net/npm/html2canvas-pro@1.6.6/dist/html2canvas-pro.min.js';
       script.onload = () => {
         const w = window as WindowWithHtml2Canvas;
         if (typeof w.html2canvas !== 'undefined') {
           resolve(w.html2canvas);
         } else {
-          reject(new Error('html2canvas failed to load'));
+          reject(new Error('html2canvas-pro failed to load'));
         }
       };
-      script.onerror = () => reject(new Error('Failed to load html2canvas from CDN'));
+      script.onerror = () => reject(new Error('Failed to load html2canvas-pro from CDN'));
       document.head.appendChild(script);
     });
   }
