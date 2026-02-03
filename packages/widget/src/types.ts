@@ -357,7 +357,8 @@ export type WebSocketEventType =
   | 'read'
   | 'event'
   | 'version_warning'
-  | 'config_update';
+  | 'config_update'
+  | 'screenshot_request';
 
 export interface WebSocketEvent {
   type: WebSocketEventType;

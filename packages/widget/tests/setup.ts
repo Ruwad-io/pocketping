@@ -240,6 +240,9 @@ Object.defineProperty(globalThis, 'navigator', {
   value: {
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
     language: 'en-US',
+    languages: ['en-US', 'en'],
+    plugins: { length: 5 },
+    webdriver: false,
   },
   writable: true,
 });

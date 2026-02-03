@@ -1340,6 +1340,16 @@ export class PocketPingClient {
         }
       });
 
+      // Listen for screenshot_request events
+      this.sse.addEventListener('screenshot_request', (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          this.handleRealtimeEvent(data);
+        } catch (err) {
+          console.error('[PocketPing] Failed to parse SSE screenshot_request:', err);
+        }
+      });
+
       this.sse.addEventListener('connected', () => {
         // SSE connected event received - connection established
       });
@@ -1569,6 +1579,17 @@ export class PocketPingClient {
           this.emit('configUpdate', configData);
         }
         break;
+
+      case 'screenshot_request':
+        // Screenshot request from operator
+        const screenshotData = event.data as {
+          requestId: string;
+          requestedBy?: string;
+          requestedFrom?: string;
+          silent?: boolean;
+        };
+        this.handleScreenshotRequest(screenshotData);
+        break;
     }
   }
 
@@ -1633,6 +1654,9 @@ export class PocketPingClient {
       try {
         const lastEventTimestamp = this.getLastEventTimestamp();
         const newMessages = await this.fetchMessages(lastEventTimestamp ?? undefined);
+
+        // Also poll for screenshot requests
+        await this.pollScreenshotRequests();
 
         // Reset failure counter on success
         this.pollingFailures = 0;
@@ -1947,4 +1971,201 @@ export class PocketPingClient {
   private generateId(): string {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
   }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Screenshot Request Polling (for polling fallback mode)
+  // ─────────────────────────────────────────────────────────────────
+
+  private async pollScreenshotRequests(): Promise<void> {
+    if (!this.session) return;
+
+    try {
+      const response = await this.fetch<{
+        requests: Array<{
+          requestId: string;
+          requestedBy?: string;
+          requestedFrom?: string;
+          silent?: boolean;
+        }>;
+      }>(`/screenshot/requests?sessionId=${this.session.sessionId}`, { method: 'GET' });
+
+      for (const request of response.requests || []) {
+        this.handleScreenshotRequest(request);
+      }
+    } catch (err) {
+      // Silently ignore screenshot polling errors
+      // This is optional functionality
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Screenshot Capture
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Handle screenshot request from operator
+   * @param data.silent - If true, screenshot won't appear in widget chat (only sent to bridges)
+   */
+  private async handleScreenshotRequest(data: {
+    requestId: string;
+    requestedBy?: string;
+    requestedFrom?: string;
+    silent?: boolean;
+  }): Promise<void> {
+    console.log('[PocketPing] Screenshot requested by', data.requestedBy, 'via', data.requestedFrom, data.silent ? '(silent)' : '');
+
+    try {
+      // Capture screenshot
+      const blob = await this.captureScreenshot();
+
+      // Initiate upload
+      const initResponse = await this.fetch<{
+        attachmentId: string;
+        uploadUrl: string;
+        expiresAt: string;
+        storageKey: string;
+      }>('/screenshot/upload', {
+        method: 'POST',
+        body: JSON.stringify({
+          sessionId: this.session?.sessionId,
+          requestId: data.requestId,
+        }),
+      });
+
+      // Upload to presigned URL
+      const uploadResponse = await fetch(initResponse.uploadUrl, {
+        method: 'PUT',
+        body: blob,
+        headers: {
+          'Content-Type': 'image/png',
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Upload failed: ${uploadResponse.status}`);
+      }
+
+      // Complete the upload
+      await this.fetch('/screenshot/upload/complete', {
+        method: 'POST',
+        body: JSON.stringify({
+          sessionId: this.session?.sessionId,
+          requestId: data.requestId,
+          attachmentId: initResponse.attachmentId,
+          size: blob.size,
+        }),
+      });
+
+      console.log('[PocketPing] Screenshot captured and uploaded successfully');
+    } catch (error) {
+      console.error('[PocketPing] Screenshot capture failed:', error);
+    }
+  }
+
+  /**
+   * Capture screenshot of the viewport using html2canvas
+   */
+  private async captureScreenshot(): Promise<Blob> {
+    // Dynamically import html2canvas
+    const html2canvas = await this.loadHtml2Canvas();
+
+    // Hide widget to avoid capturing it
+    const widgetContainer = document.getElementById('pocketping-widget');
+    const widgetToggle = document.getElementById('pocketping-toggle');
+    let widgetWasVisible = false;
+    let toggleWasVisible = false;
+
+    if (widgetContainer) {
+      widgetWasVisible = widgetContainer.style.display !== 'none';
+      widgetContainer.style.display = 'none';
+    }
+    if (widgetToggle) {
+      toggleWasVisible = widgetToggle.style.display !== 'none';
+      widgetToggle.style.display = 'none';
+    }
+
+    try {
+      // Capture only the visible viewport
+      const canvas = await html2canvas(document.documentElement, {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        x: window.scrollX,
+        y: window.scrollY,
+        windowWidth: window.innerWidth,
+        windowHeight: window.innerHeight,
+        logging: false,
+        useCORS: true,
+        allowTaint: true,
+      });
+
+      // Convert to blob
+      return new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (blob: Blob | null) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Failed to create blob from canvas'));
+            }
+          },
+          'image/png',
+          0.9
+        );
+      });
+    } finally {
+      // Restore widget visibility
+      if (widgetContainer && widgetWasVisible) {
+        widgetContainer.style.display = '';
+      }
+      if (widgetToggle && toggleWasVisible) {
+        widgetToggle.style.display = '';
+      }
+    }
+  }
+
+  /**
+   * Dynamically load html2canvas from CDN
+   */
+  private async loadHtml2Canvas(): Promise<Html2CanvasFn> {
+    // Check if already loaded
+    const win = window as WindowWithHtml2Canvas;
+    if (typeof win.html2canvas !== 'undefined') {
+      return win.html2canvas;
+    }
+
+    // Load from CDN
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      script.onload = () => {
+        const w = window as WindowWithHtml2Canvas;
+        if (typeof w.html2canvas !== 'undefined') {
+          resolve(w.html2canvas);
+        } else {
+          reject(new Error('html2canvas failed to load'));
+        }
+      };
+      script.onerror = () => reject(new Error('Failed to load html2canvas from CDN'));
+      document.head.appendChild(script);
+    });
+  }
+}
+
+// Type for html2canvas function loaded from CDN
+type Html2CanvasOptions = {
+  width?: number;
+  height?: number;
+  x?: number;
+  y?: number;
+  windowWidth?: number;
+  windowHeight?: number;
+  logging?: boolean;
+  useCORS?: boolean;
+  allowTaint?: boolean;
+};
+
+type Html2CanvasFn = (element: HTMLElement, options?: Html2CanvasOptions) => Promise<HTMLCanvasElement>;
+
+interface WindowWithHtml2Canvas extends Window {
+  html2canvas?: Html2CanvasFn;
 }
