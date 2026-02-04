@@ -8,13 +8,19 @@ const sidebars = {
             type: 'category',
             label: 'Widget',
             collapsed: false,
-            items: ['widget/installation', 'widget/configuration', 'widget/customization'],
+            items: [
+                'widget/installation',
+                'widget/configuration',
+                'widget/customization',
+                'widget/wordpress',
+                'widget/customize',
+            ],
         },
         {
             type: 'category',
             label: 'SDKs',
             link: { type: 'doc', id: 'sdk/index' },
-            items: ['sdk/nodejs', 'sdk/python'],
+            items: ['sdk/nodejs', 'sdk/python', 'sdk/go', 'sdk/php', 'sdk/ruby'],
         },
         {
             type: 'category',

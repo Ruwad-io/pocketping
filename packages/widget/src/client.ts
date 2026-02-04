@@ -1250,9 +1250,8 @@ export class PocketPingClient {
       this.ws = new WebSocket(wsUrl);
       this.wsConnectedAt = Date.now();
 
-      // Timeout for hanging connections (serverless platforms)
+      // Timeout for hanging connections (serverless platforms don't support WebSocket)
       const connectionTimeout = setTimeout(() => {
-        console.warn('[PocketPing] ⏱️ WebSocket timeout - trying SSE');
         if (this.ws && this.ws.readyState !== WebSocket.OPEN) {
           this.ws.onclose = null;
           this.ws.onerror = null;
@@ -1291,7 +1290,7 @@ export class PocketPingClient {
         // Error will be followed by onclose
       };
     } catch {
-      console.warn('[PocketPing] WebSocket unavailable - trying SSE');
+      // WebSocket not available (expected on serverless platforms)
       this.connectSSE();
     }
   }
@@ -1314,16 +1313,16 @@ export class PocketPingClient {
     try {
       this.sse = new EventSource(sseUrl);
 
-      // Timeout for SSE connection
+      // Timeout for SSE connection (15s to handle Vercel cold starts)
       const connectionTimeout = setTimeout(() => {
-        console.warn('[PocketPing] ⏱️ SSE timeout - falling back to polling');
         if (this.sse && this.sse.readyState !== EventSource.OPEN) {
+          console.info('[PocketPing] SSE connection slow, using polling for faster updates');
           this.sse.close();
           this.sse = null;
           this.connectionMode = 'polling';
           this.startPolling();
         }
-      }, 5000);
+      }, 15000);
 
       this.sse.onopen = () => {
         clearTimeout(connectionTimeout);
@@ -1354,9 +1353,13 @@ export class PocketPingClient {
         // SSE connected event received - connection established
       });
 
-      this.sse.onerror = () => {
+      this.sse.onerror = (event) => {
         clearTimeout(connectionTimeout);
-        console.warn('[PocketPing] ❌ SSE error - falling back to polling');
+        // Log SSE error details for debugging
+        const readyState = this.sse?.readyState;
+        console.info(
+          `[PocketPing] SSE error (readyState: ${readyState === 0 ? 'CONNECTING' : readyState === 1 ? 'OPEN' : 'CLOSED'}) - using polling`
+        );
         if (this.sse) {
           this.sse.close();
           this.sse = null;
@@ -1365,7 +1368,7 @@ export class PocketPingClient {
         this.startPolling();
       };
     } catch {
-      console.warn('[PocketPing] SSE unavailable - falling back to polling');
+      // SSE not available, use polling
       this.connectionMode = 'polling';
       this.startPolling();
     }
@@ -1374,9 +1377,8 @@ export class PocketPingClient {
   private handleWsFailure(): void {
     const timeSinceConnect = Date.now() - this.wsConnectedAt;
 
-    // If WebSocket fails quickly, try SSE
+    // If WebSocket fails quickly (serverless platforms don't support WS), try SSE
     if (timeSinceConnect < this.quickFailureThreshold) {
-      console.info('[PocketPing] WebSocket failed quickly - trying SSE');
       this.connectSSE();
       return;
     }
