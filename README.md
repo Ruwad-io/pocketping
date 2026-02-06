@@ -339,9 +339,9 @@ Diagrams and use cases for each mode: see `docs/ARCHITECTURE.md`.
 flowchart LR
   V[Visitor Browser] --> W[Widget]
   W -->|event| S{Server Mode}
-  S --> SAAS[pocketping.io\n(SaaS)]
-  S --> BR[bridge-server\n(Self-hosted)]
-  S --> SDK[Your backend + SDK\n(Self-hosted custom)]
+  S --> SAAS["pocketping.io<br/>(SaaS)"]
+  S --> BR["bridge-server<br/>(Self-hosted)"]
+  S --> SDK["Your backend + SDK<br/>(Self-hosted custom)"]
   SAAS --> C[Chat App]
   BR --> C
   SDK --> C
