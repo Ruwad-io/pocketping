@@ -28,7 +28,7 @@ flowchart LR
   V[Visitor Browser] -->|message| W[Widget]
   W -->|event| B[Your Backend]
   B -->|notify| BR[Bridge]
-  BR -->|post| C[Chat App\nTelegram/Discord/Slack]
+  BR -->|post| C["Chat App<br/>Telegram/Discord/Slack"]
   C -->|reply| BR
   BR -->|webhook| B
   B -->|update| W
@@ -52,7 +52,7 @@ Use cases:
 ```mermaid
 flowchart LR
   V[Visitor Browser] --> W[Widget]
-  W -->|event| PB[PocketPing Cloud\nAPI + Bridge]
+  W -->|event| PB["PocketPing Cloud<br/>API + Bridge"]
   PB -->|post| C[Chat App]
   C -->|reply| PB
   PB -->|update| W
@@ -92,7 +92,7 @@ flowchart LR
   V[Visitor Browser] --> W[Widget]
   W -->|event| B[Your Backend]
   B -->|sdk| S[SDKs / Custom Bridge]
-  S -->|post| C[Chat App or\nInternal Systems]
+  S -->|post| C["Chat App or<br/>Internal Systems"]
   C -->|reply| S
   S -->|webhook| B
   B -->|update| W
