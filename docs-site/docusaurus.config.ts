@@ -52,9 +52,31 @@ const config: Config = {
     ],
   ],
 
+  headTags: [
+    {
+      tagName: 'script',
+      attributes: { type: 'application/ld+json' },
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'SoftwareApplication',
+        name: 'PocketPing',
+        applicationCategory: 'BusinessApplication',
+        operatingSystem: 'Web',
+        description:
+          'Open-source live chat widget that routes conversations to Telegram, Discord, Slack, and HubSpot.',
+        url: 'https://pocketping.io',
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+        author: {
+          '@type': 'Organization',
+          name: 'Ruwad',
+          url: 'https://ruwad.io',
+        },
+      }),
+    },
+  ],
+
   themeConfig: {
-    // TODO: Add social-card.png for Open Graph
-    // image: 'img/social-card.png',
+    image: 'img/social-card.png',
     colorMode: {
       defaultMode: 'light',
       respectPrefersColorScheme: true,
