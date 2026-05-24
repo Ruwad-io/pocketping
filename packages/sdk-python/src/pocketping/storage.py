@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from pocketping.models import Message, Session
+from pocketping.models import Attachment, Message, Session
 
 
 @dataclass
@@ -67,6 +67,22 @@ class Storage(ABC):
         """Get bridge message IDs for a message. Optional to implement."""
         return None
 
+    async def save_attachment(self, attachment: Attachment) -> None:
+        """Save an attachment. Optional to implement."""
+        pass
+
+    async def get_attachment(self, attachment_id: str) -> Optional[Attachment]:
+        """Get an attachment by ID. Optional to implement."""
+        return None
+
+    async def get_message_attachments(self, message_id: str) -> list[Attachment]:
+        """Get all attachments linked to a message. Optional to implement."""
+        return []
+
+    async def update_attachment(self, attachment: Attachment) -> None:
+        """Update an existing attachment. Optional to implement."""
+        await self.save_attachment(attachment)
+
     async def cleanup_old_sessions(self, older_than: datetime) -> int:
         """Clean up old sessions. Optional to implement."""
         return 0
@@ -84,6 +100,7 @@ class MemoryStorage(Storage):
         self._messages: dict[str, list[Message]] = {}
         self._message_by_id: dict[str, Message] = {}
         self._bridge_message_ids: dict[str, BridgeMessageIds] = {}
+        self._attachments: dict[str, Attachment] = {}
 
     async def create_session(self, session: Session) -> None:
         self._sessions[session.id] = session
@@ -116,10 +133,23 @@ class MemoryStorage(Storage):
                     break
             messages = messages[start_index:]
 
-        return messages[:limit]
+        result = messages[:limit]
+        for message in result:
+            self._hydrate_attachments(message)
+        return result
 
     async def get_message(self, message_id: str) -> Optional[Message]:
-        return self._message_by_id.get(message_id)
+        message = self._message_by_id.get(message_id)
+        if message:
+            self._hydrate_attachments(message)
+        return message
+
+    def _hydrate_attachments(self, message: Message) -> None:
+        """Populate message.attachments from stored attachments if not already set."""
+        if not message.attachments:
+            linked = [a for a in self._attachments.values() if a.message_id == message.id]
+            if linked:
+                message.attachments = linked
 
     async def update_message(self, message: Message) -> None:
         self._message_by_id[message.id] = message
@@ -145,6 +175,18 @@ class MemoryStorage(Storage):
 
     async def get_bridge_message_ids(self, message_id: str) -> Optional[BridgeMessageIds]:
         return self._bridge_message_ids.get(message_id)
+
+    async def save_attachment(self, attachment: Attachment) -> None:
+        self._attachments[attachment.id] = attachment
+
+    async def get_attachment(self, attachment_id: str) -> Optional[Attachment]:
+        return self._attachments.get(attachment_id)
+
+    async def get_message_attachments(self, message_id: str) -> list[Attachment]:
+        return [a for a in self._attachments.values() if a.message_id == message_id]
+
+    async def update_attachment(self, attachment: Attachment) -> None:
+        self._attachments[attachment.id] = attachment
 
     async def cleanup_old_sessions(self, older_than: datetime) -> int:
         count = 0

@@ -24,6 +24,33 @@ module PocketPing
   #     webhook_secret: "secret123"
   #   )
   class Client
+    # Maximum allowed attachment size in bytes (10 MiB)
+    MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024
+
+    # Default list of MIME types accepted for upload
+    DEFAULT_ALLOWED_MIME_TYPES = [
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+      "application/pdf",
+      "text/plain",
+      "text/csv",
+      "application/zip",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "video/mp4",
+      "audio/mpeg"
+    ].freeze
+
+    # Default base URL used to build presigned upload/access URLs
+    DEFAULT_UPLOAD_BASE_URL = "https://uploads.pocketping.local"
+
+    # How long a presigned upload URL remains valid, in seconds (15 minutes)
+    UPLOAD_URL_TTL_SECONDS = 900
+
     # @return [Storage::Base] The storage adapter
     attr_reader :storage
 
@@ -50,6 +77,15 @@ module PocketPing
 
     # @return [IpFilterConfig, nil] IP filter configuration
     attr_reader :ip_filter
+
+    # @return [Integer] Maximum allowed attachment size in bytes
+    attr_reader :max_attachment_size
+
+    # @return [Array<String>] Allowed MIME types for uploads
+    attr_reader :allowed_mime_types
+
+    # @return [String] Base URL used to build presigned upload/access URLs
+    attr_reader :upload_base_url
 
     # Initialize a new PocketPing client
     #
@@ -89,7 +125,10 @@ module PocketPing
       latest_widget_version: nil,
       version_warning_message: nil,
       version_upgrade_url: nil,
-      ip_filter: nil
+      ip_filter: nil,
+      max_attachment_size: MAX_ATTACHMENT_SIZE,
+      allowed_mime_types: DEFAULT_ALLOWED_MIME_TYPES,
+      upload_base_url: DEFAULT_UPLOAD_BASE_URL
     )
       @storage = storage || Storage::MemoryStorage.new
       @bridges = bridges || []
@@ -118,6 +157,11 @@ module PocketPing
                    else
                      ip_filter
                    end
+
+      # File attachment configuration
+      @max_attachment_size = max_attachment_size
+      @allowed_mime_types = allowed_mime_types
+      @upload_base_url = upload_base_url
 
       @operator_online = false
       @last_operator_activity = {}
@@ -273,6 +317,10 @@ module PocketPing
         reply_to: request.reply_to
       )
 
+      # Link any uploaded attachments to this message BEFORE persisting and
+      # notifying bridges so the broadcast and bridges see the attachments.
+      message.attachments = link_attachments(request.attachment_ids, message)
+
       @storage.save_message(message)
 
       # Update session activity
@@ -302,6 +350,12 @@ module PocketPing
         request.session_id,
         WebSocketEvent.new(type: "message", data: message.to_h)
       )
+
+      # AI fallback: when the operator is offline and takeover is due, let the
+      # configured AI provider answer the visitor automatically.
+      if request.sender == Sender::VISITOR
+        maybe_ai_respond(session)
+      end
 
       # Callback
       @on_message&.call(message, session)
@@ -443,7 +497,7 @@ module PocketPing
       @storage.update_message(message)
 
       # Sync edit to bridges
-      sync_edit_to_bridges(request.session_id, request.message_id, request.content, now)
+      sync_edit_to_bridges(message, session)
 
       # Broadcast to WebSocket
       broadcast_to_session(
@@ -489,7 +543,7 @@ module PocketPing
 
       # Sync delete to bridges BEFORE soft delete (we need bridge IDs)
       now = Time.now.utc
-      sync_delete_to_bridges(request.session_id, request.message_id, now)
+      sync_delete_to_bridges(message, session)
 
       # Soft delete the message
       message.deleted_at = now
@@ -508,6 +562,80 @@ module PocketPing
       )
 
       DeleteMessageResponse.new(deleted: true)
+    end
+
+    # ─────────────────────────────────────────────────────────────────
+    # File Attachments
+    # ─────────────────────────────────────────────────────────────────
+
+    # Handle a presigned upload URL request for a file attachment
+    #
+    # @param request [UploadRequest] The upload request
+    # @return [UploadResponse] The presigned upload response
+    # @raise [SessionNotFoundError] If the session is not found
+    # @raise [ValidationError] If the MIME type is not allowed or the size is invalid
+    def handle_upload_request(request)
+      session = @storage.get_session(request.session_id)
+      raise SessionNotFoundError, "Session not found" unless session
+
+      unless @allowed_mime_types.include?(request.mime_type)
+        raise ValidationError, "Invalid mime type: #{request.mime_type}"
+      end
+
+      size = request.size
+      if size.nil? || size <= 0 || size > @max_attachment_size
+        raise ValidationError, "File too large: #{size} exceeds maximum of #{@max_attachment_size} bytes"
+      end
+
+      now = Time.now.utc
+      id = generate_id
+      attachment = Attachment.new(
+        id: id,
+        message_id: nil,
+        filename: request.filename,
+        mime_type: request.mime_type,
+        size: size,
+        url: "#{@upload_base_url}/#{id}",
+        thumbnail_url: nil,
+        status: AttachmentStatus::PENDING,
+        created_at: now
+      )
+
+      @storage.save_attachment(attachment)
+
+      UploadResponse.new(
+        attachment_id: id,
+        upload_url: "#{@upload_base_url}/#{id}",
+        expires_at: now + UPLOAD_URL_TTL_SECONDS
+      )
+    end
+
+    # Mark an attachment as ready once its upload has completed
+    #
+    # @param attachment_id [String] The attachment ID
+    # @return [Attachment] The updated attachment
+    # @raise [ValidationError] If the attachment is not found
+    def handle_upload_complete(attachment_id)
+      attachment = @storage.get_attachment(attachment_id)
+      raise ValidationError, "Attachment not found: #{attachment_id}" unless attachment
+
+      attachment.status = AttachmentStatus::READY
+      @storage.update_attachment(attachment)
+      attachment
+    end
+
+    # Mark an attachment as failed if its upload could not be completed
+    #
+    # @param attachment_id [String] The attachment ID
+    # @return [Attachment] The updated attachment
+    # @raise [ValidationError] If the attachment is not found
+    def handle_upload_failed(attachment_id)
+      attachment = @storage.get_attachment(attachment_id)
+      raise ValidationError, "Attachment not found: #{attachment_id}" unless attachment
+
+      attachment.status = AttachmentStatus::FAILED
+      @storage.update_attachment(attachment)
+      attachment
     end
 
     # ─────────────────────────────────────────────────────────────────
@@ -847,10 +975,40 @@ module PocketPing
     end
 
     def notify_bridges_message(message, session)
+      bridge_ids = nil
       @bridges.each do |bridge|
-        bridge.on_visitor_message(message, session)
+        result = bridge.on_visitor_message(message, session)
+        platform_id = result.respond_to?(:message_id) ? result.message_id : nil
+        next unless platform_id
+
+        ids = bridge_ids_for(bridge, platform_id)
+        next unless ids
+
+        bridge_ids = bridge_ids ? bridge_ids.merge_with(ids) : ids
       rescue StandardError => e
         warn "[PocketPing] Bridge #{bridge.name} error: #{e.message}"
+      end
+
+      return unless bridge_ids && @storage.respond_to?(:save_bridge_message_ids)
+
+      @storage.save_bridge_message_ids(message.id, bridge_ids)
+    end
+
+    # Build a BridgeMessageIds for a single bridge result, keyed by platform.
+    def bridge_ids_for(bridge, platform_message_id)
+      case bridge.name
+      when /\Atelegram/ then BridgeMessageIds.new(telegram_message_id: platform_message_id.to_i)
+      when /\Adiscord/ then BridgeMessageIds.new(discord_message_id: platform_message_id.to_s)
+      when /\Aslack/ then BridgeMessageIds.new(slack_message_ts: platform_message_id.to_s)
+      end
+    end
+
+    # Resolve the platform-specific message ID for a bridge from stored IDs.
+    def platform_message_id_for(bridge, bridge_ids)
+      case bridge.name
+      when /\Atelegram/ then bridge_ids.telegram_message_id
+      when /\Adiscord/ then bridge_ids.discord_message_id
+      when /\Aslack/ then bridge_ids.slack_message_ts
       end
     end
 
@@ -886,24 +1044,42 @@ module PocketPing
       end
     end
 
-    def sync_edit_to_bridges(session_id, message_id, content, edited_at)
+    def sync_edit_to_bridges(message, session)
+      bridge_ids = stored_bridge_ids(message.id)
+      return unless bridge_ids
+
       @bridges.each do |bridge|
         next unless bridge.respond_to?(:on_message_edit)
 
-        bridge.on_message_edit(session_id, message_id, content, edited_at)
+        platform_id = platform_message_id_for(bridge, bridge_ids)
+        next unless platform_id
+
+        bridge.on_message_edit(message, session, platform_id)
       rescue StandardError => e
         warn "[PocketPing] Bridge #{bridge.name} edit sync error: #{e.message}"
       end
     end
 
-    def sync_delete_to_bridges(session_id, message_id, deleted_at)
+    def sync_delete_to_bridges(message, session)
+      bridge_ids = stored_bridge_ids(message.id)
+      return unless bridge_ids
+
       @bridges.each do |bridge|
         next unless bridge.respond_to?(:on_message_delete)
 
-        bridge.on_message_delete(session_id, message_id, deleted_at)
+        platform_id = platform_message_id_for(bridge, bridge_ids)
+        next unless platform_id
+
+        bridge.on_message_delete(message, session, platform_id)
       rescue StandardError => e
         warn "[PocketPing] Bridge #{bridge.name} delete sync error: #{e.message}"
       end
+    end
+
+    def stored_bridge_ids(message_id)
+      return nil unless @storage.respond_to?(:get_bridge_message_ids)
+
+      @storage.get_bridge_message_ids(message_id)
     end
 
     # ─────────────────────────────────────────────────────────────────
@@ -975,6 +1151,93 @@ module PocketPing
       rescue StandardError => e
         warn "[PocketPing] Webhook error: #{e.message}"
       end
+    end
+
+    # ─────────────────────────────────────────────────────────────────
+    # Attachments
+    # ─────────────────────────────────────────────────────────────────
+
+    # Link previously uploaded attachments to a message and return them.
+    #
+    # @param attachment_ids [Array<String>, nil] IDs of attachments to link
+    # @param message [Message] The message they belong to
+    # @return [Array<Attachment>] The linked attachments
+    def link_attachments(attachment_ids, message)
+      return [] if attachment_ids.nil? || attachment_ids.empty?
+      return [] unless @storage.respond_to?(:get_attachment)
+
+      attachment_ids.each_with_object([]) do |attachment_id, linked|
+        attachment = @storage.get_attachment(attachment_id)
+        next unless attachment
+
+        attachment.message_id = message.id
+        @storage.update_attachment(attachment)
+        linked << attachment
+      end
+    end
+
+    # ─────────────────────────────────────────────────────────────────
+    # AI Fallback
+    # ─────────────────────────────────────────────────────────────────
+
+    # Maybe generate an AI reply for a visitor message when the operator is
+    # offline and takeover is due. Errors are logged and never propagate so
+    # they cannot break message handling.
+    #
+    # Triggers when ALL of the following hold:
+    #   1. an AI provider is configured
+    #   2. the operator is not online
+    #   3. takeover is due (delay <= 0, or enough time has elapsed since the
+    #      last operator activity for the session, or the operator never showed)
+    #
+    # @param session [Session] The session that just received a visitor message
+    # @return [void]
+    def maybe_ai_respond(session)
+      return unless @ai_provider
+      return if operator_online?
+      return unless ai_takeover_due?(session.id)
+
+      # Mark the session as AI-handled and persist.
+      session.ai_active = true
+      @storage.update_session(session)
+
+      messages = @storage.get_messages(session.id)
+      reply = @ai_provider.generate_response(messages, @ai_system_prompt)
+      return if reply.nil? || reply.to_s.strip.empty?
+
+      ai_message = Message.new(
+        id: generate_id,
+        session_id: session.id,
+        content: reply,
+        sender: Sender::AI,
+        timestamp: Time.now.utc
+      )
+      @storage.save_message(ai_message)
+
+      # Broadcast to WebSocket clients.
+      broadcast_to_session(
+        session.id,
+        WebSocketEvent.new(type: "message", data: ai_message.to_h)
+      )
+
+      # Surface the AI reply on bridges (Telegram/etc.) via the operator path.
+      notify_bridges_operator_message(ai_message, session, "ai", "AI")
+    rescue StandardError => e
+      warn "[PocketPing] AI fallback error: #{e.message}"
+    end
+
+    # Whether AI takeover is due for the given session.
+    #
+    # @param session_id [String]
+    # @return [Boolean]
+    def ai_takeover_due?(session_id)
+      return true if @ai_takeover_delay <= 0
+
+      last_activity = @mutex.synchronize { @last_operator_activity[session_id] }
+      # No recorded operator activity -> operator never showed up -> due.
+      return true if last_activity.nil?
+
+      (Time.now - last_activity) >= @ai_takeover_delay
     end
 
     # ─────────────────────────────────────────────────────────────────

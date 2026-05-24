@@ -218,12 +218,15 @@ module PocketPing
   # File attachment in a message
   class Attachment < Model
     attribute :id, type: String
+    # Linked to a message after the message is created
+    attribute :message_id, type: String, alias_name: :messageId
     attribute :filename, type: String
     attribute :mime_type, type: String, alias_name: :mimeType
     attribute :size, type: Integer
     attribute :url, type: String
     attribute :thumbnail_url, type: String, alias_name: :thumbnailUrl
     attribute :status, type: String, default: AttachmentStatus::READY
+    attribute :created_at, type: Time, default: -> { Time.now.utc }, alias_name: :createdAt
     attribute :uploaded_from, type: String, alias_name: :uploadedFrom
     attribute :bridge_file_id, type: String, alias_name: :bridgeFileId
   end
@@ -321,6 +324,21 @@ module PocketPing
   class SendMessageResponse < Model
     attribute :message_id, type: String, alias_name: :messageId
     attribute :timestamp, type: Time
+  end
+
+  # Request to obtain a presigned upload URL for a file attachment
+  class UploadRequest < Model
+    attribute :session_id, type: String, alias_name: :sessionId
+    attribute :filename, type: String
+    attribute :mime_type, type: String, alias_name: :mimeType
+    attribute :size, type: Integer
+  end
+
+  # Response containing the presigned upload URL for an attachment
+  class UploadResponse < Model
+    attribute :attachment_id, type: String, alias_name: :attachmentId
+    attribute :upload_url, type: String, alias_name: :uploadUrl
+    attribute :expires_at, type: Time, alias_name: :expiresAt
   end
 
   # Request to send typing indicator

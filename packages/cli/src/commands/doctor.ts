@@ -27,7 +27,7 @@ export async function doctor() {
 
   // Load .env file
   const envPath = join(process.cwd(), '.env')
-  let envVars: Record<string, string> = {}
+  const envVars: Record<string, string> = {}
 
   if (existsSync(envPath)) {
     const content = await readFile(envPath, 'utf-8')

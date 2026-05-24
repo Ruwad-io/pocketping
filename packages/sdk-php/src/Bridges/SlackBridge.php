@@ -12,6 +12,7 @@ use PocketPing\Models\BridgeMessageResult;
 use PocketPing\Models\CustomEvent;
 use PocketPing\Models\Message;
 use PocketPing\Models\MessageStatus;
+use PocketPing\Models\Sender;
 use PocketPing\Models\Session;
 use PocketPing\PocketPing;
 use PocketPing\Storage\StorageWithBridgeIdsInterface;
@@ -263,8 +264,8 @@ class SlackBridge extends AbstractBridge implements BridgeWithEditDeleteInterfac
         }
 
         $senderLabel = match ($replyTarget->sender) {
-            'operator' => 'Support',
-            'ai' => 'AI',
+            Sender::OPERATOR => 'Support',
+            Sender::AI => 'AI',
             default => 'Visitor',
         };
 

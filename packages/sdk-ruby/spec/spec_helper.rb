@@ -1,5 +1,12 @@
 # frozen_string_literal: true
 
+require "simplecov"
+SimpleCov.start do
+  # Only measure the SDK source code, not the test suite itself.
+  track_files "lib/**/*.rb"
+  add_filter "/spec/"
+end
+
 require "bundler/setup"
 require "pocketping"
 require "webmock/rspec"

@@ -16,7 +16,7 @@ final class Message implements \JsonSerializable
     public function __construct(
         public readonly string $id,
         public readonly string $sessionId,
-        public readonly string $content,
+        public string $content,
         public readonly Sender $sender,
         public \DateTimeImmutable $timestamp,
         public readonly ?string $replyTo = null,

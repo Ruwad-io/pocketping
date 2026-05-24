@@ -24,6 +24,17 @@ class MockHttpClient implements HttpClientInterface
     /** @var array<array{body: string|null, httpCode: int, error: string|null}> */
     public array $responseQueue = [];
 
+    public function get(string $url, array $headers = []): array
+    {
+        $this->requests[] = [
+            'method' => 'GET',
+            'url' => $url,
+            'data' => [],
+            'headers' => $headers,
+        ];
+        return $this->getNextResponse();
+    }
+
     public function post(string $url, array $data, array $headers = []): array
     {
         $this->requests[] = [

@@ -90,6 +90,19 @@ export interface PocketPingConfig {
 
   /** User-Agent filtering configuration (block bots/crawlers) */
   uaFilter?: UaFilterConfig;
+
+  // ─────────────────────────────────────────────────────────────────
+  // File Attachments
+  // ─────────────────────────────────────────────────────────────────
+
+  /** Maximum allowed attachment size in bytes (default: 10MB) */
+  maxAttachmentSize?: number;
+
+  /** Allowed MIME types for attachments (defaults to a curated list) */
+  allowedMimeTypes?: string[];
+
+  /** Base URL for generated upload/access URLs */
+  uploadBaseUrl?: string;
 }
 
 export interface AIConfig {
@@ -172,6 +185,8 @@ export type UploadSource = 'widget' | 'telegram' | 'discord' | 'slack' | 'api';
 export interface Attachment {
   /** Unique attachment ID */
   id: string;
+  /** Message this attachment is linked to (null until linked) */
+  messageId?: string | null;
   /** Original filename */
   filename: string;
   /** MIME type (e.g., 'image/jpeg', 'application/pdf') */
@@ -181,13 +196,36 @@ export interface Attachment {
   /** URL to access the file */
   url: string;
   /** Thumbnail URL (for images/videos) */
-  thumbnailUrl?: string;
+  thumbnailUrl?: string | null;
   /** Upload status */
   status: AttachmentStatus;
+  /** Timestamp when the attachment was created */
+  createdAt?: Date;
   /** Source of the upload */
   uploadedFrom?: UploadSource;
   /** External file ID (from Telegram/Discord/Slack) */
   bridgeFileId?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Attachment Upload Flow (presigned URL pattern)
+// ─────────────────────────────────────────────────────────────────
+
+/** Request to obtain a presigned upload URL for a file */
+export interface UploadRequest {
+  sessionId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
+/** Response with the presigned upload URL */
+export interface UploadResponse {
+  attachmentId: string;
+  /** Presigned URL for direct upload */
+  uploadUrl: string;
+  /** Expiry of the upload URL */
+  expiresAt: Date;
 }
 
 export interface Message {

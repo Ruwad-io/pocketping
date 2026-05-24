@@ -23,6 +23,14 @@ class CurlHttpClient implements HttpClientInterface
     /**
      * {@inheritdoc}
      */
+    public function get(string $url, array $headers = []): array
+    {
+        return $this->request('GET', $url, null, $headers);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
     public function post(string $url, array $data, array $headers = []): array
     {
         return $this->request('POST', $url, $data, $headers);

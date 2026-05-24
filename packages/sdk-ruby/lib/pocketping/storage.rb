@@ -125,6 +125,42 @@ module PocketPing
       def get_bridge_message_ids(message_id)
         nil
       end
+
+      # Save a file attachment
+      # Optional: implement for file attachment support
+      #
+      # @param attachment [Attachment] The attachment to save
+      # @return [void]
+      def save_attachment(attachment)
+        nil
+      end
+
+      # Get an attachment by ID
+      # Optional: implement for file attachment support
+      #
+      # @param attachment_id [String] The attachment ID
+      # @return [Attachment, nil] The attachment or nil if not found
+      def get_attachment(attachment_id)
+        nil
+      end
+
+      # Get all attachments linked to a message
+      # Optional: implement for file attachment support
+      #
+      # @param message_id [String] The message ID
+      # @return [Array<Attachment>] List of attachments
+      def get_message_attachments(message_id)
+        []
+      end
+
+      # Update an existing attachment (for status changes / linking)
+      # Optional: implement for file attachment support
+      #
+      # @param attachment [Attachment] The attachment to update
+      # @return [void]
+      def update_attachment(attachment)
+        save_attachment(attachment)
+      end
     end
 
     # In-memory storage adapter
@@ -141,6 +177,7 @@ module PocketPing
         @messages = {}
         @message_by_id = {}
         @bridge_message_ids = {}
+        @attachments = {}
         @mutex = Mutex.new
       end
 
@@ -198,7 +235,7 @@ module PocketPing
 
       # @see Base#get_messages
       def get_messages(session_id, after: nil, limit: 50)
-        @mutex.synchronize do
+        result = @mutex.synchronize do
           messages = @messages[session_id] || []
 
           if after
@@ -214,13 +251,16 @@ module PocketPing
 
           messages.first(limit)
         end
+
+        result.each { |msg| hydrate_attachments(msg) }
+        result
       end
 
       # @see Base#get_message
       def get_message(message_id)
-        @mutex.synchronize do
-          @message_by_id[message_id]
-        end
+        message = @mutex.synchronize { @message_by_id[message_id] }
+        hydrate_attachments(message) if message
+        message
       end
 
       # @see Base#cleanup_old_sessions
@@ -282,6 +322,7 @@ module PocketPing
           @messages.clear
           @message_by_id.clear
           @bridge_message_ids.clear
+          @attachments.clear
         end
         nil
       end
@@ -321,6 +362,46 @@ module PocketPing
         @mutex.synchronize do
           @bridge_message_ids[message_id]
         end
+      end
+
+      # @see Base#save_attachment
+      def save_attachment(attachment)
+        @mutex.synchronize do
+          @attachments[attachment.id] = attachment
+        end
+        nil
+      end
+
+      # @see Base#get_attachment
+      def get_attachment(attachment_id)
+        @mutex.synchronize do
+          @attachments[attachment_id]
+        end
+      end
+
+      # @see Base#get_message_attachments
+      def get_message_attachments(message_id)
+        @mutex.synchronize do
+          @attachments.values.select { |a| a.message_id == message_id }
+        end
+      end
+
+      # @see Base#update_attachment
+      def update_attachment(attachment)
+        @mutex.synchronize do
+          @attachments[attachment.id] = attachment
+        end
+        nil
+      end
+
+      private
+
+      # Populate a message's attachments from storage if not already set.
+      def hydrate_attachments(message)
+        return if message.attachments && !message.attachments.empty?
+
+        linked = get_message_attachments(message.id)
+        message.attachments = linked unless linked.empty?
       end
     end
   end

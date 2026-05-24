@@ -1,3 +1,5 @@
 packages:
   - 'packages/*'
   - 'bridge-server'
+allowBuilds:
+  esbuild: true

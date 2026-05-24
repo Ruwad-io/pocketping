@@ -165,6 +165,9 @@ func parseUserAgent(ua string) string {
 func (t *TelegramBridge) OnVisitorMessage(ctx context.Context, message *Message, session *Session) error {
 	visitorName := t.getVisitorName(session)
 	text := fmt.Sprintf("💬 %s:\n%s", visitorName, message.Content)
+	for _, att := range message.Attachments {
+		text += fmt.Sprintf("\n📎 %s", att.Filename)
+	}
 
 	var replyToMessageID *int64
 	if message.ReplyTo != "" && t.pp != nil {

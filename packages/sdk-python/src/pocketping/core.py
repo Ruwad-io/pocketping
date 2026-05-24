@@ -6,7 +6,7 @@ import hmac
 import json
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Optional
 
 import httpx
@@ -14,6 +14,8 @@ import httpx
 from pocketping.ai.base import AIProvider
 from pocketping.bridges import Bridge
 from pocketping.models import (
+    Attachment,
+    AttachmentStatus,
     ConnectRequest,
     ConnectResponse,
     CustomEvent,
@@ -34,13 +36,42 @@ from pocketping.models import (
     SendMessageResponse,
     Session,
     TypingRequest,
+    UploadRequest,
+    UploadResponse,
     VersionCheckResult,
     VersionStatus,
     VersionWarning,
     WebSocketEvent,
 )
-from pocketping.storage import MemoryStorage, Storage
+from pocketping.storage import BridgeMessageIds, MemoryStorage, Storage
 from pocketping.utils.ip_filter import IpFilterConfig
+
+# ─────────────────────────────────────────────────────────────────
+# Attachment constants (identical across all SDKs - see SDK_SPEC.md §14)
+# ─────────────────────────────────────────────────────────────────
+
+MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024  # 10485760 bytes
+
+DEFAULT_ALLOWED_MIME_TYPES = [
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "application/pdf",
+    "text/plain",
+    "text/csv",
+    "application/zip",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "video/mp4",
+    "audio/mpeg",
+]
+
+DEFAULT_UPLOAD_BASE_URL = "https://uploads.pocketping.local"
+
+UPLOAD_URL_TTL_SECONDS = 900  # 15 minutes
 
 
 class PocketPing:
@@ -69,6 +100,10 @@ class PocketPing:
         version_upgrade_url: Optional[str] = None,
         # IP filtering
         ip_filter: Optional[IpFilterConfig] = None,
+        # File attachments
+        max_attachment_size: int = MAX_ATTACHMENT_SIZE,
+        allowed_mime_types: Optional[list[str]] = None,
+        upload_base_url: str = DEFAULT_UPLOAD_BASE_URL,
     ):
         self.storage = storage or MemoryStorage()
         self.bridges = bridges or []
@@ -99,6 +134,13 @@ class PocketPing:
 
         # IP filtering config
         self.ip_filter = ip_filter
+
+        # File attachment config
+        self.max_attachment_size = max_attachment_size
+        self.allowed_mime_types = (
+            allowed_mime_types if allowed_mime_types is not None else list(DEFAULT_ALLOWED_MIME_TYPES)
+        )
+        self.upload_base_url = upload_base_url.rstrip("/")
 
         self._operator_online = False
         self._last_operator_activity: dict[str, float] = {}  # session_id -> timestamp
@@ -225,6 +267,10 @@ class PocketPing:
             reply_to=request.reply_to,
         )
 
+        # Link attachments to the message BEFORE persisting / notifying bridges,
+        # so bridges and the WebSocket broadcast see them.
+        await self._link_attachments(message, request)
+
         await self.storage.save_message(message)
 
         # Update session activity
@@ -249,6 +295,11 @@ class PocketPing:
             WebSocketEvent(type="message", data=message.model_dump(by_alias=True)),
         )
 
+        # AI fallback: for visitor messages, after persist + attachment link +
+        # bridge notify, maybe generate an AI reply if the operator is offline.
+        if request.sender == Sender.VISITOR:
+            await self._maybe_ai_respond(session)
+
         # Callback
         if self.on_message:
             result = self.on_message(message, session)
@@ -259,6 +310,118 @@ class PocketPing:
             message_id=message.id,
             timestamp=message.timestamp,
         )
+
+    async def _link_attachments(self, message: Message, request: SendMessageRequest) -> None:
+        """Link pre-uploaded attachments (by id) to a message.
+
+        For each id in request.attachment_ids, the stored attachment's message_id is
+        set to message.id, persisted, and collected into message.attachments. Any
+        inline attachments already on the request are preserved.
+        """
+        if not request.attachment_ids:
+            return
+
+        linked: list[Attachment] = list(request.attachments or [])
+        for attachment_id in request.attachment_ids:
+            attachment = await self.storage.get_attachment(attachment_id)
+            if attachment is None:
+                continue
+            attachment.message_id = message.id
+            await self.storage.update_attachment(attachment)
+            linked.append(attachment)
+
+        if linked:
+            message.attachments = linked
+
+    # ─────────────────────────────────────────────────────────────────
+    # File Attachments
+    # ─────────────────────────────────────────────────────────────────
+
+    async def handle_upload_request(self, request: UploadRequest) -> UploadResponse:
+        """Handle an attachment upload request (presigned URL pattern).
+
+        Args:
+            request: The upload request with session_id, filename, mime_type, size.
+
+        Returns:
+            UploadResponse with the attachment id, upload URL, and expiry.
+
+        Raises:
+            ValueError: If the session is not found, the MIME type is not allowed,
+                or the file size is out of range.
+        """
+        session = await self.storage.get_session(request.session_id)
+        if not session:
+            raise ValueError("Session not found")
+
+        if request.mime_type not in self.allowed_mime_types:
+            raise ValueError(f"Invalid MIME type: {request.mime_type}")
+
+        if request.size <= 0 or request.size > self.max_attachment_size:
+            raise ValueError(f"File too large: {request.size} bytes (max {self.max_attachment_size})")
+
+        now = datetime.now(timezone.utc)
+        attachment_id = self._generate_id()
+        upload_url = f"{self.upload_base_url}/{attachment_id}"
+
+        attachment = Attachment(
+            id=attachment_id,
+            message_id=None,
+            filename=request.filename,
+            mime_type=request.mime_type,
+            size=request.size,
+            url=upload_url,
+            thumbnail_url=None,
+            status=AttachmentStatus.PENDING,
+            created_at=now,
+        )
+        await self.storage.save_attachment(attachment)
+
+        return UploadResponse(
+            attachment_id=attachment_id,
+            upload_url=upload_url,
+            expires_at=now + timedelta(seconds=UPLOAD_URL_TTL_SECONDS),
+        )
+
+    async def handle_upload_complete(self, attachment_id: str) -> Attachment:
+        """Mark an attachment as ready after the client finishes uploading.
+
+        Args:
+            attachment_id: The id returned by handle_upload_request.
+
+        Returns:
+            The updated Attachment with status=ready.
+
+        Raises:
+            ValueError: If the attachment is not found.
+        """
+        attachment = await self.storage.get_attachment(attachment_id)
+        if attachment is None:
+            raise ValueError("Attachment not found")
+
+        attachment.status = AttachmentStatus.READY
+        await self.storage.update_attachment(attachment)
+        return attachment
+
+    async def handle_upload_failed(self, attachment_id: str) -> Attachment:
+        """Mark an attachment as failed (e.g., the client upload errored).
+
+        Args:
+            attachment_id: The id returned by handle_upload_request.
+
+        Returns:
+            The updated Attachment with status=failed.
+
+        Raises:
+            ValueError: If the attachment is not found.
+        """
+        attachment = await self.storage.get_attachment(attachment_id)
+        if attachment is None:
+            raise ValueError("Attachment not found")
+
+        attachment.status = AttachmentStatus.FAILED
+        await self.storage.update_attachment(attachment)
+        return attachment
 
     async def handle_get_messages(self, session_id: str, after: Optional[str] = None, limit: int = 50) -> dict:
         """Get messages for a session."""
@@ -466,7 +629,7 @@ class PocketPing:
         await self.storage.update_message(message)
 
         # Sync edit to bridges
-        await self._sync_edit_to_bridges(message.id, message.content)
+        await self._sync_edit_to_bridges(message, session)
 
         # Broadcast to WebSocket clients
         await self._broadcast_to_session(
@@ -522,7 +685,7 @@ class PocketPing:
             raise ValueError("Cannot delete this message")
 
         # Sync delete to bridges BEFORE soft delete (need bridge IDs)
-        await self._sync_delete_to_bridges(message.id)
+        await self._sync_delete_to_bridges(message, session)
 
         # Soft delete message
         message.deleted_at = datetime.now(timezone.utc)
@@ -542,9 +705,21 @@ class PocketPing:
 
         return DeleteMessageResponse(deleted=True)
 
-    async def _sync_edit_to_bridges(self, message_id: str, new_content: str) -> None:
+    def _platform_message_id(
+        self, bridge: Bridge, bridge_ids: BridgeMessageIds
+    ) -> Optional[str | int]:
+        """Resolve the platform-specific message ID for a given bridge."""
+        if bridge.name == "telegram" and bridge_ids.telegram_message_id:
+            return bridge_ids.telegram_message_id
+        if bridge.name == "discord" and bridge_ids.discord_message_id:
+            return bridge_ids.discord_message_id
+        if bridge.name == "slack" and bridge_ids.slack_message_ts:
+            return bridge_ids.slack_message_ts
+        return None
+
+    async def _sync_edit_to_bridges(self, message: Message, session: Session) -> None:
         """Sync message edit to all bridges that support it."""
-        bridge_ids = await self.storage.get_bridge_message_ids(message_id)
+        bridge_ids = await self.storage.get_bridge_message_ids(message.id)
         if not bridge_ids:
             return
 
@@ -553,23 +728,15 @@ class PocketPing:
                 continue
 
             try:
-                bridge_message_id: Optional[str | int] = None
-
-                if bridge.name == "telegram" and bridge_ids.telegram_message_id:
-                    bridge_message_id = bridge_ids.telegram_message_id
-                elif bridge.name == "discord" and bridge_ids.discord_message_id:
-                    bridge_message_id = bridge_ids.discord_message_id
-                elif bridge.name == "slack" and bridge_ids.slack_message_ts:
-                    bridge_message_id = bridge_ids.slack_message_ts
-
-                if bridge_message_id is not None:
-                    await bridge.on_message_edit(message_id, new_content, bridge_message_id)
+                platform_message_id = self._platform_message_id(bridge, bridge_ids)
+                if platform_message_id is not None:
+                    await bridge.on_message_edit(message, session, platform_message_id)
             except Exception as e:
                 print(f"[PocketPing] Bridge {bridge.name} edit sync error: {e}")
 
-    async def _sync_delete_to_bridges(self, message_id: str) -> None:
+    async def _sync_delete_to_bridges(self, message: Message, session: Session) -> None:
         """Sync message delete to all bridges that support it."""
-        bridge_ids = await self.storage.get_bridge_message_ids(message_id)
+        bridge_ids = await self.storage.get_bridge_message_ids(message.id)
         if not bridge_ids:
             return
 
@@ -578,17 +745,9 @@ class PocketPing:
                 continue
 
             try:
-                bridge_message_id: Optional[str | int] = None
-
-                if bridge.name == "telegram" and bridge_ids.telegram_message_id:
-                    bridge_message_id = bridge_ids.telegram_message_id
-                elif bridge.name == "discord" and bridge_ids.discord_message_id:
-                    bridge_message_id = bridge_ids.discord_message_id
-                elif bridge.name == "slack" and bridge_ids.slack_message_ts:
-                    bridge_message_id = bridge_ids.slack_message_ts
-
-                if bridge_message_id is not None:
-                    await bridge.on_message_delete(message_id, bridge_message_id)
+                platform_message_id = self._platform_message_id(bridge, bridge_ids)
+                if platform_message_id is not None:
+                    await bridge.on_message_delete(message, session, platform_message_id)
             except Exception as e:
                 print(f"[PocketPing] Bridge {bridge.name} delete sync error: {e}")
 
@@ -654,6 +813,76 @@ class PocketPing:
     # ─────────────────────────────────────────────────────────────────
     # AI Fallback
     # ─────────────────────────────────────────────────────────────────
+
+    def _is_ai_takeover_due(self, session: Session) -> bool:
+        """Whether the AI takeover delay has elapsed for this session.
+
+        Takeover is due when:
+        - ai_takeover_delay <= 0 (immediate), OR
+        - (now - last_operator_activity_for_session) >= ai_takeover_delay.
+
+        If there is no recorded operator activity for the session, treat takeover
+        as due (the operator never showed up).
+        """
+        if self.ai_takeover_delay <= 0:
+            return True
+
+        last_activity = self._last_operator_activity.get(session.id)
+        if last_activity is None:
+            return True
+
+        return (time.time() - last_activity) >= self.ai_takeover_delay
+
+    async def _maybe_ai_respond(self, session: Session) -> None:
+        """Maybe generate an AI reply to a visitor message.
+
+        Triggers an AI reply when ALL are true:
+        1. ai_provider is set
+        2. operator is NOT online
+        3. takeover is due (see _is_ai_takeover_due)
+
+        Provider calls are wrapped in try/except: on error we log and return
+        WITHOUT crashing message handling (no raise).
+        """
+        if not self.ai_provider:
+            return
+        if self.is_operator_online():
+            return
+        if not self._is_ai_takeover_due(session):
+            return
+
+        # Mark session as AI active and persist.
+        session.ai_active = True
+        await self.storage.update_session(session)
+
+        messages = await self.storage.get_messages(session.id)
+
+        try:
+            reply = await self.ai_provider.generate_response(messages, self.ai_system_prompt)
+        except Exception as e:  # noqa: BLE001 - never crash message handling
+            print(f"[PocketPing] AI response error: {e}")
+            return
+
+        if not reply:
+            return
+
+        ai_message = Message(
+            id=self._generate_id(),
+            session_id=session.id,
+            content=reply,
+            sender=Sender.AI,
+            timestamp=datetime.now(timezone.utc),
+        )
+        await self.storage.save_message(ai_message)
+
+        # Broadcast the AI message to WebSocket clients.
+        await self._broadcast_to_session(
+            session.id,
+            WebSocketEvent(type="message", data=ai_message.model_dump(by_alias=True)),
+        )
+
+        # Notify bridges via the operator-message path so it shows in Telegram/etc.
+        await self._notify_bridges_operator_message(ai_message, session, "ai", "AI")
 
     async def _check_ai_takeover(self, session: Session) -> bool:
         """Check if AI should take over a session."""
@@ -817,12 +1046,33 @@ class PocketPing:
                 print(f"[PocketPing] Bridge {bridge.name} error: {e}")
 
     async def _notify_bridges_message(self, message: Message, session: Session) -> None:
-        """Notify all bridges about a new visitor message."""
+        """Notify all bridges about a new visitor message.
+
+        The platform message IDs returned by each bridge are persisted so that
+        later edit/delete operations can be synced back to the bridge.
+        """
+        bridge_ids = BridgeMessageIds()
+        saved_any = False
         for bridge in self.bridges:
             try:
-                await bridge.on_visitor_message(message, session)
+                result = await bridge.on_visitor_message(message, session)
+                platform_id = getattr(result, "message_id", None) if result else None
+                if platform_id is None:
+                    continue
+                if bridge.name == "telegram":
+                    bridge_ids.telegram_message_id = int(platform_id)
+                    saved_any = True
+                elif bridge.name == "discord":
+                    bridge_ids.discord_message_id = str(platform_id)
+                    saved_any = True
+                elif bridge.name == "slack":
+                    bridge_ids.slack_message_ts = str(platform_id)
+                    saved_any = True
             except Exception as e:
                 print(f"[PocketPing] Bridge {bridge.name} error: {e}")
+
+        if saved_any:
+            await self.storage.save_bridge_message_ids(message.id, bridge_ids)
 
     async def _notify_bridges_operator_message(
         self,

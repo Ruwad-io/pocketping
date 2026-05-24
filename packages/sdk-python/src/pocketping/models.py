@@ -52,6 +52,9 @@ class Attachment(BaseModel):
     id: str
     """Unique attachment identifier."""
 
+    message_id: Optional[str] = Field(None, alias="messageId")
+    """ID of the message this attachment is linked to (set after the message is created)."""
+
     filename: str
     """Original filename."""
 
@@ -69,6 +72,9 @@ class Attachment(BaseModel):
 
     status: AttachmentStatus = AttachmentStatus.READY
     """Upload status."""
+
+    created_at: datetime = Field(default_factory=_utc_now, alias="createdAt")
+    """When the attachment was created."""
 
     uploaded_from: Optional[UploadSource] = Field(None, alias="uploadedFrom")
     """Source of the upload."""
@@ -249,6 +255,30 @@ class SendMessageResponse(BaseModel):
 
     message_id: str = Field(alias="messageId")
     timestamp: datetime
+
+
+class UploadRequest(BaseModel):
+    """Request to create a presigned upload for an attachment."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    session_id: str = Field(alias="sessionId")
+    filename: str
+    mime_type: str = Field(alias="mimeType")
+    size: int
+    """File size in bytes."""
+
+
+class UploadResponse(BaseModel):
+    """Response after creating an upload request (presigned URL pattern)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    attachment_id: str = Field(alias="attachmentId")
+    upload_url: str = Field(alias="uploadUrl")
+    """Presigned URL for direct upload."""
+    expires_at: datetime = Field(alias="expiresAt")
+    """When the presigned upload URL expires."""
 
 
 class TypingRequest(BaseModel):

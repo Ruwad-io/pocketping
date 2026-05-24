@@ -2,12 +2,16 @@
 
 from typing import Optional
 
+import httpx
+
 from pocketping.ai.base import AIProvider
 from pocketping.models import Message, Sender
 
+DEFAULT_BASE_URL = "https://api.openai.com/v1"
+
 
 class OpenAIProvider(AIProvider):
-    """OpenAI GPT provider."""
+    """OpenAI GPT provider (raw HTTP via httpx)."""
 
     def __init__(
         self,
@@ -17,27 +21,14 @@ class OpenAIProvider(AIProvider):
     ):
         self.api_key = api_key
         self.model = model
-        self.base_url = base_url
-        self._client = None
+        self.base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
 
     @property
     def name(self) -> str:
         return "openai"
 
-    def _get_client(self):
-        if self._client is None:
-            try:
-                from openai import AsyncOpenAI
-            except ImportError:
-                raise ImportError("openai package required. Install with: pip install pocketping[ai]")
-            self._client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
-        return self._client
-
     async def generate_response(self, messages: list[Message], system_prompt: str | None = None) -> str:
-        client = self._get_client()
-
-        # Convert messages to OpenAI format
-        openai_messages = []
+        openai_messages: list[dict[str, str]] = []
 
         if system_prompt:
             openai_messages.append({"role": "system", "content": system_prompt})
@@ -46,20 +37,35 @@ class OpenAIProvider(AIProvider):
             role = "user" if msg.sender == Sender.VISITOR else "assistant"
             openai_messages.append({"role": role, "content": msg.content})
 
-        response = await client.chat.completions.create(
-            model=self.model,
-            messages=openai_messages,
-            max_tokens=1000,
-            temperature=0.7,
-        )
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.api_key}",
+                },
+                json={
+                    "model": self.model,
+                    "messages": openai_messages,
+                    "max_tokens": 1000,
+                    "temperature": 0.7,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
 
-        return response.choices[0].message.content or ""
+        choices = data.get("choices") or []
+        if not choices:
+            return ""
+        return (choices[0].get("message") or {}).get("content") or ""
 
     async def is_available(self) -> bool:
         try:
-            client = self._get_client()
-            # Simple test - list models
-            await client.models.list()
-            return True
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(
+                    f"{self.base_url}/models",
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                )
+                return response.is_success
         except Exception:
             return False

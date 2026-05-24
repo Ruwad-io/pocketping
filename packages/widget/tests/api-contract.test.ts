@@ -63,7 +63,7 @@ function createContractValidatingFetch() {
 
     // Determine which contract applies
     let contract: keyof typeof API_CONTRACTS | null = null;
-    let pathParams: Record<string, string> = {};
+    const pathParams: Record<string, string> = {};
 
     if (pathname.endsWith('/connect') && method === 'POST') {
       contract = 'POST /connect';

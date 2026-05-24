@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -17,13 +18,16 @@ import (
 
 // Common errors
 var (
-	ErrSessionNotFound     = errors.New("session not found")
-	ErrIdentityIDRequired  = errors.New("identity.id is required")
-	ErrContentTooLong      = errors.New("message content exceeds maximum length")
-	ErrMessageNotFound     = errors.New("message not found")
-	ErrUnauthorized        = errors.New("unauthorized: can only edit/delete own messages")
-	ErrMessageDeleted      = errors.New("cannot edit deleted message")
-	ErrNoContent           = errors.New("content cannot be empty")
+	ErrSessionNotFound    = errors.New("session not found")
+	ErrIdentityIDRequired = errors.New("identity.id is required")
+	ErrContentTooLong     = errors.New("message content exceeds maximum length")
+	ErrMessageNotFound    = errors.New("message not found")
+	ErrUnauthorized       = errors.New("unauthorized: can only edit/delete own messages")
+	ErrMessageDeleted     = errors.New("cannot edit deleted message")
+	ErrNoContent          = errors.New("content cannot be empty")
+	ErrInvalidMimeType    = errors.New("invalid mime type")
+	ErrFileTooLarge       = errors.New("file too large")
+	ErrAttachmentNotFound = errors.New("attachment not found")
 )
 
 // Config holds the configuration for PocketPing.
@@ -78,6 +82,32 @@ type Config struct {
 
 	// UaFilter configuration for User-Agent filtering
 	UaFilter *UaFilterConfig
+
+	// MaxAttachmentSize is the maximum allowed attachment size in bytes.
+	// Defaults to DefaultMaxAttachmentSize (10 MiB) when zero.
+	MaxAttachmentSize int64
+
+	// AllowedMimeTypes is the list of MIME types accepted for upload.
+	// Defaults to DefaultAllowedMimeTypes when nil/empty.
+	AllowedMimeTypes []string
+
+	// UploadBaseURL is the base URL used for generated upload/access URLs.
+	// Defaults to DefaultUploadBaseURL when empty.
+	UploadBaseURL string
+
+	// AIProvider, when set, enables the AI fallback: an automatic AI reply is
+	// generated for visitor messages when no operator is online and the
+	// takeover delay has elapsed.
+	AIProvider AIProvider
+
+	// AISystemPrompt is the system prompt used for AI responses.
+	// Defaults to DefaultAISystemPrompt when empty.
+	AISystemPrompt string
+
+	// AITakeoverDelay is the delay in seconds before the AI takes over a session
+	// when no operator is online. Defaults to DefaultAITakeoverDelay (300s).
+	// A value <= 0 means the AI takes over immediately.
+	AITakeoverDelay int
 }
 
 // PocketPing is the main struct for handling chat sessions.
@@ -86,6 +116,21 @@ type PocketPing struct {
 	storage        Storage
 	bridges        []Bridge
 	operatorOnline bool
+
+	// Attachment configuration (resolved with defaults at construction time).
+	maxAttachmentSize int64
+	allowedMimeTypes  map[string]struct{}
+	uploadBaseURL     string
+
+	// AI fallback configuration (resolved with defaults at construction time).
+	aiProvider      AIProvider
+	aiSystemPrompt  string
+	aiTakeoverDelay int
+
+	// Operator activity tracker (sessionID -> last operator activity time).
+	// Used to decide when the AI should take over an offline session.
+	operatorActivityMu sync.RWMutex
+	operatorActivity   map[string]time.Time
 
 	// WebSocket connections (sessionID -> set of connections)
 	socketsMu      sync.RWMutex
@@ -117,12 +162,49 @@ func New(config Config) *PocketPing {
 		timeout = 5 * time.Second
 	}
 
+	maxAttachmentSize := config.MaxAttachmentSize
+	if maxAttachmentSize <= 0 {
+		maxAttachmentSize = DefaultMaxAttachmentSize
+	}
+
+	mimeTypes := config.AllowedMimeTypes
+	if len(mimeTypes) == 0 {
+		mimeTypes = DefaultAllowedMimeTypes
+	}
+	allowedMimeTypes := make(map[string]struct{}, len(mimeTypes))
+	for _, mt := range mimeTypes {
+		allowedMimeTypes[mt] = struct{}{}
+	}
+
+	uploadBaseURL := config.UploadBaseURL
+	if uploadBaseURL == "" {
+		uploadBaseURL = DefaultUploadBaseURL
+	}
+	uploadBaseURL = strings.TrimRight(uploadBaseURL, "/")
+
+	aiSystemPrompt := config.AISystemPrompt
+	if aiSystemPrompt == "" {
+		aiSystemPrompt = DefaultAISystemPrompt
+	}
+
+	aiTakeoverDelay := config.AITakeoverDelay
+	if aiTakeoverDelay == 0 {
+		aiTakeoverDelay = DefaultAITakeoverDelay
+	}
+
 	pp := &PocketPing{
-		config:         config,
-		storage:        storage,
-		bridges:        config.Bridges,
-		sessionSockets: make(map[string]map[WebSocketConn]struct{}),
-		eventHandlers:  make(map[string][]CustomEventHandler),
+		config:            config,
+		storage:           storage,
+		bridges:           config.Bridges,
+		sessionSockets:    make(map[string]map[WebSocketConn]struct{}),
+		eventHandlers:     make(map[string][]CustomEventHandler),
+		maxAttachmentSize: maxAttachmentSize,
+		allowedMimeTypes:  allowedMimeTypes,
+		uploadBaseURL:     uploadBaseURL,
+		aiProvider:        config.AIProvider,
+		aiSystemPrompt:    aiSystemPrompt,
+		aiTakeoverDelay:   aiTakeoverDelay,
+		operatorActivity:  make(map[string]time.Time),
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
@@ -245,6 +327,7 @@ func (pp *PocketPing) HandleConnect(ctx context.Context, request ConnectRequest)
 	if err != nil {
 		return nil, err
 	}
+	messages = pp.hydrateAttachments(ctx, messages)
 
 	return &ConnectResponse{
 		SessionID:       session.ID,
@@ -282,6 +365,23 @@ func (pp *PocketPing) HandleMessage(ctx context.Context, request SendMessageRequ
 		Status:    MessageStatusSent,
 	}
 
+	// Inline attachments (e.g. operator messages from bridges) take precedence.
+	if len(request.Attachments) > 0 {
+		message.Attachments = request.Attachments
+	}
+
+	// Link any referenced attachments to this message BEFORE persisting and
+	// notifying bridges so the broadcast and bridges see the attachments.
+	if len(request.AttachmentIDs) > 0 {
+		linked, err := pp.linkAttachments(ctx, message.ID, request.AttachmentIDs)
+		if err != nil {
+			return nil, err
+		}
+		if len(linked) > 0 {
+			message.Attachments = append(message.Attachments, linked...)
+		}
+	}
+
 	if err := pp.storage.SaveMessage(ctx, message); err != nil {
 		return nil, err
 	}
@@ -289,9 +389,13 @@ func (pp *PocketPing) HandleMessage(ctx context.Context, request SendMessageRequ
 	// Update session activity
 	session.LastActivity = now
 
-	// If operator responds, disable AI for this session
-	if request.Sender == SenderOperator && session.AIActive {
-		session.AIActive = false
+	// Track operator activity for AI takeover detection. If an operator
+	// responds, disable AI for this session.
+	if request.Sender == SenderOperator {
+		pp.recordOperatorActivity(request.SessionID, now)
+		if session.AIActive {
+			session.AIActive = false
+		}
 	}
 
 	if err := pp.storage.UpdateSession(ctx, session); err != nil {
@@ -312,6 +416,14 @@ func (pp *PocketPing) HandleMessage(ctx context.Context, request SendMessageRequ
 	// Callback
 	if pp.config.OnMessage != nil {
 		pp.config.OnMessage(message, session)
+	}
+
+	// AI fallback: for visitor messages, after persisting + linking attachments
+	// + notifying bridges, possibly generate an AI reply when the operator is
+	// offline and the takeover delay has elapsed. AI errors are swallowed so
+	// message handling never fails.
+	if request.Sender == SenderVisitor {
+		pp.maybeAIRespond(ctx, session)
 	}
 
 	return &SendMessageResponse{
@@ -339,6 +451,7 @@ func (pp *PocketPing) HandleGetMessages(ctx context.Context, request GetMessages
 	if hasMore {
 		messages = messages[:limit]
 	}
+	messages = pp.hydrateAttachments(ctx, messages)
 
 	return &GetMessagesResponse{
 		Messages: messages,
@@ -362,8 +475,9 @@ func (pp *PocketPing) HandleTyping(ctx context.Context, request TypingRequest) e
 // HandlePresence returns operator presence status.
 func (pp *PocketPing) HandlePresence(ctx context.Context) *PresenceResponse {
 	return &PresenceResponse{
-		Online:    pp.operatorOnline,
-		AIEnabled: false, // AI not implemented in Go SDK yet
+		Online:        pp.operatorOnline,
+		AIEnabled:     pp.aiProvider != nil,
+		AIActiveAfter: pp.aiTakeoverDelay,
 	}
 }
 
@@ -872,6 +986,102 @@ func (pp *PocketPing) SendVersionWarning(sessionID string, result VersionCheckRe
 		Type: "version_warning",
 		Data: warning,
 	})
+}
+
+// AI fallback
+
+// recordOperatorActivity records the time of the most recent operator activity
+// for a session. Used to decide when the AI should take over.
+func (pp *PocketPing) recordOperatorActivity(sessionID string, t time.Time) {
+	pp.operatorActivityMu.Lock()
+	pp.operatorActivity[sessionID] = t
+	pp.operatorActivityMu.Unlock()
+}
+
+// lastOperatorActivity returns the last recorded operator activity time for a
+// session and whether any activity has been recorded.
+func (pp *PocketPing) lastOperatorActivity(sessionID string) (time.Time, bool) {
+	pp.operatorActivityMu.RLock()
+	t, ok := pp.operatorActivity[sessionID]
+	pp.operatorActivityMu.RUnlock()
+	return t, ok
+}
+
+// aiTakeoverDue reports whether the AI takeover delay has elapsed for a session.
+// Takeover is due when the configured delay is <= 0, when no operator activity
+// has ever been recorded (operator never showed up), or when the elapsed time
+// since the last operator activity is >= the takeover delay.
+func (pp *PocketPing) aiTakeoverDue(sessionID string) bool {
+	if pp.aiTakeoverDelay <= 0 {
+		return true
+	}
+	last, ok := pp.lastOperatorActivity(sessionID)
+	if !ok {
+		return true
+	}
+	return time.Since(last) >= time.Duration(pp.aiTakeoverDelay)*time.Second
+}
+
+// maybeAIRespond generates an AI reply for a session when the AI fallback
+// conditions are met: an AI provider is configured, no operator is online, and
+// the takeover delay is due. Any error from the provider is logged and
+// swallowed so message handling never fails.
+func (pp *PocketPing) maybeAIRespond(ctx context.Context, session *Session) {
+	if pp.aiProvider == nil {
+		return
+	}
+	if pp.IsOperatorOnline() {
+		return
+	}
+	if !pp.aiTakeoverDue(session.ID) {
+		return
+	}
+
+	// Mark session as AI active and persist.
+	session.AIActive = true
+	if err := pp.storage.UpdateSession(ctx, session); err != nil {
+		log.Printf("[PocketPing] AI fallback: failed to update session %s: %v", session.ID, err)
+		return
+	}
+
+	// Build conversation history.
+	messages, err := pp.storage.GetMessages(ctx, session.ID, "", 50)
+	if err != nil {
+		log.Printf("[PocketPing] AI fallback: failed to load messages for %s: %v", session.ID, err)
+		return
+	}
+
+	reply, err := pp.aiProvider.GenerateResponse(ctx, messages, pp.aiSystemPrompt)
+	if err != nil {
+		log.Printf("[PocketPing] AI fallback: provider error for %s: %v", session.ID, err)
+		return
+	}
+	if reply == "" {
+		return
+	}
+
+	now := time.Now()
+	aiMessage := &Message{
+		ID:        pp.generateID(),
+		SessionID: session.ID,
+		Content:   reply,
+		Sender:    SenderAI,
+		Timestamp: now,
+		Status:    MessageStatusSent,
+	}
+	if err := pp.storage.SaveMessage(ctx, aiMessage); err != nil {
+		log.Printf("[PocketPing] AI fallback: failed to save AI message for %s: %v", session.ID, err)
+		return
+	}
+
+	// Broadcast to WebSocket clients.
+	pp.BroadcastToSession(session.ID, WebSocketEvent{
+		Type: "message",
+		Data: aiMessage,
+	})
+
+	// Notify bridges via the operator-message path so it shows in Telegram/etc.
+	pp.notifyBridgesOperatorMessage(ctx, aiMessage, session, "ai", "AI")
 }
 
 // Bridge notification helpers

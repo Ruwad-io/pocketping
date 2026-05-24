@@ -195,11 +195,8 @@ describe('PocketPing', () => {
   });
 
   describe('Custom Events', () => {
-    let _sessionId: string;
-
     beforeEach(async () => {
-      const response = await pp.handleConnect({ visitorId: 'visitor-123' });
-      _sessionId = response.sessionId;
+      await pp.handleConnect({ visitorId: 'visitor-123' });
     });
 
     describe('onEvent()', () => {
@@ -259,11 +256,8 @@ describe('PocketPing', () => {
   });
 
   describe('Bridges', () => {
-    let _sessionId: string;
-
     beforeEach(async () => {
-      const response = await pp.handleConnect({ visitorId: 'visitor-123' });
-      _sessionId = response.sessionId;
+      await pp.handleConnect({ visitorId: 'visitor-123' });
     });
 
     it('should notify bridge on new session', async () => {

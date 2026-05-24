@@ -11,6 +11,15 @@ namespace PocketPing\Http;
 interface HttpClientInterface
 {
     /**
+     * Make a GET request.
+     *
+     * @param string $url The URL to request
+     * @param array<string, string> $headers Additional headers
+     * @return array{body: string|null, httpCode: int, error: string|null}
+     */
+    public function get(string $url, array $headers = []): array;
+
+    /**
      * Make a POST request.
      *
      * @param string $url The URL to request
