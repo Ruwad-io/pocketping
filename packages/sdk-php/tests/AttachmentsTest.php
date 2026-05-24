@@ -16,6 +16,7 @@ use PocketPing\Models\Session;
 use PocketPing\Models\UploadRequest;
 use PocketPing\PocketPing;
 use PocketPing\Storage\MemoryStorage;
+use PocketPing\Storage\StorageInterface;
 
 class AttachmentsTest extends TestCase
 {
@@ -223,5 +224,26 @@ class AttachmentsTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $pocketPing->handleUploadRequest($this->uploadRequest(size: 101));
+    }
+
+    public function testRejectsUploadWhenStorageLacksAttachmentSupport(): void
+    {
+        // A storage that implements only the base interface (no attachment ops).
+        $storage = new class implements StorageInterface {
+            public function createSession(Session $session): void {}
+            public function getSession(string $sessionId): ?Session { return null; }
+            public function updateSession(Session $session): void {}
+            public function deleteSession(string $sessionId): void {}
+            public function saveMessage(Message $message): void {}
+            public function getMessages(string $sessionId, ?string $after = null, int $limit = 50): array { return []; }
+            public function getMessage(string $messageId): ?Message { return null; }
+            public function cleanupOldSessions(\DateTimeInterface $olderThan): int { return 0; }
+            public function getSessionByVisitorId(string $visitorId): ?Session { return null; }
+        };
+        $pp = new PocketPing(storage: $storage);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('does not support attachments');
+        $pp->handleUploadRequest($this->uploadRequest());
     }
 }

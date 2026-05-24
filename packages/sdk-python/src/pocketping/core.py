@@ -347,9 +347,15 @@ class PocketPing:
             UploadResponse with the attachment id, upload URL, and expiry.
 
         Raises:
-            ValueError: If the session is not found, the MIME type is not allowed,
-                or the file size is out of range.
+            ValueError: If the storage cannot persist attachments, the session is
+                not found, the MIME type is not allowed, or the size is out of range.
         """
+        # Fail fast if the storage does not actually implement attachment
+        # persistence (the base Storage methods are no-ops), otherwise the
+        # returned attachmentId/uploadUrl could never be completed.
+        if type(self.storage).save_attachment is Storage.save_attachment:
+            raise ValueError("Storage does not support attachments")
+
         session = await self.storage.get_session(request.session_id)
         if not session:
             raise ValueError("Session not found")

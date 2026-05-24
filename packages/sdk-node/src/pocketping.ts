@@ -1102,6 +1102,12 @@ export class PocketPing {
    * attachment and returns a presigned upload URL.
    */
   async handleUploadRequest(request: UploadRequest): Promise<UploadResponse> {
+    // Fail fast if the storage cannot persist attachments — otherwise we would
+    // hand back an attachmentId/uploadUrl that upload-complete can never resolve.
+    if (!this.storage.saveAttachment) {
+      throw new Error('Storage does not support attachments');
+    }
+
     const session = await this.storage.getSession(request.sessionId);
     if (!session) {
       throw new Error('Session not found');

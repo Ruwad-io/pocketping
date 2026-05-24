@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Bridge } from '../src/bridges/types';
 import { MAX_ATTACHMENT_SIZE, PocketPing } from '../src/pocketping';
+import { MemoryStorage } from '../src/storage/memory';
 import type { Attachment, Message, Session, UploadRequest } from '../src/types';
 
 /** Bridge that records the messages it receives. */
@@ -173,5 +174,17 @@ describe('File Attachments', () => {
     await expect(
       custom.handleUploadRequest(uploadReq(conn.sessionId, { mimeType: 'image/png', size: 101 }))
     ).rejects.toThrow();
+  });
+});
+
+describe('File Attachments — storage capability guard', () => {
+  it('rejects upload requests when the storage cannot persist attachments', async () => {
+    const storage = new MemoryStorage();
+    // Simulate a storage that does not implement attachment persistence.
+    (storage as unknown as { saveAttachment?: unknown }).saveAttachment = undefined;
+    const ppNoAtt = new PocketPing({ storage });
+    await expect(ppNoAtt.handleUploadRequest(uploadReq('any-session'))).rejects.toThrow(
+      /does not support attachments/
+    );
   });
 });

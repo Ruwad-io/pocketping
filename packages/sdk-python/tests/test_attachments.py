@@ -27,7 +27,7 @@ from pocketping.models import (
     SessionMetadata,
     UploadRequest,
 )
-from pocketping.storage import MemoryStorage
+from pocketping.storage import MemoryStorage, Storage
 
 
 @pytest.fixture
@@ -264,3 +264,37 @@ async def test_syncs_attachments_to_bridges(setup):
     received = bridge.visitor_messages[0]
     assert received.attachments is not None
     assert any(a.id == resp.attachment_id for a in received.attachments)
+
+
+class _NoAttachmentStorage(Storage):
+    """A storage implementing only the required ops (no attachment support)."""
+
+    async def create_session(self, session):
+        pass
+
+    async def get_session(self, session_id):
+        return None
+
+    async def update_session(self, session):
+        pass
+
+    async def delete_session(self, session_id):
+        pass
+
+    async def save_message(self, message):
+        pass
+
+    async def get_messages(self, session_id, after=None, limit=50):
+        return []
+
+    async def get_message(self, message_id):
+        return None
+
+
+@pytest.mark.asyncio
+async def test_upload_request_rejects_storage_without_attachments():
+    pp = PocketPing(storage=_NoAttachmentStorage())
+    with pytest.raises(ValueError, match="does not support attachments"):
+        await pp.handle_upload_request(
+            UploadRequest(session_id="s", filename="a.png", mime_type="image/png", size=10)
+        )

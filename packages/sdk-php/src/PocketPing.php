@@ -687,6 +687,12 @@ class PocketPing
      */
     public function handleUploadRequest(UploadRequest $request): UploadResponse
     {
+        // 0. Storage must be able to persist attachments — fail fast, otherwise we
+        // would hand back an attachmentId/uploadUrl that can never be completed.
+        if (!($this->storage instanceof StorageWithAttachmentsInterface)) {
+            throw new \InvalidArgumentException('Storage does not support attachments');
+        }
+
         // 1. Session must exist
         $session = $this->storage->getSession($request->sessionId);
         if ($session === null) {

@@ -575,6 +575,13 @@ module PocketPing
     # @raise [SessionNotFoundError] If the session is not found
     # @raise [ValidationError] If the MIME type is not allowed or the size is invalid
     def handle_upload_request(request)
+      # Fail fast if the storage does not implement attachment persistence (the
+      # base Storage methods are no-ops); otherwise the returned attachment id /
+      # upload URL could never be completed.
+      if @storage.method(:save_attachment).owner == Storage::Base
+        raise ValidationError, "Storage does not support attachments"
+      end
+
       session = @storage.get_session(request.session_id)
       raise SessionNotFoundError, "Session not found" unless session
 

@@ -213,4 +213,19 @@ RSpec.describe "File Attachments" do
       end.to raise_error(PocketPing::ValidationError)
     end
   end
+
+  describe "storage capability guard" do
+    it "rejects upload requests when the storage lacks attachment support" do
+      storage = Class.new(PocketPing::Storage::Base).new
+      client = PocketPing::Client.new(storage: storage)
+
+      expect do
+        client.handle_upload_request(
+          PocketPing::UploadRequest.new(
+            session_id: "s", filename: "a.png", mime_type: "image/png", size: 10
+          )
+        )
+      end.to raise_error(PocketPing::ValidationError, /does not support attachments/)
+    end
+  end
 end
