@@ -18,7 +18,7 @@ Add PocketPing live chat to your WordPress site in under 2 minutes.
 
 ### Option 2: Manual Upload
 
-1. [Download the plugin](https://github.com/pocketping/pocketping/releases/latest) (pocketping.zip)
+1. [Download the plugin](https://github.com/Ruwad-io/pocketping/releases/latest) (pocketping.zip)
 2. Go to **Plugins > Add New > Upload Plugin**
 3. Upload the zip file and activate
 

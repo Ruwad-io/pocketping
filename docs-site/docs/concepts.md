@@ -304,7 +304,7 @@ When you're away, AI can respond to visitors using your custom instructions.
 flowchart TB
     msg["1. Visitor sends message"]
     delivered["2. Delivered to bridges"]
-    timer["3. Timer starts (2 min)"]
+    timer["3. Timer starts (5 min)"]
 
     msg --> delivered --> timer
 
@@ -324,7 +324,7 @@ flowchart TB
 // AI Fallback settings
 {
   enabled: true,
-  delayMinutes: 2,           // Wait before AI responds
+  delayMinutes: 5,           // Wait before AI responds (default: 5 min)
   systemPrompt: `
     You are a helpful support agent for Acme Inc.
     - Be friendly and professional

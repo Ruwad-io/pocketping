@@ -149,9 +149,19 @@ Reply directly from your phone. The visitor sees your response in real-time.
 
 ## Architecture Overview
 
-PocketPing offers **3 deployment options** to fit your needs:
+PocketPing offers **4 deployment options** to fit your needs:
 
-### Option 1: Hosted (SaaS)
+### Option 1: Serverless (Lite — Telegram)
+
+The fastest and cheapest path: a free **Cloudflare Worker** with no server and no database to manage. Best for a Telegram-only chat that gives every visitor their own topic. The bot token stays server-side in the Worker (never in the browser). [Deploy guide →](/serverless)
+
+```mermaid
+flowchart LR
+    widget["Your Widget"] <--> worker["Cloudflare Worker<br/>(stateless, free)"]
+    worker <--> tg["Telegram"]
+```
+
+### Option 2: Hosted (SaaS)
 
 The easiest way - we handle everything:
 
@@ -163,7 +173,7 @@ flowchart LR
     pp <--> sl["Slack"]
 ```
 
-### Option 2: Bridge Server (Self-Hosted Standalone)
+### Option 3: Bridge Server (Self-Hosted Standalone)
 
 Run our standalone Go server on your infrastructure:
 
@@ -175,7 +185,7 @@ flowchart LR
     bridge <--> sl["Slack"]
 ```
 
-### Option 3: SDK Integration (Self-Hosted Custom)
+### Option 4: SDK Integration (Self-Hosted Custom)
 
 Embed PocketPing into your existing backend using our SDKs:
 
@@ -189,6 +199,7 @@ flowchart LR
 
 | Option | Best For | Setup Time |
 |--------|----------|------------|
+| **Serverless (Lite)** | Free Telegram chat, no server/DB | ~1 minute |
 | **Hosted (SaaS)** | Quick start, no infrastructure | 5 minutes |
 | **Bridge Server** | Self-hosting without custom logic | 15 minutes |
 | **SDK Integration** | Full control, custom workflows | 30+ minutes |

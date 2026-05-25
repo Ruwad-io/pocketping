@@ -1,0 +1,23 @@
+name = "pocketping-telegram-relay"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+# Cloudflare KV namespace. Create it with:
+#   wrangler kv namespace create PP
+# then paste the returned id below.
+[[kv_namespaces]]
+binding = "PP"
+id = "<your-kv-namespace-id>"
+
+[vars]
+# Supergroup chat id (e.g. -100123456789). Topics must be enabled and the bot
+# must be an admin with "Manage Topics".
+TELEGRAM_GROUP_ID = "<your-supergroup-chat-id>"
+
+# Secrets (NOT stored here — set with `wrangler secret put`):
+#   wrangler secret put TELEGRAM_BOT_TOKEN
+#   wrangler secret put TELEGRAM_WEBHOOK_SECRET   # optional
+
+# Development
+[env.dev]
+name = "pocketping-telegram-relay-dev"

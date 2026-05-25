@@ -30,6 +30,7 @@ const sidebars: SidebarsConfig = {
       link: { type: 'doc', id: 'bridges/index' },
       items: ['bridges/telegram', 'bridges/discord', 'bridges/slack', 'bridges/docker'],
     },
+    'serverless',
     'self-hosting',
     'community-edition',
     'ai-fallback',

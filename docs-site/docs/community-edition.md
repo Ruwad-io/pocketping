@@ -33,7 +33,7 @@ Unlike the SDK approach (where you implement your own storage), the Community Ed
 ### 1. Clone and Configure
 
 ```bash
-git clone https://github.com/pocketping/pocketping.git
+git clone https://github.com/Ruwad-io/pocketping.git
 cd pocketping/community
 
 # Configure environment
@@ -298,7 +298,7 @@ volumes:
 | Storage included | ❌ (implement yourself) | ❌ (stateless) | ✅ PostgreSQL |
 | Thread management | ❌ | ❌ | ✅ Auto-recreate |
 | Pre-chat forms | ❌ | ❌ | ✅ |
-| Message sync | Partial | ✅ | ✅ |
+| Message sync | ✅ | ✅ | ✅ |
 | Docker ready | ❌ | ✅ | ✅ |
 | Multi-tenant | ❌ | ❌ | ❌ (use SaaS) |
 

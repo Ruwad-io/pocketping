@@ -20,8 +20,8 @@ flowchart LR
         onEvent["onEvent()"]
         onMessage["onMessage()"]
         emitEvent["emitEvent()"]
-        identify["identify()"]
-        sendMessage["sendMessage()"]
+        identify["handleIdentify()"]
+        sendOp["sendOperatorMessage()"]
     end
 
     trigger -->|"clicked_pricing"| onEvent
@@ -52,66 +52,49 @@ pnpm add @pocketping/sdk-node
 
 ```javascript
 const express = require('express');
+const http = require('node:http');
 const { PocketPing } = require('@pocketping/sdk-node');
 
 const app = express();
+app.use(express.json());
 
 // Initialize PocketPing
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL || 'http://localhost:3001',
-  apiKey: process.env.POCKETPING_API_KEY,
+  welcomeMessage: 'Hi! How can we help?',
 });
 
-// Mount PocketPing middleware at /pocketping
+// Mount the PocketPing request handler at /pocketping
+// It handles /pocketping/connect, /message, /messages, etc.
 app.use('/pocketping', pp.middleware());
 
-app.listen(3000, () => {
+// Attach the WebSocket server for real-time streaming (/pocketping/stream)
+const server = http.createServer(app);
+pp.attachWebSocket(server);
+
+server.listen(3000, () => {
   console.log('Server running on port 3000');
 });
 ```
 
-### Fastify
-
-```javascript
-const fastify = require('fastify')();
-const { PocketPing } = require('@pocketping/sdk-node');
-
-const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL,
-  apiKey: process.env.POCKETPING_API_KEY,
-});
-
-// Register as Fastify plugin
-fastify.register(pp.fastifyPlugin, { prefix: '/pocketping' });
-
-fastify.listen({ port: 3000 });
-```
+The `middleware()` returns a standard Node `(req, res, next)` handler, so it also works with raw `http`/Connect servers and any framework that accepts Connect-style middleware.
 
 ### Next.js (App Router)
+
+`middleware()` is a Node request handler, so wrap it to adapt the App Router's
+Web `Request`/`Response`. A long-running server (not serverless) is required for
+the WebSocket stream.
 
 ```typescript title="app/api/pocketping/[...path]/route.ts"
 import { PocketPing } from '@pocketping/sdk-node';
 
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL!,
-  apiKey: process.env.POCKETPING_API_KEY,
+  welcomeMessage: 'Hi! How can we help?',
 });
 
-export const GET = pp.nextHandler();
-export const POST = pp.nextHandler();
-```
-
-### Next.js (Pages Router)
-
-```typescript title="pages/api/pocketping/[...path].ts"
-import { PocketPing } from '@pocketping/sdk-node';
-
-const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL!,
-  apiKey: process.env.POCKETPING_API_KEY,
+// Receive an event from the widget and react to it
+pp.onEvent('clicked_pricing', async (event, session) => {
+  console.log(`Pricing interest from ${session.id}`, event.data);
 });
-
-export default pp.nextPagesHandler();
 ```
 
 ---
@@ -169,19 +152,20 @@ You can add multiple bridges simultaneously. Messages sync across all platforms.
 
 ```javascript
 const pp = new PocketPing({
-  // Optional: URL of external bridge server (alternative to built-in bridges)
-  bridgeUrl: 'http://localhost:3001',
+  // Optional: welcome message returned to new visitors on connect
+  welcomeMessage: 'Hi! How can we help?',
 
-  // Optional: API key for authentication
-  apiKey: 'pk_xxxx',
+  // Optional: built-in bridges (Telegram, Discord, Slack)
+  bridges: [],
 
   // Optional: Custom session storage (see Custom Storage section)
   storage: new RedisStorage(),
 
   // Optional: Event handlers (see below)
-  onSessionStart: (session) => {},
+  onNewSession: (session) => {},
   onMessage: (message, session) => {},
   onEvent: (event, session) => {},
+  onIdentify: (session) => {},
 });
 ```
 
@@ -189,15 +173,19 @@ const pp = new PocketPing({
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `bridgeUrl` | string | No | URL of external bridge server (alternative to built-in bridges) |
-| `apiKey` | string | No | API key for authentication |
-| `storage` | Storage | No | Custom session/message storage |
-| `onSessionStart` | function | No | Called when new session starts |
+| `storage` | Storage \| `'memory'` | No | Custom session/message storage (defaults to in-memory) |
+| `bridges` | Bridge[] | No | Built-in bridges (Telegram/Discord/Slack) |
+| `welcomeMessage` | string | No | Message returned to new visitors on connect |
+| `onNewSession` | function | No | Called when a new session starts |
 | `onMessage` | function | No | Called on each message |
-| `onEvent` | function | No | Called on custom events from widget |
+| `onEvent` | function | No | Called on custom events from the widget |
+| `onIdentify` | function | No | Called when a visitor is identified |
+| `onVisitorDisconnect` | function | No | Called when a visitor disconnects |
 | `webhookUrl` | string | No | URL to forward custom events (Zapier, Make, n8n, etc.) |
 | `webhookSecret` | string | No | Secret for HMAC-SHA256 signature verification |
 | `webhookTimeout` | number | No | Webhook request timeout in ms (default: 5000) |
+| `ai` | AIConfig | No | AI fallback provider (see [AI Fallback](/ai-fallback)) |
+| `aiTakeoverDelay` | number | No | Seconds offline before AI takes over (default: 300) |
 
 ---
 
@@ -218,8 +206,6 @@ flowchart LR
 
 ```javascript
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL,
-
   // Forward all custom events to your webhook
   webhookUrl: 'https://hooks.zapier.com/hooks/catch/123456/abcdef',
 });
@@ -231,7 +217,6 @@ For security, add a webhook secret to verify requests:
 
 ```javascript
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL,
   webhookUrl: 'https://your-backend.com/pocketping/events',
   webhookSecret: process.env.WEBHOOK_SECRET,  // e.g., 'whsec_xxx'
   webhookTimeout: 10000,  // 10 seconds (default: 5000)
@@ -328,8 +313,6 @@ Handle events sent by `PocketPing.trigger()` in the widget:
 
 ```javascript
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL,
-
   onEvent: async (event, session) => {
     console.log(`Event: ${event.name}`, event.data);
     console.log(`From session: ${session.id}`);
@@ -343,18 +326,18 @@ const pp = new PocketPing({
 
     // Example: Trigger automation based on event
     if (event.name === 'clicked_pricing') {
-      // Wait 5 seconds, then send a message
+      // Wait 5 seconds, then send an operator message
       setTimeout(() => {
-        pp.sendMessage(session.id, {
-          content: "I see you're checking out our pricing! Want help choosing a plan?",
-          type: 'operator',
-        });
+        pp.sendOperatorMessage(
+          session.id,
+          "I see you're checking out our pricing! Want help choosing a plan?"
+        );
       }, 5000);
     }
 
     // Example: Notify team in Slack
     if (event.name === 'requested_demo') {
-      await notifySlack(`New demo request from ${session.metadata?.email}`);
+      await notifySlack(`New demo request from ${session.identity?.email}`);
     }
   },
 });
@@ -364,26 +347,32 @@ const pp = new PocketPing({
 
 ```typescript
 interface CustomEvent {
-  name: string;           // Event name (e.g., 'clicked_pricing')
-  data: Record<string, unknown>;  // Event payload
-  timestamp: string;      // ISO timestamp
-  sessionId: string;      // Session that triggered it
+  name: string;                    // Event name (e.g., 'clicked_pricing')
+  data?: Record<string, unknown>;  // Event payload
+  timestamp: string;               // ISO timestamp
+  sessionId?: string;              // Session that triggered it
 }
 
 interface Session {
   id: string;
   visitorId: string;
-  projectId: string;
-  metadata: {
-    url: string;
-    country: string;
-    browser: string;
-    device: string;
-    // Plus any data from identify()
+  createdAt: Date;
+  lastActivity: Date;
+  operatorOnline: boolean;
+  aiActive: boolean;
+  metadata?: {
+    url?: string;
+    country?: string;
+    browser?: string;
+    deviceType?: 'desktop' | 'mobile' | 'tablet';
+    // ...plus other page/client/geo fields
   };
-  status: 'active' | 'closed';
-  createdAt: string;
-  lastActivity: string;
+  identity?: {
+    id: string;       // set after PocketPing.identify()
+    email?: string;
+    name?: string;
+    [key: string]: unknown;
+  };
 }
 ```
 
@@ -431,40 +420,45 @@ PocketPing.onEvent('show_discount', (data) => {
 ### Working with Sessions
 
 ```javascript
-// Get all active sessions
-const sessions = await pp.getSessions();
-console.log(`${sessions.length} active conversations`);
-
 // Get a specific session
 const session = await pp.getSession('sess_abc123');
-console.log(`Session from ${session.metadata.country}`);
+if (session) {
+  console.log(`Session from ${session.metadata?.country}`);
+}
 
-// Get session messages
-const messages = await pp.getMessages('sess_abc123');
-messages.forEach(msg => {
-  console.log(`[${msg.sender.type}] ${msg.content}`);
+// Get session messages (paginated; returns { messages, hasMore })
+const { messages, hasMore } = await pp.handleGetMessages({
+  sessionId: 'sess_abc123',
+  limit: 50,        // optional, max 100
+  // after: 'msg_id' // optional cursor for pagination
 });
-
-// Close a session
-await pp.closeSession('sess_abc123');
+messages.forEach((msg) => {
+  console.log(`[${msg.sender}] ${msg.content}`);
+});
 ```
+
+:::note Sessions live in your storage
+The SDK does not keep an in-memory list of "all sessions". To enumerate
+conversations, query your `Storage` implementation directly (e.g. via
+`pp.getStorage()` or your own DB), or track sessions in `onNewSession`.
+:::
 
 ### Sending Messages
 
-```javascript
-// Send a message to a session
-await pp.sendMessage('sess_abc123', {
-  content: 'Hello from the backend!',
-  type: 'operator',  // 'operator' | 'system'
-});
+Send a reply as the operator. `sendOperatorMessage(sessionId, content)` persists
+the message, broadcasts it to the widget over WebSocket, and syncs it to your
+bridges (Telegram/Discord/Slack).
 
-// Send with custom sender name
-await pp.sendMessage('sess_abc123', {
-  content: 'Your order has shipped!',
-  type: 'system',
-  senderName: 'Order Bot',
-});
+```javascript
+// Send an operator message to a session
+await pp.sendOperatorMessage(
+  'sess_abc123',
+  'Hello from the backend!'
+);
 ```
+
+For lower-level control you can also call `handleMessage()` directly with a
+full `SendMessageRequest` (`{ sessionId, content, sender }`).
 
 ### Identifying Visitors
 
@@ -507,31 +501,29 @@ This data appears in your messaging platform (Telegram/Discord/Slack) and enable
 
 ## Event Handlers
 
-### onSessionStart
+### onNewSession
 
 Called when a new conversation starts:
 
 ```javascript
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL,
-
-  onSessionStart: async (session) => {
+  onNewSession: async (session) => {
     console.log(`New session: ${session.id}`);
-    console.log(`From: ${session.metadata.country}`);
-    console.log(`Page: ${session.metadata.url}`);
+    console.log(`From: ${session.metadata?.country}`);
+    console.log(`Page: ${session.metadata?.url}`);
 
     // Log to analytics
     analytics.track('chat_started', {
       sessionId: session.id,
-      page: session.metadata.url,
+      page: session.metadata?.url,
     });
 
     // Send welcome based on page
-    if (session.metadata.url.includes('/pricing')) {
-      await pp.sendMessage(session.id, {
-        content: "Hi! Looking at our pricing? I'd love to help you find the right plan.",
-        type: 'operator',
-      });
+    if (session.metadata?.url?.includes('/pricing')) {
+      await pp.sendOperatorMessage(
+        session.id,
+        "Hi! Looking at our pricing? I'd love to help you find the right plan."
+      );
     }
   },
 });
@@ -539,25 +531,23 @@ const pp = new PocketPing({
 
 ### onMessage
 
-Called on every message (sent and received):
+Called on every message (visitor, operator, and AI):
 
 ```javascript
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL,
-
   onMessage: async (message, session) => {
-    console.log(`[${message.direction}] ${message.content}`);
+    console.log(`[${message.sender}] ${message.content}`);
 
     // Log all messages for compliance
     await logMessage({
       sessionId: session.id,
       content: message.content,
-      direction: message.direction,
+      sender: message.sender,        // 'visitor' | 'operator' | 'ai'
       timestamp: message.timestamp,
     });
 
-    // Keyword detection
-    if (message.direction === 'inbound') {
+    // Keyword detection on visitor messages
+    if (message.sender === 'visitor') {
       const lowerContent = message.content.toLowerCase();
 
       if (lowerContent.includes('urgent') || lowerContent.includes('emergency')) {
@@ -565,10 +555,10 @@ const pp = new PocketPing({
       }
 
       if (lowerContent.includes('cancel') || lowerContent.includes('refund')) {
-        await pp.sendMessage(session.id, {
-          content: "I'll connect you with our billing team right away.",
-          type: 'system',
-        });
+        await pp.sendOperatorMessage(
+          session.id,
+          "I'll connect you with our billing team right away."
+        );
         await escalateToSupport(session.id);
       }
     }
@@ -582,29 +572,30 @@ const pp = new PocketPing({
 
 ```javascript
 const express = require('express');
+const http = require('node:http');
 const { PocketPing } = require('@pocketping/sdk-node');
 
 const app = express();
+app.use(express.json());
 
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL,
-  apiKey: process.env.POCKETPING_API_KEY,
+  welcomeMessage: 'Hi! How can we help?',
 
   // New session started
-  onSessionStart: async (session) => {
-    console.log(`New chat from ${session.metadata.country}`);
+  onNewSession: async (session) => {
+    console.log(`New chat from ${session.metadata?.country}`);
 
     // Track in analytics
     analytics.track('chat_started', {
       sessionId: session.id,
-      country: session.metadata.country,
-      page: session.metadata.url,
+      country: session.metadata?.country,
+      page: session.metadata?.url,
     });
   },
 
   // Message received
   onMessage: async (message, session) => {
-    if (message.direction === 'inbound') {
+    if (message.sender === 'visitor') {
       analytics.track('message_received', {
         sessionId: session.id,
         wordCount: message.content.split(' ').length,
@@ -648,24 +639,23 @@ const pp = new PocketPing({
   },
 });
 
-// Mount middleware
+// Mount middleware + WebSocket stream
 app.use('/pocketping', pp.middleware());
+const server = http.createServer(app);
+pp.attachWebSocket(server);
 
 // Your other routes
-app.get('/api/support/sessions', async (req, res) => {
-  const sessions = await pp.getSessions();
-  res.json({ sessions });
+app.get('/api/support/sessions/:id', async (req, res) => {
+  const session = await pp.getSession(req.params.id);
+  res.json({ session });
 });
 
 app.post('/api/support/sessions/:id/message', async (req, res) => {
-  await pp.sendMessage(req.params.id, {
-    content: req.body.message,
-    type: 'operator',
-  });
+  await pp.sendOperatorMessage(req.params.id, req.body.message);
   res.json({ success: true });
 });
 
-app.listen(3000);
+server.listen(3000);
 ```
 
 ---
@@ -682,24 +672,33 @@ class RedisStorage implements Storage {
   constructor(private redis: Redis) {}
 
   async createSession(session: Session): Promise<void> {
-    await this.redis.hset(
+    await this.redis.set(
       `pocketping:session:${session.id}`,
-      session
+      JSON.stringify(session)
     );
   }
 
-  async getSession(id: string): Promise<Session | null> {
-    const data = await this.redis.hgetall(`pocketping:session:${id}`);
-    return data.id ? data as Session : null;
+  async getSession(sessionId: string): Promise<Session | null> {
+    const data = await this.redis.get(`pocketping:session:${sessionId}`);
+    return data ? (JSON.parse(data) as Session) : null;
   }
 
-  async updateSession(id: string, updates: Partial<Session>): Promise<void> {
-    await this.redis.hset(`pocketping:session:${id}`, updates);
+  // The SDK passes the full, updated Session object
+  async updateSession(session: Session): Promise<void> {
+    await this.redis.set(
+      `pocketping:session:${session.id}`,
+      JSON.stringify(session)
+    );
   }
 
-  async saveMessage(sessionId: string, message: Message): Promise<void> {
+  async deleteSession(sessionId: string): Promise<void> {
+    await this.redis.del(`pocketping:session:${sessionId}`);
+    await this.redis.del(`pocketping:messages:${sessionId}`);
+  }
+
+  async saveMessage(message: Message): Promise<void> {
     await this.redis.rpush(
-      `pocketping:messages:${sessionId}`,
+      `pocketping:messages:${message.sessionId}`,
       JSON.stringify(message)
     );
   }
@@ -709,21 +708,28 @@ class RedisStorage implements Storage {
       `pocketping:messages:${sessionId}`,
       0, -1
     );
-    return messages.map(m => JSON.parse(m));
+    return messages.map((m) => JSON.parse(m));
   }
 
-  async deleteSession(id: string): Promise<void> {
-    await this.redis.del(`pocketping:session:${id}`);
-    await this.redis.del(`pocketping:messages:${id}`);
+  async getMessage(messageId: string): Promise<Message | null> {
+    // Scan or maintain a secondary index; simplified here
+    return null;
   }
 }
 
 // Use it
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL,
   storage: new RedisStorage(new Redis(process.env.REDIS_URL)),
 });
 ```
+
+:::note Required vs optional methods
+`createSession`, `getSession`, `updateSession`, `deleteSession`, `saveMessage`,
+`getMessages`, and `getMessage` are required. Methods for bridge message IDs and
+attachments (`saveAttachment`, `getAttachment`, `updateAttachment`,
+`saveBridgeMessageIds`, `getBridgeMessageIds`) are optional — implement them to
+enable edit/delete-to-bridge sync and file attachments.
+:::
 
 ---
 
@@ -742,13 +748,12 @@ import {
 } from '@pocketping/sdk-node';
 
 const config: PocketPingConfig = {
-  bridgeUrl: process.env.BRIDGE_URL!,
-  apiKey: process.env.POCKETPING_API_KEY,
+  welcomeMessage: 'Hi! How can we help?',
 
   onEvent: (event: CustomEvent, session: Session) => {
     // Fully typed
     console.log(event.name, event.data);
-    console.log(session.id, session.metadata.country);
+    console.log(session.id, session.metadata?.country);
   },
 };
 
@@ -763,17 +768,27 @@ const pp = new PocketPing(config);
 
 | Method | Description |
 |--------|-------------|
-| `pp.middleware()` | Express middleware |
-| `pp.fastifyPlugin` | Fastify plugin |
-| `pp.nextHandler()` | Next.js App Router handler |
-| `pp.nextPagesHandler()` | Next.js Pages Router handler |
-| `pp.getSessions()` | Get all active sessions |
+| `pp.middleware()` | Returns a Node/Connect/Express request handler |
+| `pp.attachWebSocket(server)` | Attach the WebSocket stream to an HTTP server |
+| `pp.handleConnect(request)` | Handle a widget connection |
+| `pp.handleMessage(request)` | Handle a message (`{ sessionId, content, sender }`) |
+| `pp.handleGetMessages(request)` | Get session messages (`{ messages, hasMore }`) |
+| `pp.handleEditMessage(request)` | Edit a visitor message (synced to bridges) |
+| `pp.handleDeleteMessage(request)` | Delete a visitor message (synced to bridges) |
+| `pp.handleRead(request)` | Update delivered/read status |
+| `pp.handleIdentify({ sessionId, identity })` | Identify a visitor |
+| `pp.handlePresence()` | Get operator presence + AI status |
+| `pp.handleUploadRequest(request)` | Request a presigned upload URL |
+| `pp.handleUploadComplete(attachmentId)` | Mark an attachment ready |
 | `pp.getSession(id)` | Get a specific session |
-| `pp.getMessages(sessionId)` | Get session messages |
-| `pp.sendMessage(sessionId, message)` | Send a message |
-| `pp.emitEvent(sessionId, event, data)` | Send event to widget |
-| `pp.handleIdentify({ sessionId, identity })` | Identify visitor |
-| `pp.closeSession(sessionId)` | Close a session |
+| `pp.sendOperatorMessage(sessionId, content)` | Send an operator reply |
+| `pp.setOperatorOnline(online)` | Set operator online/offline |
+| `pp.emitEvent(sessionId, event, data)` | Send a custom event to one widget |
+| `pp.broadcastEvent(event, data)` | Send a custom event to all widgets |
+| `pp.triggerEvent(sessionId, event, data)` | Process an event server-side |
+| `pp.onEvent(name, handler)` | Subscribe to custom events (`'*'` for all) |
+| `pp.addBridge(bridge)` | Add a bridge at runtime |
+| `pp.getStorage()` | Access the underlying storage adapter |
 
 ---
 
@@ -785,7 +800,6 @@ Block bots and automated requests from creating chat sessions to prevent spam an
 
 ```javascript
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL,
   uaFilter: {
     enabled: true,
     // Automatically blocks ~50 known bot patterns (GoogleBot, curl, etc.)
@@ -798,7 +812,6 @@ const pp = new PocketPing({
 
 ```javascript
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL,
   uaFilter: {
     enabled: true,
     mode: 'blocklist',  // 'blocklist' | 'allowlist' | 'both'
@@ -871,7 +884,6 @@ For dynamic filtering logic:
 
 ```javascript
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL,
   uaFilter: {
     enabled: true,
     customFilter: (userAgent, requestInfo) => {
