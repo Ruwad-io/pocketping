@@ -1,4 +1,4 @@
-import type { Message, Session } from '../types';
+import type { Attachment, Message, Session } from '../types';
 import type { BridgeMessageIds, Storage } from './types';
 
 /**
@@ -10,6 +10,7 @@ export class MemoryStorage implements Storage {
   private messages: Map<string, Message[]> = new Map();
   private messageById: Map<string, Message> = new Map();
   private bridgeMessageIds: Map<string, BridgeMessageIds> = new Map();
+  private attachments: Map<string, Attachment> = new Map();
 
   async createSession(session: Session): Promise<void> {
     this.sessions.set(session.id, session);
@@ -58,11 +59,26 @@ export class MemoryStorage implements Storage {
       }
     }
 
-    return sessionMessages.slice(startIndex, startIndex + limit);
+    return sessionMessages.slice(startIndex, startIndex + limit).map((m) => this.hydrate(m));
   }
 
   async getMessage(messageId: string): Promise<Message | null> {
-    return this.messageById.get(messageId) ?? null;
+    const message = this.messageById.get(messageId);
+    return message ? this.hydrate(message) : null;
+  }
+
+  /** Populate message.attachments from stored attachments when empty */
+  private hydrate(message: Message): Message {
+    if (message.attachments && message.attachments.length > 0) {
+      return message;
+    }
+    const attachments = Array.from(this.attachments.values()).filter(
+      (a) => a.messageId === message.id
+    );
+    if (attachments.length === 0) {
+      return message;
+    }
+    return { ...message, attachments };
   }
 
   async updateMessage(message: Message): Promise<void> {
@@ -84,6 +100,22 @@ export class MemoryStorage implements Storage {
 
   async getBridgeMessageIds(messageId: string): Promise<BridgeMessageIds | null> {
     return this.bridgeMessageIds.get(messageId) ?? null;
+  }
+
+  async saveAttachment(attachment: Attachment): Promise<void> {
+    this.attachments.set(attachment.id, attachment);
+  }
+
+  async getAttachment(attachmentId: string): Promise<Attachment | null> {
+    return this.attachments.get(attachmentId) ?? null;
+  }
+
+  async getMessageAttachments(messageId: string): Promise<Attachment[]> {
+    return Array.from(this.attachments.values()).filter((a) => a.messageId === messageId);
+  }
+
+  async updateAttachment(attachment: Attachment): Promise<void> {
+    this.attachments.set(attachment.id, attachment);
   }
 
   async cleanupOldSessions(olderThan: Date): Promise<number> {

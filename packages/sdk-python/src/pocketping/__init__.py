@@ -9,6 +9,8 @@ from pocketping.bridges import (
 )
 from pocketping.core import PocketPing
 from pocketping.models import (
+    Attachment,
+    AttachmentStatus,
     BridgeMessageResult,
     ConnectRequest,
     ConnectResponse,
@@ -21,6 +23,8 @@ from pocketping.models import (
     SessionMetadata,
     TrackedElement,
     TriggerOptions,
+    UploadRequest,
+    UploadResponse,
 )
 from pocketping.storage import MemoryStorage, Storage
 from pocketping.utils.ip_filter import IpFilterConfig
@@ -39,6 +43,10 @@ __all__ = [
     "SendMessageResponse",
     "PresenceResponse",
     "CustomEvent",
+    "Attachment",
+    "AttachmentStatus",
+    "UploadRequest",
+    "UploadResponse",
     "TrackedElement",
     "TriggerOptions",
     "Storage",

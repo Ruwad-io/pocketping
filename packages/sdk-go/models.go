@@ -50,6 +50,9 @@ const (
 type Attachment struct {
 	// ID is the unique attachment identifier.
 	ID string `json:"id"`
+	// MessageID is the ID of the message this attachment is linked to.
+	// It is empty until the attachment is linked to a message.
+	MessageID string `json:"messageId,omitempty"`
 	// Filename is the original filename.
 	Filename string `json:"filename"`
 	// MimeType is the MIME type (e.g., 'image/jpeg', 'application/pdf').
@@ -62,12 +65,57 @@ type Attachment struct {
 	ThumbnailURL string `json:"thumbnailUrl,omitempty"`
 	// Status is the upload status.
 	Status AttachmentStatus `json:"status"`
+	// CreatedAt is when the attachment was created.
+	CreatedAt time.Time `json:"createdAt"`
 	// UploadedFrom is the source of the upload.
 	UploadedFrom UploadSource `json:"uploadedFrom,omitempty"`
 	// BridgeFileID is the external file ID (from Telegram/Discord/Slack).
 	BridgeFileID string `json:"bridgeFileId,omitempty"`
 	// Data is the raw file bytes (not serialized to JSON, used for incoming files).
 	Data []byte `json:"-"`
+}
+
+// Attachment defaults and limits (identical across all SDKs).
+const (
+	// DefaultMaxAttachmentSize is the maximum allowed attachment size in bytes (10 MiB).
+	DefaultMaxAttachmentSize int64 = 10 * 1024 * 1024
+	// DefaultUploadBaseURL is the default base URL for generated upload/access URLs.
+	DefaultUploadBaseURL = "https://uploads.pocketping.local"
+	// UploadURLTTLSeconds is the time-to-live of a presigned upload URL (15 minutes).
+	UploadURLTTLSeconds = 900
+)
+
+// DefaultAllowedMimeTypes is the default list of MIME types accepted for upload.
+var DefaultAllowedMimeTypes = []string{
+	"image/jpeg",
+	"image/png",
+	"image/gif",
+	"image/webp",
+	"application/pdf",
+	"text/plain",
+	"text/csv",
+	"application/zip",
+	"application/msword",
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	"application/vnd.ms-excel",
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	"video/mp4",
+	"audio/mpeg",
+}
+
+// UploadRequest is the request to obtain a presigned upload URL for an attachment.
+type UploadRequest struct {
+	SessionID string `json:"sessionId"`
+	Filename  string `json:"filename"`
+	MimeType  string `json:"mimeType"`
+	Size      int64  `json:"size"`
+}
+
+// UploadResponse is the response containing the presigned upload URL.
+type UploadResponse struct {
+	AttachmentID string    `json:"attachmentId"`
+	UploadURL    string    `json:"uploadUrl"`
+	ExpiresAt    time.Time `json:"expiresAt"`
 }
 
 // VersionStatus represents the result of a version check.

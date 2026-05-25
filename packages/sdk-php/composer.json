@@ -30,7 +30,11 @@
     "autoload": {
         "psr-4": {
             "PocketPing\\": "src/"
-        }
+        },
+        "files": [
+            "src/Utils/IpFilter.php",
+            "src/Utils/UserAgentFilter.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {

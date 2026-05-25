@@ -43,13 +43,8 @@ discord = [
 slack = [
     "slack-sdk>=3.23.0",
 ]
-ai = [
-    "openai>=1.0.0",
-    "google-generativeai>=0.3.0",
-    "anthropic>=0.18.0",
-]
 all = [
-    "pocketping[fastapi,telegram,discord,slack,ai]",
+    "pocketping[fastapi,telegram,discord,slack]",
 ]
 dev = [
     "pytest>=7.0.0",

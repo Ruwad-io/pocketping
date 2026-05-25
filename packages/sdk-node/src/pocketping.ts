@@ -1,10 +1,15 @@
 import { createHmac } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { WebSocket, WebSocketServer } from 'ws';
+import { AnthropicProvider } from './ai/anthropic';
+import { GeminiProvider } from './ai/gemini';
+import { OpenAIProvider } from './ai/openai';
+import type { AIProvider } from './ai/types';
 import type { Bridge } from './bridges/types';
 import { MemoryStorage } from './storage/memory';
 import type { Storage } from './storage/types';
 import type {
+  Attachment,
   ConnectRequest,
   ConnectResponse,
   CustomEvent,
@@ -29,6 +34,8 @@ import type {
   SendMessageResponse,
   Session,
   TypingRequest,
+  UploadRequest,
+  UploadResponse,
   VersionCheckResult,
   VersionStatus,
   VisibilityRequest,
@@ -132,6 +139,44 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Attachment Constants
+// ─────────────────────────────────────────────────────────────────
+
+/** Maximum allowed attachment size in bytes (10 MB) */
+export const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+
+/** Default allowed MIME types for attachments */
+export const DEFAULT_ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+  'text/plain',
+  'text/csv',
+  'application/zip',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'video/mp4',
+  'audio/mpeg',
+];
+
+/** Default base URL for generated upload/access URLs */
+export const DEFAULT_UPLOAD_BASE_URL = 'https://uploads.pocketping.local';
+
+/** Upload URL time-to-live in seconds (15 minutes) */
+export const UPLOAD_URL_TTL_SECONDS = 900;
+
+/** Default system prompt used by the AI fallback when none is configured. */
+export const DEFAULT_AI_SYSTEM_PROMPT =
+  "You are a helpful customer support assistant. Be friendly, concise, and helpful. If you don't know something, say so and offer to connect them with a human.";
+
+/** Default number of seconds before the AI takes over from offline operators. */
+export const DEFAULT_AI_TAKEOVER_DELAY = 300;
+
 export class PocketPing {
   private storage: Storage;
   private bridges: Bridge[];
@@ -140,11 +185,56 @@ export class PocketPing {
   private sessionSockets: Map<string, Set<WebSocket>> = new Map();
   private operatorOnline = false;
   private eventHandlers: Map<string, Set<CustomEventHandler>> = new Map();
+  private maxAttachmentSize: number;
+  private allowedMimeTypes: string[];
+  private uploadBaseUrl: string;
+
+  // AI fallback
+  private aiProvider: AIProvider | null;
+  private aiSystemPrompt: string;
+  private aiTakeoverDelay: number;
+  /** Per-session last operator activity timestamp (ms epoch). */
+  private lastOperatorActivity: Map<string, number> = new Map();
 
   constructor(config: PocketPingConfig = {}) {
     this.config = config;
     this.storage = this.initStorage(config.storage);
     this.bridges = config.bridges ?? [];
+    this.maxAttachmentSize = config.maxAttachmentSize ?? MAX_ATTACHMENT_SIZE;
+    this.allowedMimeTypes = config.allowedMimeTypes ?? DEFAULT_ALLOWED_MIME_TYPES;
+    this.uploadBaseUrl = (config.uploadBaseUrl ?? DEFAULT_UPLOAD_BASE_URL).replace(/\/+$/, '');
+
+    this.aiProvider = this.resolveAiProvider(config);
+    this.aiSystemPrompt = config.ai?.systemPrompt ?? DEFAULT_AI_SYSTEM_PROMPT;
+    this.aiTakeoverDelay =
+      config.aiTakeoverDelay ?? config.ai?.fallbackAfter ?? DEFAULT_AI_TAKEOVER_DELAY;
+  }
+
+  /**
+   * Resolve an AIProvider instance from the config.
+   * Accepts either a ready provider instance or a provider name + apiKey/model.
+   */
+  private resolveAiProvider(config: PocketPingConfig): AIProvider | null {
+    const ai = config.ai;
+    if (!ai?.provider) return null;
+
+    // Already a provider instance
+    if (typeof ai.provider !== 'string') {
+      return ai.provider;
+    }
+
+    // Build a concrete provider from a name + apiKey
+    if (!ai.apiKey) return null;
+    switch (ai.provider) {
+      case 'openai':
+        return new OpenAIProvider({ apiKey: ai.apiKey, model: ai.model });
+      case 'anthropic':
+        return new AnthropicProvider({ apiKey: ai.apiKey, model: ai.model });
+      case 'gemini':
+        return new GeminiProvider({ apiKey: ai.apiKey, model: ai.model });
+      default:
+        return null;
+    }
   }
 
   private initStorage(storage?: Storage | 'memory'): Storage {
@@ -344,6 +434,15 @@ export class PocketPing {
             break;
           case 'visibility':
             result = await this.handleVisibility(body as VisibilityRequest);
+            break;
+          case 'upload-request':
+            result = await this.handleUploadRequest(body as UploadRequest);
+            break;
+          case 'upload-complete':
+            result = await this.handleUploadComplete((body as { attachmentId: string }).attachmentId);
+            break;
+          case 'upload-failed':
+            result = await this.handleUploadFailed((body as { attachmentId: string }).attachmentId);
             break;
           default:
             if (next) {
@@ -628,10 +727,29 @@ export class PocketPing {
       replyTo: request.replyTo,
     };
 
+    // Link attachments to this message before persisting / notifying bridges
+    const linked = await this.linkAttachments(message.id, request.attachmentIds);
+    if (linked.length > 0) {
+      message.attachments = linked;
+    } else if (request.attachments && request.attachments.length > 0) {
+      // Inline attachments (e.g. operator messages from bridges)
+      message.attachments = request.attachments;
+    }
+
     await this.storage.saveMessage(message);
 
     // Update session activity
     session.lastActivity = new Date();
+
+    // Track operator activity for AI takeover detection; an operator reply
+    // also disables the AI fallback for this session.
+    if (request.sender === 'operator') {
+      this.lastOperatorActivity.set(request.sessionId, Date.now());
+      if (session.aiActive) {
+        session.aiActive = false;
+      }
+    }
+
     await this.storage.updateSession(session);
 
     // Notify bridges
@@ -647,6 +765,12 @@ export class PocketPing {
 
     // Callback
     await this.config.onMessage?.(message, session);
+
+    // AI fallback: after a visitor message is persisted and bridges notified,
+    // optionally let the configured AI provider respond when operators are away.
+    if (request.sender === 'visitor') {
+      await this.maybeAiRespond(session);
+    }
 
     return {
       messageId: message.id,
@@ -680,9 +804,14 @@ export class PocketPing {
   async handlePresence(): Promise<PresenceResponse> {
     return {
       online: this.operatorOnline,
-      aiEnabled: !!this.config.ai,
-      aiActiveAfter: this.config.aiTakeoverDelay ?? 300,
+      aiEnabled: this.aiProvider !== null,
+      aiActiveAfter: this.aiTakeoverDelay,
     };
+  }
+
+  /** Whether an operator is currently online. */
+  isOperatorOnline(): boolean {
+    return this.operatorOnline;
   }
 
   async handleRead(request: ReadRequest): Promise<ReadResponse> {
@@ -964,6 +1093,131 @@ export class PocketPing {
   }
 
   // ─────────────────────────────────────────────────────────────────
+  // File Attachments
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Handle an upload request from the widget.
+   * Validates the session, MIME type and size, then creates a pending
+   * attachment and returns a presigned upload URL.
+   */
+  async handleUploadRequest(request: UploadRequest): Promise<UploadResponse> {
+    // Fail fast if the storage cannot persist attachments — otherwise we would
+    // hand back an attachmentId/uploadUrl that upload-complete can never resolve.
+    if (!this.storage.saveAttachment) {
+      throw new Error('Storage does not support attachments');
+    }
+
+    const session = await this.storage.getSession(request.sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    if (!this.allowedMimeTypes.includes(request.mimeType)) {
+      throw new Error(`Invalid mime type: ${request.mimeType}`);
+    }
+
+    if (request.size <= 0 || request.size > this.maxAttachmentSize) {
+      throw new Error(
+        `File too large: ${request.size} bytes (max ${this.maxAttachmentSize} bytes)`
+      );
+    }
+
+    const id = this.generateId();
+    const now = new Date();
+    const url = `${this.uploadBaseUrl}/${id}`;
+
+    const attachment: Attachment = {
+      id,
+      messageId: null,
+      filename: request.filename,
+      mimeType: request.mimeType,
+      size: request.size,
+      url,
+      thumbnailUrl: null,
+      status: 'pending',
+      createdAt: now,
+      uploadedFrom: 'widget',
+    };
+
+    if (this.storage.saveAttachment) {
+      await this.storage.saveAttachment(attachment);
+    }
+
+    return {
+      attachmentId: id,
+      uploadUrl: url,
+      expiresAt: new Date(now.getTime() + UPLOAD_URL_TTL_SECONDS * 1000),
+    };
+  }
+
+  /**
+   * Mark an attachment as ready after the upload completes.
+   */
+  async handleUploadComplete(attachmentId: string): Promise<Attachment> {
+    if (!this.storage.getAttachment) {
+      throw new Error('Storage does not support attachments');
+    }
+
+    const attachment = await this.storage.getAttachment(attachmentId);
+    if (!attachment) {
+      throw new Error('Attachment not found');
+    }
+
+    attachment.status = 'ready';
+    if (this.storage.updateAttachment) {
+      await this.storage.updateAttachment(attachment);
+    }
+
+    return attachment;
+  }
+
+  /**
+   * Mark an attachment as failed (e.g. when the upload errors out).
+   */
+  async handleUploadFailed(attachmentId: string): Promise<Attachment> {
+    if (!this.storage.getAttachment) {
+      throw new Error('Storage does not support attachments');
+    }
+
+    const attachment = await this.storage.getAttachment(attachmentId);
+    if (!attachment) {
+      throw new Error('Attachment not found');
+    }
+
+    attachment.status = 'failed';
+    if (this.storage.updateAttachment) {
+      await this.storage.updateAttachment(attachment);
+    }
+
+    return attachment;
+  }
+
+  /**
+   * Link previously-uploaded attachments to a message.
+   * Sets each attachment's messageId and returns the linked attachments.
+   */
+  private async linkAttachments(
+    messageId: string,
+    attachmentIds?: string[]
+  ): Promise<Attachment[]> {
+    if (!attachmentIds || attachmentIds.length === 0) return [];
+    if (!this.storage.getAttachment) return [];
+
+    const linked: Attachment[] = [];
+    for (const id of attachmentIds) {
+      const attachment = await this.storage.getAttachment(id);
+      if (!attachment) continue;
+      attachment.messageId = messageId;
+      if (this.storage.updateAttachment) {
+        await this.storage.updateAttachment(attachment);
+      }
+      linked.push(attachment);
+    }
+    return linked;
+  }
+
+  // ─────────────────────────────────────────────────────────────────
   // Operator Actions (for bridges)
   // ─────────────────────────────────────────────────────────────────
 
@@ -1190,6 +1444,101 @@ export class PocketPing {
         console.error(`[PocketPing] Bridge ${bridge.name} identity notification error:`, err);
       }
     }
+  }
+
+  /**
+   * Notify bridges of an operator (or AI) message via the operator-message path,
+   * so it shows up in Telegram/Discord/Slack just like a human operator reply.
+   */
+  private async notifyBridgesOperatorMessage(
+    message: Message,
+    session: Session,
+    sourceBridge: string,
+    operatorName: string
+  ): Promise<void> {
+    for (const bridge of this.bridges) {
+      try {
+        await bridge.onOperatorMessage?.(message, session, sourceBridge, operatorName);
+      } catch (err) {
+        console.error(`[PocketPing] Bridge ${bridge.name} operator message error:`, err);
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // AI Fallback
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Maybe generate an AI reply for a session after a visitor message.
+   *
+   * Triggers an AI response when ALL of the following hold:
+   *  1. an AI provider is configured;
+   *  2. no operator is currently online;
+   *  3. takeover is due — the takeover delay is <= 0, or the elapsed time since
+   *     the last operator activity for this session is >= the takeover delay.
+   *     If no operator activity has ever been recorded for the session, takeover
+   *     is treated as due (the operator never showed up).
+   *
+   * Errors from the provider are logged and swallowed so message handling never
+   * crashes because of the AI fallback.
+   */
+  private async maybeAiRespond(session: Session): Promise<void> {
+    if (!this.aiProvider) return;
+    if (this.isOperatorOnline()) return;
+    if (!this.isAiTakeoverDue(session.id)) return;
+
+    // Mark the session as AI-active and persist it.
+    session.aiActive = true;
+    await this.storage.updateSession(session);
+
+    let reply = '';
+    try {
+      const messages = await this.storage.getMessages(session.id);
+      reply = await this.aiProvider.generateResponse(messages, this.aiSystemPrompt);
+    } catch (err) {
+      console.error('[PocketPing] AI response error:', err);
+      return;
+    }
+
+    if (!reply) return;
+
+    const aiMessage: Message = {
+      id: this.generateId(),
+      sessionId: session.id,
+      content: reply,
+      sender: 'ai',
+      timestamp: new Date(),
+    };
+
+    await this.storage.saveMessage(aiMessage);
+
+    // Broadcast to widget clients.
+    this.broadcastToSession(session.id, {
+      type: 'message',
+      data: aiMessage,
+    });
+
+    // Surface the AI reply on bridges via the operator-message path.
+    await this.notifyBridgesOperatorMessage(aiMessage, session, 'ai', 'AI');
+
+    // Callback
+    await this.config.onMessage?.(aiMessage, session);
+  }
+
+  /**
+   * Whether AI takeover is due for the given session based on the configured
+   * takeover delay and the last recorded operator activity for that session.
+   */
+  private isAiTakeoverDue(sessionId: string): boolean {
+    if (this.aiTakeoverDelay <= 0) return true;
+
+    const lastActivity = this.lastOperatorActivity.get(sessionId);
+    // No operator has ever acted on this session -> takeover is due.
+    if (lastActivity === undefined) return true;
+
+    const elapsedSeconds = (Date.now() - lastActivity) / 1000;
+    return elapsedSeconds >= this.aiTakeoverDelay;
   }
 
   /**

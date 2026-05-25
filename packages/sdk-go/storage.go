@@ -40,14 +40,33 @@ type StorageWithBridgeIDs interface {
 	GetBridgeMessageIDs(ctx context.Context, messageID string) (*BridgeMessageIds, error)
 }
 
+// StorageWithAttachments extends Storage with attachment operations.
+// Implement this interface to support file attachments.
+type StorageWithAttachments interface {
+	Storage
+
+	// SaveAttachment persists a new attachment.
+	SaveAttachment(ctx context.Context, attachment *Attachment) error
+
+	// GetAttachment retrieves an attachment by ID. Returns (nil, nil) if not found.
+	GetAttachment(ctx context.Context, attachmentID string) (*Attachment, error)
+
+	// GetMessageAttachments returns all attachments linked to the given message ID.
+	GetMessageAttachments(ctx context.Context, messageID string) ([]Attachment, error)
+
+	// UpdateAttachment updates an existing attachment.
+	UpdateAttachment(ctx context.Context, attachment *Attachment) error
+}
+
 // MemoryStorage is an in-memory storage adapter.
 // Useful for development and testing. Data is lost on restart.
 type MemoryStorage struct {
-	mu              sync.RWMutex
-	sessions        map[string]*Session
-	messages        map[string][]Message  // sessionID -> messages
-	messageByID     map[string]*Message   // messageID -> message
+	mu               sync.RWMutex
+	sessions         map[string]*Session
+	messages         map[string][]Message         // sessionID -> messages
+	messageByID      map[string]*Message          // messageID -> message
 	bridgeMessageIDs map[string]*BridgeMessageIds // messageID -> bridge IDs
+	attachments      map[string]*Attachment       // attachmentID -> attachment
 }
 
 // NewMemoryStorage creates a new in-memory storage adapter.
@@ -57,6 +76,7 @@ func NewMemoryStorage() *MemoryStorage {
 		messages:         make(map[string][]Message),
 		messageByID:      make(map[string]*Message),
 		bridgeMessageIDs: make(map[string]*BridgeMessageIds),
+		attachments:      make(map[string]*Attachment),
 	}
 }
 
@@ -304,8 +324,58 @@ func (m *MemoryStorage) GetBridgeMessageIDs(ctx context.Context, messageID strin
 	return m.bridgeMessageIDs[messageID], nil
 }
 
+// SaveAttachment persists a new attachment.
+func (m *MemoryStorage) SaveAttachment(ctx context.Context, attachment *Attachment) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	stored := *attachment
+	m.attachments[attachment.ID] = &stored
+	return nil
+}
+
+// GetAttachment retrieves an attachment by ID. Returns (nil, nil) if not found.
+func (m *MemoryStorage) GetAttachment(ctx context.Context, attachmentID string) (*Attachment, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	att, ok := m.attachments[attachmentID]
+	if !ok {
+		return nil, nil
+	}
+	clone := *att
+	return &clone, nil
+}
+
+// GetMessageAttachments returns all attachments linked to the given message ID.
+func (m *MemoryStorage) GetMessageAttachments(ctx context.Context, messageID string) ([]Attachment, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	result := []Attachment{}
+	for _, att := range m.attachments {
+		if att.MessageID == messageID {
+			result = append(result, *att)
+		}
+	}
+	return result, nil
+}
+
+// UpdateAttachment updates an existing attachment.
+func (m *MemoryStorage) UpdateAttachment(ctx context.Context, attachment *Attachment) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	stored := *attachment
+	m.attachments[attachment.ID] = &stored
+	return nil
+}
+
 // Ensure MemoryStorage implements Storage interface
 var _ Storage = (*MemoryStorage)(nil)
 
 // Ensure MemoryStorage implements StorageWithBridgeIDs interface
 var _ StorageWithBridgeIDs = (*MemoryStorage)(nil)
+
+// Ensure MemoryStorage implements StorageWithAttachments interface
+var _ StorageWithAttachments = (*MemoryStorage)(nil)

@@ -103,7 +103,6 @@ describe('Version Management', () => {
       });
 
       it('should return outdated for patch version behind', () => {
-        const _result = pp.checkWidgetVersion('1.2.0');
         const ppPatch = new PocketPing({ latestWidgetVersion: '1.2.1' });
         const resultPatch = ppPatch.checkWidgetVersion('1.2.0');
 

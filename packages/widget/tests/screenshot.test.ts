@@ -302,9 +302,6 @@ describe('Screenshot Feature', () => {
 
       // Check that screenshot requests endpoint was called
       const fetchCalls = (globalThis.fetch as any).mock.calls;
-      const screenshotRequestsCalled = fetchCalls.some(
-        (call: any) => call[0]?.includes('/screenshot/requests')
-      );
 
       // Note: This might not pass if polling timing is off
       // The test verifies the polling mechanism is wired correctly
@@ -441,9 +438,7 @@ describe('Screenshot Feature', () => {
       await client.connect();
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      const uploadInitUrl = 'http://localhost:8000/pocketping/screenshot/upload';
       const presignedUrl = 'https://r2.example.com/upload?signature=xxx';
-      const uploadCompleteUrl = 'http://localhost:8000/pocketping/screenshot/upload/complete';
 
       // Mock responses in sequence
       (globalThis.fetch as any)

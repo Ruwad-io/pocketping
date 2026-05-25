@@ -6,8 +6,13 @@ require_relative "pocketping/storage"
 require_relative "pocketping/bridges"
 require_relative "pocketping/version_checker"
 require_relative "pocketping/ip_filter"
+require_relative "pocketping/user_agent_filter"
 require_relative "pocketping/middleware/ip_filter_middleware"
 require_relative "pocketping/webhooks"
+require_relative "pocketping/ai/base"
+require_relative "pocketping/ai/openai_provider"
+require_relative "pocketping/ai/anthropic_provider"
+require_relative "pocketping/ai/gemini_provider"
 require_relative "pocketping/core"
 
 # PocketPing - Real-time customer chat with mobile notifications

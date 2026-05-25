@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PocketPing\Storage;
 
+use PocketPing\Models\Attachment;
 use PocketPing\Models\BridgeMessageIds;
 use PocketPing\Models\Message;
 use PocketPing\Models\Session;
@@ -11,7 +12,7 @@ use PocketPing\Models\Session;
 /**
  * In-memory storage adapter. Useful for development and testing.
  */
-final class MemoryStorage implements StorageWithBridgeIdsInterface
+final class MemoryStorage implements StorageWithBridgeIdsInterface, StorageWithAttachmentsInterface
 {
     /** @var array<string, Session> */
     private array $sessions = [];
@@ -24,6 +25,9 @@ final class MemoryStorage implements StorageWithBridgeIdsInterface
 
     /** @var array<string, BridgeMessageIds> */
     private array $bridgeMessageIds = [];
+
+    /** @var array<string, Attachment> */
+    private array $attachments = [];
 
     /**
      * Create a new session.
@@ -116,7 +120,9 @@ final class MemoryStorage implements StorageWithBridgeIdsInterface
             $messages = array_slice($messages, $startIndex);
         }
 
-        return array_slice($messages, 0, $limit);
+        $messages = array_slice($messages, 0, $limit);
+
+        return array_map(fn (Message $m) => $this->hydrateAttachments($m), $messages);
     }
 
     /**
@@ -124,7 +130,43 @@ final class MemoryStorage implements StorageWithBridgeIdsInterface
      */
     public function getMessage(string $messageId): ?Message
     {
-        return $this->messageById[$messageId] ?? null;
+        $message = $this->messageById[$messageId] ?? null;
+        if ($message === null) {
+            return null;
+        }
+
+        return $this->hydrateAttachments($message);
+    }
+
+    /**
+     * Populate a message's attachments from storage when not already set.
+     */
+    private function hydrateAttachments(Message $message): Message
+    {
+        if (!empty($message->attachments)) {
+            return $message;
+        }
+
+        $attachments = $this->getMessageAttachments($message->id);
+        if (empty($attachments)) {
+            return $message;
+        }
+
+        return new Message(
+            id: $message->id,
+            sessionId: $message->sessionId,
+            content: $message->content,
+            sender: $message->sender,
+            timestamp: $message->timestamp,
+            replyTo: $message->replyTo,
+            messageMetadata: $message->messageMetadata,
+            attachments: $attachments,
+            status: $message->status,
+            deliveredAt: $message->deliveredAt,
+            readAt: $message->readAt,
+            editedAt: $message->editedAt,
+            deletedAt: $message->deletedAt,
+        );
     }
 
     /**
@@ -235,5 +277,42 @@ final class MemoryStorage implements StorageWithBridgeIdsInterface
     public function getBridgeMessageIds(string $messageId): ?BridgeMessageIds
     {
         return $this->bridgeMessageIds[$messageId] ?? null;
+    }
+
+    /**
+     * Save an attachment.
+     */
+    public function saveAttachment(Attachment $attachment): void
+    {
+        $this->attachments[$attachment->id] = $attachment;
+    }
+
+    /**
+     * Get an attachment by ID.
+     */
+    public function getAttachment(string $attachmentId): ?Attachment
+    {
+        return $this->attachments[$attachmentId] ?? null;
+    }
+
+    /**
+     * Get all attachments linked to a message.
+     *
+     * @return Attachment[]
+     */
+    public function getMessageAttachments(string $messageId): array
+    {
+        return array_values(array_filter(
+            $this->attachments,
+            fn (Attachment $attachment) => $attachment->messageId === $messageId
+        ));
+    }
+
+    /**
+     * Update an existing attachment.
+     */
+    public function updateAttachment(Attachment $attachment): void
+    {
+        $this->attachments[$attachment->id] = $attachment;
     }
 }

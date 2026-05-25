@@ -248,15 +248,16 @@ export function shouldAllowUa(
   }
 
   switch (mode) {
-    case 'allowlist':
+    case 'allowlist': {
       // Only allow if matches allowlist
       const allowMatch = matchesAnyPattern(ua, allowlist);
       if (allowMatch) {
         return { allowed: true, reason: 'allowlist', matchedPattern: allowMatch };
       }
       return { allowed: false, reason: 'not_in_allowlist' };
+    }
 
-    case 'blocklist':
+    case 'blocklist': {
       // Block if matches blocklist (including default bots)
       const blockMatch = matchesAnyPattern(ua, combinedBlocklist);
       if (blockMatch) {
@@ -271,8 +272,9 @@ export function shouldAllowUa(
         };
       }
       return { allowed: true, reason: 'default' };
+    }
 
-    case 'both':
+    case 'both': {
       // Allowlist takes precedence, then check blocklist
       const bothAllowMatch = matchesAnyPattern(ua, allowlist);
       if (bothAllowMatch) {
@@ -294,6 +296,7 @@ export function shouldAllowUa(
         };
       }
       return { allowed: true, reason: 'default' };
+    }
 
     default:
       return { allowed: true, reason: 'default' };

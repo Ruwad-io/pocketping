@@ -48,12 +48,14 @@ Visitor opens chat -> You get a Telegram ping -> Reply from your phone
 |---------|------------|----------|-------|----------|---------|
 | **Pricing** | Free | $74+/mo | $25+/mo | Free | Free |
 | **Self-hosted** | Yes | No | No | Yes | No |
-| **Telegram** | Yes | No | No | No | No |
-| **Discord** | Yes | No | No | No | No |
-| **Slack** | Yes | Add-on | Add-on | Yes | No |
+| **Telegram** | Native | No | Channel | Channel | No |
+| **Discord** | Native | No | No | No | No |
+| **Slack** | Native | Add-on | Add-on | Channel | No |
 | **Multi-channel sync** | Yes | No | No | No | No |
 | **Custom Events** | Yes | Paid | Limited | No | No |
 | **Open source** | MIT | No | No | AGPL | No |
+
+> "Channel" means the tool can ingest that messaging app as an inbound channel into its agent inbox. PocketPing's angle is different: **phone-first, two-way sync across Telegram/Discord/Slack with no separate agent inbox to manage** — you reply from the app you already use.
 
 **[See full comparison](docs/COMPARISON.md)** - Detailed analysis vs Intercom, Crisp, Chatwoot, Tawk.to, Drift, Zendesk
 

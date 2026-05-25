@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace PocketPing;
 
+use PocketPing\AI\AIProviderInterface;
 use PocketPing\Bridges\BridgeInterface;
 use PocketPing\Bridges\BridgeWithEditDeleteInterface;
+use PocketPing\Models\Attachment;
+use PocketPing\Models\AttachmentStatus;
 use PocketPing\Models\BridgeMessageIds;
 use PocketPing\Models\ConnectRequest;
 use PocketPing\Models\ConnectResponse;
@@ -27,15 +30,22 @@ use PocketPing\Models\SendMessageResponse;
 use PocketPing\Models\Session;
 use PocketPing\Models\TrackedElement;
 use PocketPing\Models\TypingRequest;
+use PocketPing\Models\UploadRequest;
+use PocketPing\Models\UploadResponse;
 use PocketPing\Models\VersionCheckResult;
 use PocketPing\Models\VersionWarning;
 use PocketPing\Models\WebSocketEvent;
 use PocketPing\Storage\MemoryStorage;
 use PocketPing\Storage\StorageInterface;
+use PocketPing\Storage\StorageWithAttachmentsInterface;
 use PocketPing\Storage\StorageWithBridgeIdsInterface;
 use PocketPing\Utils\IpFilter;
 use PocketPing\Utils\IpFilterConfig;
 use PocketPing\Utils\IpFilterResult;
+use PocketPing\Utils\UaFilterConfig;
+use PocketPing\Utils\UaFilterReason;
+use PocketPing\Utils\UaFilterResult;
+use PocketPing\Utils\UserAgentFilter;
 use PocketPing\Version\VersionChecker;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -45,10 +55,53 @@ use Psr\Log\NullLogger;
  */
 class PocketPing
 {
+    /** Default maximum attachment size in bytes (10 MB). */
+    public const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+
+    /** Default base URL for presigned upload URLs. */
+    public const DEFAULT_UPLOAD_BASE_URL = 'https://uploads.pocketping.local';
+
+    /** Lifetime of a presigned upload URL in seconds (15 minutes). */
+    public const UPLOAD_URL_TTL_SECONDS = 900;
+
+    /** Default system prompt used for AI fallback replies. */
+    public const DEFAULT_AI_SYSTEM_PROMPT = "You are a helpful customer support assistant. "
+        . "Be friendly, concise, and helpful. If you don't know something, say so and offer "
+        . "to connect them with a human.";
+
+    /** Default delay (seconds) before AI takes over when the operator is offline. */
+    public const DEFAULT_AI_TAKEOVER_DELAY = 300;
+
+    /** @var list<string> Default allowed MIME types for attachments. */
+    public const DEFAULT_ALLOWED_MIME_TYPES = [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'application/pdf',
+        'text/plain',
+        'text/csv',
+        'application/zip',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'video/mp4',
+        'audio/mpeg',
+    ];
+
     private StorageInterface $storage;
     private VersionChecker $versionChecker;
     private LoggerInterface $logger;
     private ?IpFilterConfig $ipFilter = null;
+    private ?UaFilterConfig $uaFilter = null;
+
+    private int $maxAttachmentSize;
+
+    /** @var list<string> */
+    private array $allowedMimeTypes;
+
+    private string $uploadBaseUrl;
 
     /** @var BridgeInterface[] */
     private array $bridges = [];
@@ -63,6 +116,10 @@ class PocketPing
     private array $eventHandlers = [];
 
     private bool $operatorOnline = false;
+
+    private ?AIProviderInterface $aiProvider = null;
+    private string $aiSystemPrompt;
+    private int $aiTakeoverDelay;
 
     /**
      * @param StorageInterface|null $storage Storage adapter
@@ -79,6 +136,9 @@ class PocketPing
      * @param LoggerInterface|null $logger PSR-3 logger
      * @param TrackedElement[]|null $trackedElements Elements to track
      * @param IpFilterConfig|array<string, mixed>|null $ipFilter IP filter configuration
+     * @param AIProviderInterface|null $aiProvider AI provider for offline fallback replies
+     * @param string|null $aiSystemPrompt System prompt for AI fallback replies
+     * @param int|null $aiTakeoverDelay Seconds offline before AI takes over (default 300)
      */
     public function __construct(
         ?StorageInterface $storage = null,
@@ -100,6 +160,14 @@ class PocketPing
         /** @var TrackedElement[]|null */
         private ?array $trackedElements = null,
         IpFilterConfig|array|null $ipFilter = null,
+        ?UaFilterConfig $uaFilter = null,
+        ?int $maxAttachmentSize = null,
+        /** @var list<string>|null */
+        ?array $allowedMimeTypes = null,
+        ?string $uploadBaseUrl = null,
+        ?AIProviderInterface $aiProvider = null,
+        ?string $aiSystemPrompt = null,
+        ?int $aiTakeoverDelay = null,
     ) {
         $this->storage = $storage ?? new MemoryStorage();
         $this->bridges = $bridges;
@@ -118,6 +186,19 @@ class PocketPing
                 ? IpFilterConfig::fromArray($ipFilter)
                 : $ipFilter;
         }
+
+        // User-Agent filtering
+        $this->uaFilter = $uaFilter;
+
+        // Attachment configuration (overridable)
+        $this->maxAttachmentSize = $maxAttachmentSize ?? self::MAX_ATTACHMENT_SIZE;
+        $this->allowedMimeTypes = $allowedMimeTypes ?? self::DEFAULT_ALLOWED_MIME_TYPES;
+        $this->uploadBaseUrl = rtrim($uploadBaseUrl ?? self::DEFAULT_UPLOAD_BASE_URL, '/');
+
+        // AI fallback configuration
+        $this->aiProvider = $aiProvider;
+        $this->aiSystemPrompt = $aiSystemPrompt ?? self::DEFAULT_AI_SYSTEM_PROMPT;
+        $this->aiTakeoverDelay = $aiTakeoverDelay ?? self::DEFAULT_AI_TAKEOVER_DELAY;
 
         // Initialize bridges
         foreach ($this->bridges as $bridge) {
@@ -177,6 +258,52 @@ class PocketPing
     public function createBlockedResponse(): array
     {
         return IpFilter::createBlockedResponse($this->ipFilter);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // User-Agent Filtering
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Check if a user-agent is allowed by the filter.
+     *
+     * @param array<string, mixed>|null $requestInfo Additional request information
+     */
+    public function checkUaFilter(?string $userAgent, ?array $requestInfo = null): UaFilterResult
+    {
+        if ($this->uaFilter === null) {
+            return new UaFilterResult(true, UaFilterReason::DEFAULT);
+        }
+
+        return UserAgentFilter::checkUaFilter($userAgent, $this->uaFilter, $requestInfo ?? []);
+    }
+
+    /**
+     * Extract the client user-agent from a headers array or $_SERVER.
+     *
+     * @param array<string, string>|null $headers Optional headers array
+     */
+    public function getClientUserAgent(?array $headers = null): ?string
+    {
+        if ($headers !== null) {
+            foreach ($headers as $name => $value) {
+                if (strtolower($name) === 'user-agent') {
+                    return $value;
+                }
+            }
+
+            return null;
+        }
+
+        return $_SERVER['HTTP_USER_AGENT'] ?? null;
+    }
+
+    /**
+     * Get the user-agent filter configuration.
+     */
+    public function getUaFilter(): ?UaFilterConfig
+    {
+        return $this->uaFilter;
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -271,13 +398,20 @@ class PocketPing
             throw new \InvalidArgumentException('Session not found');
         }
 
+        $messageId = $this->generateId();
+
+        // Link any referenced attachments to this message before persisting,
+        // so bridges and the broadcast see the populated attachments.
+        $attachments = $this->linkAttachments($request->attachmentIds, $messageId);
+
         $message = new Message(
-            id: $this->generateId(),
+            id: $messageId,
             sessionId: $request->sessionId,
             content: $request->content,
             sender: $request->sender,
             timestamp: new \DateTimeImmutable(),
             replyTo: $request->replyTo,
+            attachments: $attachments,
         );
 
         $this->storage->saveMessage($message);
@@ -311,6 +445,11 @@ class PocketPing
         // Callback
         if ($this->onMessage !== null) {
             ($this->onMessage)($message, $session);
+        }
+
+        // AI fallback: maybe respond with an AI message when the operator is offline.
+        if ($request->sender === Sender::VISITOR) {
+            $this->maybeAiRespond($session);
         }
 
         return new SendMessageResponse(
@@ -361,7 +500,8 @@ class PocketPing
     {
         return new PresenceResponse(
             online: $this->operatorOnline,
-            aiEnabled: false, // AI provider support can be added later
+            aiEnabled: $this->aiProvider !== null,
+            aiActiveAfter: $this->aiTakeoverDelay,
         );
     }
 
@@ -479,9 +619,11 @@ class PocketPing
         );
 
         return new EditMessageResponse(
-            id: $message->id,
-            content: $message->content,
-            editedAt: $now,
+            message: [
+                'id' => $message->id,
+                'content' => $message->content,
+                'editedAt' => $now->format(\DateTimeInterface::ATOM),
+            ],
         );
     }
 
@@ -534,6 +676,160 @@ class PocketPing
         );
 
         return new DeleteMessageResponse(deleted: true);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // File Attachments
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Handle a request for a presigned upload URL (presigned URL pattern).
+     */
+    public function handleUploadRequest(UploadRequest $request): UploadResponse
+    {
+        // 0. Storage must be able to persist attachments — fail fast, otherwise we
+        // would hand back an attachmentId/uploadUrl that can never be completed.
+        if (!($this->storage instanceof StorageWithAttachmentsInterface)) {
+            throw new \InvalidArgumentException('Storage does not support attachments');
+        }
+
+        // 1. Session must exist
+        $session = $this->storage->getSession($request->sessionId);
+        if ($session === null) {
+            throw new \InvalidArgumentException('Session not found');
+        }
+
+        // 2. MIME type must be allowed
+        if (!in_array($request->mimeType, $this->allowedMimeTypes, true)) {
+            throw new \InvalidArgumentException(
+                sprintf('Invalid MIME type: %s', $request->mimeType)
+            );
+        }
+
+        // 3. Size must be within bounds
+        if ($request->size <= 0 || $request->size > $this->maxAttachmentSize) {
+            throw new \InvalidArgumentException(
+                sprintf('File too large: %d bytes (max %d)', $request->size, $this->maxAttachmentSize)
+            );
+        }
+
+        // 4. Create the pending attachment
+        $id = $this->generateId();
+        $uploadUrl = "{$this->uploadBaseUrl}/{$id}";
+        $now = new \DateTimeImmutable();
+
+        $attachment = new Attachment(
+            id: $id,
+            filename: $request->filename,
+            mimeType: $request->mimeType,
+            size: $request->size,
+            url: $uploadUrl,
+            messageId: null,
+            thumbnailUrl: null,
+            status: AttachmentStatus::PENDING,
+            createdAt: $now,
+        );
+
+        // 5. Persist
+        $this->saveAttachment($attachment);
+
+        // 6. Respond with presigned upload details
+        return new UploadResponse(
+            attachmentId: $id,
+            uploadUrl: $uploadUrl,
+            expiresAt: $now->add(new \DateInterval('PT' . self::UPLOAD_URL_TTL_SECONDS . 'S')),
+        );
+    }
+
+    /**
+     * Mark an attachment as ready after the upload has completed.
+     */
+    public function handleUploadComplete(string $attachmentId): Attachment
+    {
+        $attachment = $this->getAttachment($attachmentId);
+        if ($attachment === null) {
+            throw new \InvalidArgumentException('Attachment not found');
+        }
+
+        $attachment = $attachment->withStatus(AttachmentStatus::READY);
+        $this->updateAttachment($attachment);
+
+        return $attachment;
+    }
+
+    /**
+     * Mark an attachment as failed after an upload error.
+     */
+    public function handleUploadFailed(string $attachmentId): Attachment
+    {
+        $attachment = $this->getAttachment($attachmentId);
+        if ($attachment === null) {
+            throw new \InvalidArgumentException('Attachment not found');
+        }
+
+        $attachment = $attachment->withStatus(AttachmentStatus::FAILED);
+        $this->updateAttachment($attachment);
+
+        return $attachment;
+    }
+
+    /**
+     * Link a list of attachment IDs to a message, persisting the link.
+     *
+     * @param list<string>|null $attachmentIds
+     * @return list<Attachment>|null
+     */
+    private function linkAttachments(?array $attachmentIds, string $messageId): ?array
+    {
+        if (empty($attachmentIds)) {
+            return null;
+        }
+
+        $linked = [];
+        foreach ($attachmentIds as $attachmentId) {
+            $attachment = $this->getAttachment((string) $attachmentId);
+            if ($attachment === null) {
+                continue;
+            }
+
+            $attachment = $attachment->withMessageId($messageId);
+            $this->updateAttachment($attachment);
+            $linked[] = $attachment;
+        }
+
+        return $linked === [] ? null : $linked;
+    }
+
+    /**
+     * Persist a new attachment via the storage adapter (if supported).
+     */
+    private function saveAttachment(Attachment $attachment): void
+    {
+        if ($this->storage instanceof StorageWithAttachmentsInterface) {
+            $this->storage->saveAttachment($attachment);
+        }
+    }
+
+    /**
+     * Update an attachment via the storage adapter (if supported).
+     */
+    private function updateAttachment(Attachment $attachment): void
+    {
+        if ($this->storage instanceof StorageWithAttachmentsInterface) {
+            $this->storage->updateAttachment($attachment);
+        }
+    }
+
+    /**
+     * Fetch an attachment via the storage adapter (if supported).
+     */
+    private function getAttachment(string $attachmentId): ?Attachment
+    {
+        if ($this->storage instanceof StorageWithAttachmentsInterface) {
+            return $this->storage->getAttachment($attachmentId);
+        }
+
+        return null;
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -895,6 +1191,111 @@ class PocketPing
     public function getStorage(): StorageInterface
     {
         return $this->storage;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Internal: AI Fallback
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Maybe generate an AI fallback reply for a visitor message.
+     *
+     * Triggers an AI reply when ALL of the following are true:
+     *   1. an AI provider is configured;
+     *   2. the operator is NOT online;
+     *   3. takeover is due (delay <= 0, or enough time has elapsed since the
+     *      last operator activity for this session — if no activity has ever
+     *      been recorded, takeover is treated as due).
+     *
+     * Any provider error is caught and logged so message handling never crashes.
+     */
+    private function maybeAiRespond(Session $session): void
+    {
+        // 1. AI provider must be configured.
+        if ($this->aiProvider === null) {
+            return;
+        }
+
+        // 2. Operator must be offline.
+        if ($this->isOperatorOnline()) {
+            return;
+        }
+
+        // 3. Takeover must be due.
+        if (!$this->isAiTakeoverDue($session->id)) {
+            return;
+        }
+
+        // Mark the session as AI-handled and persist.
+        $session->aiActive = true;
+        $this->storage->updateSession($session);
+
+        try {
+            $messages = $this->storage->getMessages($session->id);
+            $reply = $this->aiProvider->generateResponse($messages, $this->aiSystemPrompt);
+        } catch (\Throwable $e) {
+            $this->logger->error('AI fallback failed to generate a response', [
+                'sessionId' => $session->id,
+                'provider' => $this->aiProvider->name(),
+                'error' => $e->getMessage(),
+            ]);
+            return;
+        }
+
+        if (trim($reply) === '') {
+            return;
+        }
+
+        $aiMessage = new Message(
+            id: $this->generateId(),
+            sessionId: $session->id,
+            content: $reply,
+            sender: Sender::AI,
+            timestamp: new \DateTimeImmutable(),
+        );
+
+        $this->storage->saveMessage($aiMessage);
+
+        // Broadcast the AI reply to connected widgets.
+        $this->broadcastToSession(
+            $session->id,
+            new WebSocketEvent('message', $aiMessage->toArray())
+        );
+
+        // Notify bridges so the AI reply appears in Telegram/Discord/Slack.
+        $this->notifyBridgesOperatorMessage($aiMessage, $session, 'ai', 'AI');
+
+        // Config callback.
+        if ($this->onMessage !== null) {
+            ($this->onMessage)($aiMessage, $session);
+        }
+    }
+
+    /**
+     * Determine whether AI takeover is due for a session based on operator activity.
+     */
+    private function isAiTakeoverDue(string $sessionId): bool
+    {
+        if ($this->aiTakeoverDelay <= 0) {
+            return true;
+        }
+
+        // No recorded operator activity => operator never showed up => takeover is due.
+        if (!isset($this->lastOperatorActivity[$sessionId])) {
+            return true;
+        }
+
+        $elapsed = microtime(true) - $this->lastOperatorActivity[$sessionId];
+
+        return $elapsed >= $this->aiTakeoverDelay;
+    }
+
+    /**
+     * Get the configured AI provider, if any.
+     */
+    public function getAiProvider(): ?AIProviderInterface
+    {
+        return $this->aiProvider;
     }
 
     // ─────────────────────────────────────────────────────────────────

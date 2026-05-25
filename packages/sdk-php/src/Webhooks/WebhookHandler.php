@@ -256,7 +256,7 @@ class WebhookHandler
             $getFileUrl = "https://api.telegram.org/bot{$botToken}/getFile?file_id=" . urlencode($fileId);
             $response = $this->getHttpClient()->get($getFileUrl);
 
-            if ($response['statusCode'] !== 200) {
+            if ($response['httpCode'] !== 200) {
                 return null;
             }
 
@@ -271,7 +271,7 @@ class WebhookHandler
             $downloadUrl = "https://api.telegram.org/file/bot{$botToken}/{$filePath}";
             $fileResponse = $this->getHttpClient()->get($downloadUrl);
 
-            if ($fileResponse['statusCode'] !== 200) {
+            if ($fileResponse['httpCode'] !== 200) {
                 return null;
             }
 
@@ -447,7 +447,7 @@ class WebhookHandler
                 'Authorization' => 'Bearer ' . $this->config->slackBotToken,
             ]);
 
-            if ($response['statusCode'] !== 200) {
+            if ($response['httpCode'] !== 200) {
                 return null;
             }
 
@@ -466,7 +466,7 @@ class WebhookHandler
                 'Authorization' => 'Bearer ' . $this->config->slackBotToken,
             ]);
 
-            if ($response['statusCode'] !== 200) {
+            if ($response['httpCode'] !== 200) {
                 return null;
             }
 

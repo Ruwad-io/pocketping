@@ -139,6 +139,26 @@ Widget  ◀──────────────▶  BRIDGE-SERVER  ◀─�
 | File Attachments | ✅ | ✅ | ✅ | ✅ |
 | **Attachments (incoming)** | ✅ | ✅ | ✅ | ✅ |
 
+#### SDK parity & test status (verified 2026-05-23, all via Docker `make test`)
+
+All 5 SDKs (Node, Python, Go, PHP, Ruby) now genuinely implement the full feature
+set above — including **File Attachments** (handle_upload_request/complete/failed +
+storage attachment ops + message linking) and **AI Fallback** (OpenAI + Anthropic +
+Gemini providers + offline-takeover wiring), each with a dedicated test suite. Edit/
+delete → bridge sync (previously broken in Python/Ruby/PHP) is fixed and regression-
+tested. Line coverage is **≥80% in every SDK**: Ruby 95.8%, Python 90%, PHP 89.9%,
+Node 89.7%, Go 85.0%.
+
+**Known, intentional nuances (not bugs):**
+- **Version status taxonomy**: SDKs return `ok / outdated / deprecated / unsupported`
+  (consistent across all SDKs) rather than the spec's `ok / warning / error`. Spec text
+  is older; the SDK taxonomy is the source of truth.
+- **Go `AITakeoverDelay`**: due to Go's int zero-value, `0` resolves to the 300s default
+  (not "immediate"); pass a **negative** value for immediate takeover. Other SDKs treat
+  `<= 0` as immediate.
+- AI providers test against mocked HTTP (injectable client / base URL); no network calls
+  in the test suites.
+
 ### Bridge Platform Support Matrix
 
 Chaque plateforme a des contraintes techniques différentes:

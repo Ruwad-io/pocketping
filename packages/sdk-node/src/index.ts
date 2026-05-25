@@ -7,10 +7,18 @@ export type { TelegramBridgeOptions } from './bridges/telegram';
 // Bridge implementations
 export { TelegramBridge } from './bridges/telegram';
 export type { Bridge, BridgeMessageResult } from './bridges/types';
-export { PocketPing } from './pocketping';
+export {
+  DEFAULT_ALLOWED_MIME_TYPES,
+  DEFAULT_UPLOAD_BASE_URL,
+  MAX_ATTACHMENT_SIZE,
+  PocketPing,
+  UPLOAD_URL_TTL_SECONDS,
+} from './pocketping';
 export { MemoryStorage } from './storage/memory';
 export type { BridgeMessageIds, Storage } from './storage/types';
 export type {
+  Attachment,
+  AttachmentStatus,
   ConnectRequest,
   ConnectResponse,
   CustomEvent,
@@ -29,6 +37,9 @@ export type {
   Session,
   TrackedElement,
   TriggerOptions,
+  UploadRequest,
+  UploadResponse,
+  UploadSource,
   VisibilityRequest,
   VisibilityResponse,
   WebhookPayload,

@@ -68,6 +68,7 @@ export class PocketPingClient {
   private maxPollingFailures = 10;
   private wsConnectedAt = 0;
   private quickFailureThreshold = 2000; // If WS fails within 2s, assume serverless
+  private sseConnectionTimeout = 15000; // 15s to handle Vercel/serverless cold starts
   private connectionMode: 'none' | 'ws' | 'sse' | 'polling' = 'none';
   private trackedElementCleanups: Array<() => void> = [];
   private currentTrackedElements: TrackedElement[] = [];
@@ -1353,7 +1354,7 @@ export class PocketPingClient {
         // SSE connected event received - connection established
       });
 
-      this.sse.onerror = (event) => {
+      this.sse.onerror = (_event) => {
         clearTimeout(connectionTimeout);
         // Log SSE error details for debugging
         const readyState = this.sse?.readyState;
@@ -1414,7 +1415,7 @@ export class PocketPingClient {
 
   private handleWebSocketEvent(event: WebSocketEvent): void {
     switch (event.type) {
-      case 'message':
+      case 'message': {
         const message = event.data as Message;
         if (this.session) {
           // First, try to find by exact ID
@@ -1502,14 +1503,16 @@ export class PocketPingClient {
           this.emit('typing', { isTyping: false });
         }
         break;
+      }
 
-      case 'typing':
+      case 'typing': {
         // Only show typing indicator if it's from operator/AI, not visitor
         const typingData = event.data as { isTyping: boolean; sender?: string };
         if (typingData.sender !== 'visitor') {
           this.emit('typing', { isTyping: typingData.isTyping });
         }
         break;
+      }
 
       case 'presence':
         if (this.session) {
@@ -1522,7 +1525,7 @@ export class PocketPingClient {
         this.emit('aiTakeover', event.data);
         break;
 
-      case 'read':
+      case 'read': {
         const readData = event.data as { messageIds: string[]; status: MessageStatus; readAt?: string; deliveredAt?: string };
         if (this.session) {
           for (const msg of this.session.messages) {
@@ -1535,6 +1538,7 @@ export class PocketPingClient {
         }
         this.emit('read', readData);
         break;
+      }
 
       case 'message_edited':
         if (this.session) {
@@ -1561,19 +1565,21 @@ export class PocketPingClient {
         }
         break;
 
-      case 'event':
+      case 'event': {
         // Custom event from backend
         const customEvent = event.data as CustomEvent;
         this.emitCustomEvent(customEvent);
         break;
+      }
 
-      case 'version_warning':
+      case 'version_warning': {
         // Version mismatch warning from backend
         const versionWarning = event.data as VersionWarning;
         this.handleVersionWarning(versionWarning);
         break;
+      }
 
-      case 'config_update':
+      case 'config_update': {
         // Hot-reload tracked elements from SaaS dashboard
         const configData = event.data as { trackedElements?: TrackedElement[] };
         if (configData.trackedElements) {
@@ -1581,8 +1587,9 @@ export class PocketPingClient {
           this.emit('configUpdate', configData);
         }
         break;
+      }
 
-      case 'screenshot_request':
+      case 'screenshot_request': {
         // Screenshot request from operator
         const screenshotData = event.data as {
           requestId: string;
@@ -1592,6 +1599,7 @@ export class PocketPingClient {
         };
         this.handleScreenshotRequest(screenshotData);
         break;
+      }
     }
   }
 
@@ -1994,7 +2002,7 @@ export class PocketPingClient {
       for (const request of response.requests || []) {
         this.handleScreenshotRequest(request);
       }
-    } catch (err) {
+    } catch {
       // Silently ignore screenshot polling errors
       // This is optional functionality
     }

@@ -1,4 +1,4 @@
-import type { Message, Session } from '../types';
+import type { Attachment, Message, Session } from '../types';
 
 /**
  * Bridge message IDs for edit/delete sync.
@@ -34,6 +34,16 @@ export interface Storage {
   saveBridgeMessageIds?(messageId: string, bridgeIds: BridgeMessageIds): Promise<void>;
   /** Get bridge message IDs for a message */
   getBridgeMessageIds?(messageId: string): Promise<BridgeMessageIds | null>;
+
+  // Attachments (optional - can use external storage)
+  /** Save an attachment */
+  saveAttachment?(attachment: Attachment): Promise<void>;
+  /** Get an attachment by ID */
+  getAttachment?(attachmentId: string): Promise<Attachment | null>;
+  /** Get all attachments linked to a message */
+  getMessageAttachments?(messageId: string): Promise<Attachment[]>;
+  /** Update an existing attachment */
+  updateAttachment?(attachment: Attachment): Promise<void>;
 
   // Optional: Cleanup old sessions
   cleanupOldSessions?(olderThan: Date): Promise<number>;
