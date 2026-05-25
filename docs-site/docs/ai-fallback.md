@@ -18,7 +18,7 @@ Let AI handle customer conversations when you're away or busy. Never miss a lead
 │   2. Message delivered to Telegram/Discord/Slack                │
 │      │                                                          │
 │      ▼                                                          │
-│   3. Timer starts (configurable, default: 2 min)                │
+│   3. Timer starts (configurable, default: 5 min)                │
 │      │                                                          │
 │      ├──► You reply within time?                                │
 │      │           │                                              │
@@ -64,26 +64,75 @@ Let AI handle customer conversations when you're away or busy. Never miss a lead
 
 ### Self-Hosted Users
 
-Add to your `.env` file:
+When you self-host with an SDK, AI fallback is configured **in code** by passing
+an AI provider to the `PocketPing` constructor. Three providers ship with the
+SDKs:
 
-```bash title=".env"
-# Required: OpenAI API key
-OPENAI_API_KEY=sk-...
+| Provider | Class | Default model |
+|----------|-------|---------------|
+| OpenAI | `OpenAIProvider` | `gpt-4o-mini` |
+| Anthropic | `AnthropicProvider` | `claude-sonnet-4-20250514` |
+| Gemini | `GeminiProvider` | `gemini-1.5-flash` |
 
-# AI Configuration
-AI_ENABLED=true
-AI_RESPONSE_DELAY=120          # Seconds to wait (default: 120 = 2 min)
-AI_MODEL=gpt-4o-mini           # gpt-4o-mini (fast) or gpt-4o (powerful)
+Each provider takes your API key and an optional `model` override. The AI only
+takes over when the operator is offline, after `aiTakeoverDelay` seconds
+(default: **300 = 5 min**).
 
-# Custom system prompt (see below)
-AI_SYSTEM_PROMPT="You are a helpful support agent for Acme Inc..."
+#### Node.js
+
+```javascript
+import { PocketPing, OpenAIProvider } from '@pocketping/sdk-node';
+
+const pp = new PocketPing({
+  ai: {
+    // Pass a provider instance...
+    provider: new OpenAIProvider({
+      apiKey: process.env.OPENAI_API_KEY,
+      model: 'gpt-4o-mini', // optional, this is the default
+    }),
+    systemPrompt: 'You are a helpful support agent for Acme Inc...',
+  },
+  aiTakeoverDelay: 300, // seconds offline before AI takes over (default: 300)
+});
 ```
 
-Then restart your bridge server:
+You can also pass a provider **name** plus `apiKey` instead of an instance:
 
-```bash
-docker compose restart bridge
+```javascript
+const pp = new PocketPing({
+  ai: {
+    provider: 'anthropic', // 'openai' | 'anthropic' | 'gemini'
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    model: 'claude-sonnet-4-20250514', // optional
+  },
+});
 ```
+
+#### Python
+
+```python
+import os
+from pocketping import PocketPing
+from pocketping.ai import OpenAIProvider  # or AnthropicProvider, GeminiProvider
+
+pp = PocketPing(
+    ai_provider=OpenAIProvider(
+        api_key=os.environ["OPENAI_API_KEY"],
+        model="gpt-4o-mini",  # optional, this is the default
+    ),
+    ai_system_prompt="You are a helpful support agent for Acme Inc...",
+    ai_takeover_delay=300,  # seconds offline before AI takes over (default: 300)
+)
+```
+
+Swap in `AnthropicProvider` (default `claude-sonnet-4-20250514`) or
+`GeminiProvider` (default `gemini-1.5-flash`) the same way.
+
+:::note Go SDK: takeover delay
+In the **Go** SDK, an `AITakeoverDelay` of `0` resolves to the 300s default (due
+to Go's zero-value semantics). To make the AI take over **immediately**, pass a
+**negative** value (e.g. `AITakeoverDelay: -1`).
+:::
 
 ---
 
@@ -434,10 +483,10 @@ You are the virtual assistant for a digital marketing agency.
 
 | Check | Solution |
 |-------|----------|
-| `AI_ENABLED=true` | Set in .env and restart |
-| OpenAI API key valid | Test with `curl` or check OpenAI dashboard |
-| Business hours config | Verify timezone and days |
-| Response delay too long | Try shorter delay for testing |
+| AI provider configured | Pass a provider to the constructor (`ai` in Node, `ai_provider` in Python, `aiProvider` in PHP) — there is no `AI_ENABLED` env var |
+| API key valid | Test with `curl` or check your provider's dashboard |
+| Operator marked offline | AI only takes over when the operator is offline |
+| Takeover delay too long | Lower `aiTakeoverDelay` (default 300s) for testing |
 
 ### AI giving wrong answers?
 

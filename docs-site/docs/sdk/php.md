@@ -20,18 +20,34 @@ composer require pocketping/pocketping-php
 
 ```php
 <?php
-// routes/web.php
+// app/Http/Controllers/ChatController.php
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
 use PocketPing\PocketPing;
+use PocketPing\Models\ConnectRequest;
 
-$pp = new PocketPing([
-    'bridgeUrl' => env('BRIDGE_URL', 'http://localhost:3001'),
-    'welcomeMessage' => 'Hi! How can we help?',
-]);
+class ChatController extends Controller
+{
+    public function __construct(private PocketPing $pp)
+    {
+    }
 
-Route::any('/pocketping/{path?}', function ($path = '') use ($pp) {
-    return $pp->handleRequest(request());
-})->where('path', '.*');
+    // POST /pocketping/connect
+    public function connect(Request $request)
+    {
+        $connectRequest = ConnectRequest::fromArray($request->all());
+        $response = $this->pp->handleConnect($connectRequest);
+
+        return response()->json($response);
+    }
+}
 ```
+
+The `PocketPing` instance is wired once (e.g. in a service provider) and
+injected — see [Configuration](#configuration) for the constructor options. It
+is a library: you call its handlers from your own routes — there is no
+`handleRequest()`/`bridgeUrl`.
 
 ### Symfony
 
@@ -41,24 +57,25 @@ Route::any('/pocketping/{path?}', function ($path = '') use ($pp) {
 namespace App\Controller;
 
 use PocketPing\PocketPing;
+use PocketPing\Models\ConnectRequest;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 
 class PocketPingController
 {
-    private PocketPing $pp;
-
-    public function __construct()
+    public function __construct(private PocketPing $pp)
     {
-        $this->pp = new PocketPing([
-            'bridgeUrl' => $_ENV['BRIDGE_URL'],
-        ]);
     }
 
-    #[Route('/pocketping/{path}', requirements: ['path' => '.*'])]
-    public function handle(Request $request)
+    #[Route('/pocketping/connect', methods: ['POST'])]
+    public function connect(Request $request): JsonResponse
     {
-        return $this->pp->handleSymfonyRequest($request);
+        $data = json_decode($request->getContent(), true);
+        $connectRequest = ConnectRequest::fromArray($data);
+        $response = $this->pp->handleConnect($connectRequest);
+
+        return new JsonResponse($response);
     }
 }
 ```
@@ -70,14 +87,18 @@ class PocketPingController
 require 'vendor/autoload.php';
 
 use PocketPing\PocketPing;
+use PocketPing\Models\ConnectRequest;
 
-$pp = new PocketPing([
-    'bridgeUrl' => 'http://localhost:3001',
-]);
+$pp = new PocketPing(
+    welcomeMessage: 'Hi! How can we help?',
+);
 
-// Handle request
-$response = $pp->handleRequest();
-$response->send();
+// Read the JSON body the widget posted and call the matching handler.
+$body = json_decode(file_get_contents('php://input'), true) ?? [];
+$response = $pp->handleConnect(ConnectRequest::fromArray($body));
+
+header('Content-Type: application/json');
+echo json_encode($response);
 ```
 
 ## Built-in Bridges
@@ -189,28 +210,47 @@ Use **Bot mode** for full bidirectional communication. Webhooks are simpler but 
 
 ## Configuration
 
+The constructor takes named arguments (PHP 8.1+). Bridges are passed directly
+via `bridges:` (or added later with `addBridge()`) — there is no bridge server
+URL.
+
 ```php
-$pp = new PocketPing([
-    // Bridge server URL (alternative to built-in bridges)
-    'bridgeUrl' => 'http://localhost:3001',
+use PocketPing\PocketPing;
+use PocketPing\Bridges\TelegramBridge;
+
+$pp = new PocketPing(
+    // Custom storage (optional, defaults to in-memory MemoryStorage)
+    storage: new PostgresStorage(),
+
+    // Notification bridges (or add later with $pp->addBridge(...))
+    bridges: [
+        new TelegramBridge(
+            botToken: $_ENV['TELEGRAM_BOT_TOKEN'],
+            chatId: $_ENV['TELEGRAM_CHAT_ID'],
+        ),
+    ],
 
     // Welcome message for new visitors
-    'welcomeMessage' => 'Hi! How can we help?',
+    welcomeMessage: 'Hi! How can we help?',
 
-    // Event handlers
-    'onSessionStart' => function ($session) {
+    // Widget version management (optional)
+    minWidgetVersion: '0.2.0',
+    latestWidgetVersion: '0.3.0',
+
+    // Event callbacks
+    onNewSession: function ($session) {
         error_log("New session: {$session->id}");
     },
-    'onMessage' => function ($session, $message) {
+    onMessage: function ($message, $session) {
         error_log("Message: {$message->content}");
     },
-    'onEvent' => function ($session, $event) {
+    onEvent: function ($event, $session) {
         error_log("Event: {$event->name}");
     },
-
-    // Custom storage (optional)
-    'storage' => new PostgresStorage(),
-]);
+    onIdentify: function ($session) {
+        error_log("User identified: {$session->identity->id}");
+    },
+);
 ```
 
 ## API
@@ -218,40 +258,32 @@ $pp = new PocketPing([
 ### Sessions
 
 ```php
-// Get all active sessions
-$sessions = $pp->getSessions();
-
-// Get a specific session
+// Get a specific session (returns ?Session)
 $session = $pp->getSession('sess_xxx');
 
-// Get session messages
-$messages = $pp->getMessages('sess_xxx');
-
-// Close a session
-$pp->closeSession('sess_xxx');
+// Get session messages (returns ['messages' => [...], 'hasMore' => bool])
+$page = $pp->handleGetMessages('sess_xxx', after: null, limit: 50);
+$messages = $page['messages'];
 ```
 
 ### Messages
 
 ```php
-// Send a message to a session
-$pp->sendMessage('sess_xxx', [
-    'content' => 'Hello from the server!',
-    'type' => 'operator',
-]);
+// Send an operator reply to a session
+$pp->sendOperatorMessage('sess_xxx', 'Hello from the server!');
 ```
 
 ### Custom Events
 
 ```php
 // Receive events from widget
-$pp = new PocketPing([
-    'onEvent' => function ($session, $event) {
+$pp = new PocketPing(
+    onEvent: function ($event, $session) {
         if ($event->name === 'clicked_pricing') {
             // Track analytics, trigger automation, etc.
         }
     },
-]);
+);
 
 // Send events to widget
 $pp->emitEvent('sess_xxx', 'show_offer', [
@@ -306,12 +338,12 @@ Block bots and automated requests from creating chat sessions.
 use PocketPing\PocketPing;
 use PocketPing\Utils\UaFilterConfig;
 
-$pp = new PocketPing([
-    'uaFilter' => new UaFilterConfig(
+$pp = new PocketPing(
+    uaFilter: new UaFilterConfig(
         enabled: true,
         useDefaultBots: true, // Block ~50 known bot patterns
     ),
-]);
+);
 ```
 
 ### Configuration Options
@@ -320,8 +352,8 @@ $pp = new PocketPing([
 use PocketPing\Utils\UaFilterConfig;
 use PocketPing\Utils\UaFilterMode;
 
-$pp = new PocketPing([
-    'uaFilter' => new UaFilterConfig(
+$pp = new PocketPing(
+    uaFilter: new UaFilterConfig(
         enabled: true,
         mode: UaFilterMode::BLOCKLIST, // BLOCKLIST | ALLOWLIST | BOTH
         useDefaultBots: true,
@@ -338,7 +370,7 @@ $pp = new PocketPing([
         blockedStatusCode: 403,
         blockedMessage: 'Forbidden',
     ),
-]);
+);
 ```
 
 ### Manual Filtering
