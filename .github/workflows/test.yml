@@ -77,6 +77,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Build widget (peer dependency)
+        # The react package imports from @pocketping/widget; its entry must be
+        # built so Vite can resolve the module (even though tests mock it).
+        run: |
+          cd packages/widget
+          pnpm build
+
       - name: Run tests
         run: |
           cd packages/react
