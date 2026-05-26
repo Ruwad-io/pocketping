@@ -4,6 +4,7 @@ module.exports = {
     // Allow scopes like: widget, sdk-node, bridge, docs
     'scope-enum': [2, 'always', [
       'widget',
+      'react',
       'sdk-node',
       'sdk-python',
       'sdk-go',

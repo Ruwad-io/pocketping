@@ -53,6 +53,44 @@ jobs:
         continue-on-error: true
 
   # ─────────────────────────────────────────────────────────────────
+  # React Bindings Unit Tests
+  # ─────────────────────────────────────────────────────────────────
+  test-react:
+    name: React Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run tests
+        run: |
+          cd packages/react
+          pnpm test -- --run --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        if: always()
+        with:
+          flags: react
+          directory: packages/react/coverage
+        continue-on-error: true
+
+  # ─────────────────────────────────────────────────────────────────
   # SDK Node Unit Tests
   # ─────────────────────────────────────────────────────────────────
   test-sdk-node:
@@ -514,6 +552,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - test-widget
+      - test-react
       - test-sdk-node
       - test-bridge-server
       - test-sdk-python
@@ -528,6 +567,7 @@ jobs:
       - name: Check all jobs passed
         run: |
           if [[ "${{ needs.test-widget.result }}" != "success" ]] || \
+             [[ "${{ needs.test-react.result }}" != "success" ]] || \
              [[ "${{ needs.test-sdk-node.result }}" != "success" ]] || \
              [[ "${{ needs.test-bridge-server.result }}" != "success" ]] || \
              [[ "${{ needs.test-sdk-python.result }}" != "success" ]] || \
