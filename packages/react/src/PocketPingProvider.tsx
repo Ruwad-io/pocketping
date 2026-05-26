@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import {
   init,
   destroy,
@@ -41,17 +41,24 @@ export function PocketPingProvider({ user, children, ...config }: PocketPingProv
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.projectId, config.endpoint]);
 
-  // Sync identity with auth state. identify()/reset() are async; we don't await
-  // them inside the effect, and reset({ newSession: true }) gives the next
-  // visitor a clean session on logout.
+  // Sync identity with auth state. The effect is keyed on a serialized snapshot
+  // of `user`, so a profile refresh (email, name, custom fields) re-identifies
+  // even when the id is unchanged.
+  const userKey = user ? JSON.stringify(user) : null;
+  // Only reset on an actual logout transition (identified → logged out). We must
+  // NOT reset on the initial anonymous mount: init() has already started the
+  // session there, and reset() would disconnect/reconnect for no reason.
+  const hasIdentified = useRef(false);
   useEffect(() => {
     if (user) {
+      hasIdentified.current = true;
       void identify(user);
-    } else {
+    } else if (hasIdentified.current) {
+      hasIdentified.current = false;
       void reset({ newSession: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [userKey]);
 
   return <>{children}</>;
 }

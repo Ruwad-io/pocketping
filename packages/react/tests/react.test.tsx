@@ -32,9 +32,24 @@ describe('PocketPingProvider', () => {
     expect(init).toHaveBeenCalledWith(
       expect.objectContaining({ projectId: 'proj_test', operatorName: 'Acme' }),
     );
-    // No user passed → starts/refreshes an anonymous session, never identifies.
-    expect(reset).toHaveBeenCalledTimes(1);
+    // Anonymous mount: init() already started the session, so we must neither
+    // identify nor reset (resetting would churn the fresh connection).
     expect(identify).not.toHaveBeenCalled();
+    expect(reset).not.toHaveBeenCalled();
+  });
+
+  it('re-identifies when user fields change for the same id', () => {
+    const { rerender } = render(
+      <PocketPingProvider projectId="proj_test" user={{ id: 'u_1', name: 'Ada' }} />,
+    );
+    expect(identify).toHaveBeenCalledTimes(1);
+
+    // Same id, changed profile field → must re-identify (P2).
+    rerender(
+      <PocketPingProvider projectId="proj_test" user={{ id: 'u_1', name: 'Ada Lovelace' }} />,
+    );
+    expect(identify).toHaveBeenCalledTimes(2);
+    expect(identify).toHaveBeenLastCalledWith({ id: 'u_1', name: 'Ada Lovelace' });
   });
 
   it('renders its children', () => {
