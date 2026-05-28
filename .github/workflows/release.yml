@@ -23,6 +23,8 @@ jobs:
       widget-version: ${{ steps.release-widget.outputs.new_release_version }}
       sdk-node-released: ${{ steps.release-sdk-node.outputs.new_release_published }}
       sdk-node-version: ${{ steps.release-sdk-node.outputs.new_release_version }}
+      react-released: ${{ steps.release-react.outputs.new_release_published }}
+      react-version: ${{ steps.release-react.outputs.new_release_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -45,9 +47,12 @@ jobs:
         run: pnpm install
 
       - name: Build packages
+        # Build widget first: @pocketping/react imports its types and entry
+        # at install/publish time, so widget's dist must exist beforehand.
         run: |
           pnpm --filter @pocketping/widget build
           pnpm --filter @pocketping/sdk-node build
+          pnpm --filter @pocketping/react build
 
       - name: Release Widget
         id: release-widget
@@ -84,6 +89,25 @@ jobs:
         if: steps.release-sdk-node.outputs.new_release_published == 'true'
         continue-on-error: true
         working-directory: packages/sdk-node
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Release React
+        id: release-react
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          working_directory: packages/react
+          semantic_version: 24
+          extra_plugins: |
+            @semantic-release/exec
+            semantic-release-monorepo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish React to npm
+        if: steps.release-react.outputs.new_release_published == 'true'
+        working-directory: packages/react
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
