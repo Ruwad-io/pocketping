@@ -632,7 +632,7 @@ Location: Paris, France
 
 | Package | Description | Status |
 |---------|-------------|--------|
-| [@pocketping/widget](packages/widget) | Chat widget (~15KB) | Ready |
+| [@pocketping/widget](packages/widget) | Chat widget (~60 KB gz CDN / ~32 KB gz ESM) | Ready |
 | [@pocketping/cli](packages/cli) | Interactive setup CLI | Ready |
 | [pocketping](packages/sdk-python) | Python SDK (FastAPI, Django, Flask) | Ready |
 | [@pocketping/sdk-node](packages/sdk-node) | Node.js SDK (Express) | Ready |
@@ -800,7 +800,7 @@ make clean        # Remove Docker containers
 ```
 pocketping/
 ├── packages/
-│   ├── widget/          # Chat widget (Preact, ~15KB)
+│   ├── widget/          # Chat widget (Preact, ~60 KB gz CDN bundle)
 │   ├── cli/             # Interactive setup CLI
 │   ├── sdk-node/        # Node.js SDK
 │   ├── sdk-python/      # Python SDK
