@@ -5,21 +5,28 @@
 <h1 align="center">PocketPing</h1>
 
 <p align="center">
-  <strong>Chat widget + instant notifications on your phone</strong><br>
-  Get pinged in Telegram, Discord, or Slack when visitors need help.
+  <strong>Phone-first OSS chat widget — visitors message you, you reply from Telegram on your phone.</strong><br>
+  No dashboard. No database. <a href="#60-second-quick-start">Free serverless deploy in 60 seconds.</a>
 </p>
 
 <p align="center">
   <a href="https://pocketping.io">Website</a> &bull;
-  <a href="https://pocketping.io/docs">Documentation</a> &bull;
-  <a href="#-60-second-quick-start">Quick Start</a> &bull;
-  <a href="#-features">Features</a> &bull;
+  <a href="https://docs.pocketping.io">Documentation</a> &bull;
+  <a href="#60-second-quick-start">Quick Start</a> &bull;
+  <a href="#three-deployment-options">Deployment modes</a> &bull;
   <a href="https://github.com/Ruwad-io/pocketping/issues">Get Help</a>
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/@pocketping/widget"><img src="https://img.shields.io/npm/v/@pocketping/widget?label=%40pocketping%2Fwidget" alt="widget on npm" /></a>
+  <a href="https://www.npmjs.com/package/@pocketping/react"><img src="https://img.shields.io/npm/v/@pocketping/react?label=%40pocketping%2Freact" alt="react on npm" /></a>
+  <a href="https://www.npmjs.com/package/@pocketping/sdk-node"><img src="https://img.shields.io/npm/v/@pocketping/sdk-node?label=%40pocketping%2Fsdk-node" alt="sdk-node on npm" /></a>
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License" />
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome" />
+</p>
+
+<p align="center">
+  <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/Ruwad-io/pocketping/tree/main/cloudflare-workers/telegram-relay"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" /></a>
 </p>
 
 ---
@@ -63,60 +70,54 @@ Visitor opens chat -> You get a Telegram ping -> Reply from your phone
 
 ## 60-Second Quick Start
 
-### Step 1: Add the widget to your site
+The shortest path: **no server, no database, no SaaS account**. A free Cloudflare Worker relays
+chat between your widget and a Telegram group where each visitor gets a **forum topic**.
+
+### 1. Deploy the relay (1 click)
+
+<a href="https://deploy.workers.cloudflare.com/?url=https://github.com/Ruwad-io/pocketping/tree/main/cloudflare-workers/telegram-relay"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" /></a>
+
+The button forks the worker into your GitHub, connects Cloudflare, auto-creates the KV namespace,
+and ships your first deploy. Detailed walkthrough: **[serverless guide](docs-site/docs/serverless.mdx)**.
+
+### 2. Wire Telegram
+
+Create a bot with [@BotFather](https://t.me/BotFather), create a Telegram group with **Topics**
+enabled, add the bot as admin with **Manage Topics**, and:
+
+- paste the supergroup id (`-100…`) into `TELEGRAM_GROUP_ID` in the Cloudflare deploy UI;
+- add the bot token as a Worker secret named `TELEGRAM_BOT_TOKEN`;
+- register the Telegram webhook:
+  ```bash
+  curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<your-worker>.workers.dev/telegram-webhook"
+  ```
+
+### 3. Drop the widget on your site
 
 ```html
 <script src="https://cdn.pocketping.io/widget.js"></script>
 <script>
-  PocketPing.init({
-    endpoint: 'https://yoursite.com/pocketping'
-  });
+  PocketPing.init({ endpoint: 'https://<your-worker>.workers.dev' });
 </script>
 ```
 
-### Step 2: Set up your backend
+Using React? `npm install @pocketping/react @pocketping/widget`, then:
 
-**Option A: Python (FastAPI)** - Recommended for beginners
+```tsx
+import { PocketPingProvider } from '@pocketping/react';
 
-```bash
-# Clone the example
-git clone https://github.com/Ruwad-io/pocketping-test-fastapi
-cd pocketping-test-fastapi
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure (copy and edit .env)
-cp .env.example .env
-# Edit .env with your Telegram bot token (see setup guide below)
-
-# Run
-uvicorn main:app --reload
+<PocketPingProvider endpoint="https://<your-worker>.workers.dev" user={user}>
+  <YourApp />
+</PocketPingProvider>
 ```
 
-**Option B: Any language** - Use the Bridge Server
+Done. Visitors chat in the widget; you reply from the matching topic in Telegram — on your phone.
 
-```bash
-# Clone PocketPing
-git clone https://github.com/Ruwad-io/pocketping
-cd pocketping/bridge-server
-
-# Configure
-cp .env.example .env
-# Edit .env with your bot tokens
-
-# Run with Docker
-docker compose up -d
-
-# Or build from source (requires Go 1.21+)
-go build -o bridge-server ./cmd/server && ./bridge-server
-```
-
-Then your backend just needs to call the Bridge Server API. See [Bridge Server docs](bridge-server/README.md).
-
-### Step 3: Get notified!
-
-Open your site, send a message, and watch it appear in Telegram!
+> **Need more than 2-way text chat?** Lite mode covers the basics. For edit/delete sync, file
+> attachments, AI fallback, Discord/Slack, or long-term history, drop the `endpoint` to either the
+> [hosted SaaS](https://pocketping.io), the [bridge-server](#option-2-bridge-server-self-hosted-standalone),
+> or your own backend via an [SDK](#option-3-sdk-integration-self-hosted-custom). Same widget,
+> same API.
 
 ---
 
