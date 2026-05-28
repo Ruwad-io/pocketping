@@ -8,51 +8,78 @@ operators reply right inside Telegram.
 State lives in **Cloudflare KV** (managed) + **Telegram itself** — there is no
 database to run. The bot token never leaves the Worker (it is a Worker secret).
 
-## Deploy in ~60 seconds
+---
 
-1. **Create a bot** — message [@BotFather](https://t.me/BotFather), `/newbot`, copy the
-   token (looks like `123456:ABC-DEF...`).
+## Deploy in ~60 seconds (1-click)
 
-2. **Create a supergroup, enable Topics, add the bot as admin**
-   - Create a group, then in **Group Settings → enable "Topics"** (this makes it a forum).
-   - Add your bot to the group and promote it to **admin** with **Manage Topics**.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Ruwad-io/pocketping/tree/main/cloudflare-workers/telegram-relay)
 
-3. **Get the group id** — add [@RawDataBot](https://t.me/RawDataBot) (or any "get chat id"
-   bot) to the group; the supergroup id looks like `-1001234567890`. Remove the helper
-   bot afterwards.
+The button forks this folder into your GitHub account, walks you through connecting
+Cloudflare, **auto-creates the `PP` KV namespace**, lets you set `TELEGRAM_GROUP_ID`
+in the UI, and ships your first deploy. After it finishes you have **three things**
+left to do — they take ~30 seconds together.
 
-4. **Create the KV namespace** and paste its id into `wrangler.toml` (`[[kv_namespaces]] id`):
-   ```bash
-   npx wrangler kv namespace create PP
-   ```
+### 1. Create the Telegram bot + group (skip if you already have one)
 
-5. **Set the group id var + the bot token secret:**
-   ```bash
-   # edit wrangler.toml: TELEGRAM_GROUP_ID = "-1001234567890"
-   npx wrangler secret put TELEGRAM_BOT_TOKEN        # paste the BotFather token
-   # optional, recommended: a random string to verify Telegram webhook calls
-   npx wrangler secret put TELEGRAM_WEBHOOK_SECRET
-   ```
+- DM [@BotFather](https://t.me/BotFather) → `/newbot` → copy the token (looks like
+  `123456:ABC-DEF...`).
+- Create a Telegram group → **Group Settings → enable "Topics"** (this makes it a
+  forum supergroup). Add your bot and promote it to **admin** with **Manage Topics**.
+- Get the supergroup id (looks like `-1001234567890`) — easiest is to message
+  [@RawDataBot](https://t.me/RawDataBot) inside the group, then remove it.
+- Back in the Cloudflare deploy UI, paste that id into the `TELEGRAM_GROUP_ID` field.
 
-6. **Deploy:**
-   ```bash
-   npm install
-   npx wrangler deploy
-   ```
-   Note the URL, e.g. `https://pocketping-telegram-relay.<you>.workers.dev`.
+### 2. Set the bot token as a secret
 
-7. **Register the Telegram webhook** so operator replies reach the Worker:
-   ```bash
-   curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://pocketping-telegram-relay.<you>.workers.dev/telegram-webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>"
-   ```
-   (drop `&secret_token=...` if you skipped step 5's optional secret.)
+In the Cloudflare dashboard → **Workers & Pages → `pocketping-telegram-relay` →
+Settings → Variables and Secrets → Add → Type "Secret"**:
 
-8. **Point the widget at the Worker:**
-   ```js
-   PocketPing.init({ endpoint: "https://pocketping-telegram-relay.<you>.workers.dev" })
-   ```
+| Name | Value |
+| --- | --- |
+| `TELEGRAM_BOT_TOKEN` | the BotFather token |
+| `TELEGRAM_WEBHOOK_SECRET` *(optional, recommended)* | any random string |
+
+Or from your terminal:
+
+```bash
+npx wrangler secret put TELEGRAM_BOT_TOKEN
+npx wrangler secret put TELEGRAM_WEBHOOK_SECRET   # optional
+```
+
+### 3. Register the Telegram webhook + point the widget
+
+```bash
+# replace <TOKEN>, the worker URL, and (if you set one) <SECRET>
+curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://pocketping-telegram-relay.<you>.workers.dev/telegram-webhook&secret_token=<SECRET>"
+```
+
+Then on your site:
+
+```js
+PocketPing.init({ endpoint: 'https://pocketping-telegram-relay.<you>.workers.dev' })
+```
 
 Done. Visitors chat in the widget; you reply from the matching topic in Telegram.
+
+---
+
+## Deploy from your terminal (alternative)
+
+Prefer to keep everything local? Same outcome, no GitHub fork:
+
+```bash
+# from this folder
+npm install
+npx wrangler kv namespace create PP            # paste the returned id into wrangler.toml
+# edit wrangler.toml: set TELEGRAM_GROUP_ID = "-100..."
+npx wrangler secret put TELEGRAM_BOT_TOKEN
+npx wrangler secret put TELEGRAM_WEBHOOK_SECRET   # optional
+npx wrangler deploy
+```
+
+Then register the webhook and point the widget as in step 3 above.
+
+---
 
 ## HTTP endpoints
 
