@@ -6,7 +6,7 @@ This document contains guidelines for Claude Code when working on this repositor
 
 ## What is PocketPing?
 
-PocketPing is an **open-source real-time chat widget** that connects website visitors to operators via messaging platforms (Telegram, Discord, Slack). It's designed to be lightweight (~15KB), privacy-respecting, and highly flexible.
+PocketPing is an **open-source real-time chat widget** that connects website visitors to operators via messaging platforms (Telegram, Discord, Slack). The CDN bundle is ~60 KB gzipped (~32 KB gzipped via npm/ESM), privacy-respecting, and highly flexible.
 
 ### Key Features
 
@@ -198,7 +198,7 @@ Chaque plateforme a des contraintes techniques différentes:
 ## Project Structure
 
 This monorepo contains:
-- `packages/widget/` - Browser widget (~15KB) - embeds on customer websites
+- `packages/widget/` - Browser widget (~60 KB gz CDN, ~32 KB gz ESM) - embeds on customer websites
 - `packages/sdk-node/` - Node.js SDK for self-hosted backends
 - `packages/sdk-python/` - Python SDK for self-hosted backends
 - `packages/sdk-go/` - Go SDK for self-hosted backends
