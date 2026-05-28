@@ -11,6 +11,6 @@
     fill-rule="evenodd"
     clip-rule="evenodd"
     fill="#ffffff"
-    d="M3 3h13l4 4v2l-2 2H10l-2 2v8H3zM9 5h6v3H9z"
+    d="M6 3h10l5 5l-5 5H11l-5 8H3V6zM9 6h4v3H9z"
   />
 </svg>
