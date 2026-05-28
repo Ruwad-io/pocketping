@@ -1,0 +1,84 @@
+name: Publish package (manual)
+
+# Manual escape-hatch for publishing a single @pocketping/* package to npm at a
+# specific version. Use it when:
+#  - a brand-new package's first publish fails (npm token scope, OIDC misconfig,
+#    name collision, etc.) and you need to re-publish the same version that
+#    semantic-release already tagged on GitHub;
+#  - you need to backfill a version that the regular release.yml flow missed.
+#
+# This bypasses semantic-release entirely. It does NOT create a tag or a
+# GitHub release — those are expected to already exist (created by release.yml).
+# For routine releases on every merge to main, keep using release.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package name within the @pocketping scope (no scope prefix)'
+        required: true
+        type: choice
+        options:
+          - react
+          - cli
+          - widget
+          - sdk-node
+      version:
+        description: 'Version to publish (semver, e.g. 1.0.0). Usually mirrors an existing GitHub release tag.'
+        required: true
+        type: string
+
+jobs:
+  publish:
+    name: Publish @pocketping/${{ inputs.package }}@${{ inputs.version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # required for npm provenance (and OIDC trusted publishing if enabled)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      # Always build widget first: every other publishable package either is
+      # widget or depends on its built dist for types/entry resolution.
+      - name: Build widget
+        run: pnpm --filter @pocketping/widget build
+
+      - name: Build target package
+        if: inputs.package != 'widget'
+        run: pnpm --filter "@pocketping/${{ inputs.package }}" build
+
+      - name: Set version in package.json
+        working-directory: packages/${{ inputs.package }}
+        run: npm pkg set version=${{ inputs.version }}
+
+      - name: Publish to npm
+        working-directory: packages/${{ inputs.package }}
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Publish result"
+            echo ""
+            echo "- Package: \`@pocketping/${{ inputs.package }}\`"
+            echo "- Version: \`${{ inputs.version }}\`"
+            echo "- Status: \`${{ job.status }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
