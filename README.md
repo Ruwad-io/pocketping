@@ -5,7 +5,8 @@
 <h1 align="center">PocketPing</h1>
 
 <p align="center">
-  <strong>Phone-first OSS chat widget — visitors message you, you reply from Telegram on your phone.</strong><br>
+  <strong>Open-source chat widget — each teammate replies from their own messaging app.</strong><br>
+  One on <strong>Telegram</strong>, one on <strong>Slack</strong>, one on <strong>Discord</strong>. Replies sync across all of them.<br>
   No dashboard. No database. <a href="#60-second-quick-start">Free serverless deploy in 60 seconds.</a>
 </p>
 
@@ -28,6 +29,24 @@
 <p align="center">
   <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/Ruwad-io/pocketping/tree/main/cloudflare-workers/telegram-relay"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" /></a>
 </p>
+
+---
+
+## Your team. Your apps.
+
+Most chat tools force the whole team onto one platform (Intercom, Crisp, Chatwoot). PocketPing routes the **same conversation** to whichever messaging app each teammate prefers — and replies sync across all of them.
+
+| Channel | Status | Routing model |
+|---|---|---|
+| 📨 **Telegram** | Native · OSS | One **forum topic** per visitor in a supergroup |
+| 💬 **Discord** | Native · OSS | One **thread** per visitor in a forum channel |
+| 💼 **Slack** | Native · OSS | Threaded reply in your `#support` channel |
+| 🔶 **HubSpot** | Hosted (via [pocketping.io](https://pocketping.io)) | Conversation inbox + CRM context |
+| 🟢 **WhatsApp** | On the roadmap | Group + DM routing via WhatsApp Business API |
+
+- **Bob on Telegram, Alice on Slack, marketing on HubSpot** — same conversation, native sync.
+- **Edit a reply in Slack** → it updates in Telegram and in the widget. **Edit in Discord** → same.
+- **Add a teammate** → pick their bridge. They join the same thread, on their own app. No agent inbox to maintain.
 
 ---
 
