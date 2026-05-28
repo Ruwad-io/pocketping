@@ -1,16 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">PocketPing</title>
+  <desc id="desc">A modern P-shaped logo with a chat bubble cutout and two ping waves in the upper-right.</desc>
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#8E72FF"/>
-      <stop offset="100%" stop-color="#4B33B3"/>
+    <linearGradient id="ppGradient" x1="116" y1="72" x2="430" y2="430" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8B5CF6"/>
+      <stop offset="0.50" stop-color="#4F8CFF"/>
+      <stop offset="1" stop-color="#22D3A6"/>
     </linearGradient>
+    <mask id="bubbleCutout" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <rect width="512" height="512" fill="white"/>
+      <path fill="black" d="M170 211C170 177.31 197.31 150 231 150H300C333.69 150 361 177.31 361 211C361 244.69 333.69 272 300 272H242L188.7 306.7C181.16 311.61 171.55 304.34 174.74 295.93L183.15 273.74C175.02 263.34 170 241.84 170 211Z"/>
+    </mask>
   </defs>
-  <rect x="88" y="88" width="336" height="336" rx="88" fill="url(#bg)"/>
-  <path
-    transform="translate(128 128) scale(10.667)"
-    fill-rule="evenodd"
-    clip-rule="evenodd"
-    fill="#ffffff"
-    d="M6 3h10l5 5l-5 5H11l-5 8H3V6zM9 6h4v3H9z"
-  />
+  <rect width="512" height="512" rx="96" fill="#080A0F"/>
+  <path fill="url(#ppGradient)" mask="url(#bubbleCutout)" d="M126 110C126 90.67 141.67 75 161 75H305C369.065 75 421 126.935 421 191C421 255.065 369.065 307 305 307H223V395C223 408.385 206.819 415.091 197.355 405.625L126 334.27V110Z"/>
+  <path d="M348.2 57.4 A142 142 0 0 1 432.7 132" stroke="#F8FAFC" stroke-width="18" stroke-linecap="round"/>
+  <path d="M359 22.8 A178 178 0 0 1 466.6 119.6" stroke="#F8FAFC" stroke-width="18" stroke-linecap="round" opacity="0.68"/>
 </svg>
