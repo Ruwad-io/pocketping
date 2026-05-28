@@ -1,0 +1,101 @@
+---
+title: PocketPing vs Crisp — an open-source, phone-first alternative
+description: How PocketPing compares to Crisp. Scope, agent dashboard vs phone-first replies, free-tier limits, data ownership, and when Crisp's broader product suite is still the right pick.
+keywords:
+  - crisp alternative
+  - open source crisp alternative
+  - crisp vs pocketping
+  - self hosted live chat
+---
+
+# PocketPing vs Crisp
+
+**[Crisp](https://crisp.chat)** is a polished SaaS customer messaging
+platform — chat widget plus a real CRM/helpdesk product around it
+(co-browsing, shared inbox, ticketing, segments, automations). **PocketPing**
+is a deliberately narrower OSS chat widget where operators reply from
+**Telegram, Discord, or Slack** — no second app, no separate inbox.
+
+If you're searching for a *Crisp alternative*, the honest framing is:
+PocketPing is not a Crisp clone. It's a different bet on what a small team
+actually needs.
+
+## TL;DR
+
+- **Pick Crisp** if you want a complete customer-messaging suite — chat plus
+  shared inbox, helpdesk, segments, automations, co-browse — and you can pay
+  for it as your team grows past the free tier.
+- **Pick PocketPing** if you want a **lean chat widget**, replies routed to
+  **Telegram/Discord/Slack** on your phone, **MIT source you can fork**,
+  unlimited operators with no per-seat cost, and an option to deploy
+  **serverless** with no database.
+
+## At a glance
+
+|                                       | Crisp                            | PocketPing                                          |
+| ------------------------------------- | -------------------------------- | --------------------------------------------------- |
+| Scope                                 | Chat + helpdesk + CRM + automation | Chat widget, focused                              |
+| Pricing                               | Free tier (limited seats) + paid plans | Free (open-source)                          |
+| Per-seat costs                        | Yes on paid plans                | None                                                |
+| Operator inbox                        | Crisp web/mobile app             | Telegram / Discord / Slack (no extra app)           |
+| Self-hostable                         | No                               | Yes (Worker · Go bridge-server · Your own backend)  |
+| Data hosting                          | Crisp's servers                  | Your Cloudflare account · your server · or pocketping.io SaaS |
+| Source code                           | Closed                           | MIT, GitHub                                         |
+| Multi-channel                         | Yes (ingest into Crisp inbox)    | Yes (Telegram/Discord/Slack — no separate inbox)    |
+| Co-browse / shared CRM                | Yes                              | —                                                   |
+| AI assist                             | Paid add-on                      | Built-in (bring your own key)                       |
+
+## Where the products diverge
+
+### Scope
+
+Crisp tries to be the full customer-messaging stack — a Tier-1 SaaS in the
+Intercom-shaped market. If you have a CS team that needs shared assignment,
+internal notes, SLAs, segments, and outbound campaigns, that's what you're
+paying for. PocketPing is **just the chat widget and the routing to a
+messaging app**. It is consciously not a helpdesk.
+
+### Where operators read and reply
+
+Crisp has its own polished web and mobile apps for operators, which is
+genuinely good if a dedicated chat app suits your workflow. PocketPing
+routes conversations to **Telegram, Discord, or Slack** — apps your team
+already lives in. In Telegram each visitor becomes a **forum topic** so the
+inbox stays organized without leaving the app.
+
+### Pricing model
+
+Crisp's free tier is generous for evaluating, but real use crosses into
+paid (2-seat limit on free, then per-seat pricing on Pro and above). For a
+small team that simply needs reliable chat-on-your-site without a per-seat
+clock running, that math gets uncomfortable. PocketPing has no per-seat
+cost because there's no "seat" — anyone in your Telegram/Discord/Slack can
+reply.
+
+### Self-hosting and data
+
+Crisp is SaaS-only; chats live on Crisp. PocketPing self-hosts behind the
+same widget API in three shapes — **serverless lite** (free Cloudflare
+Worker), **bridge-server** (Go binary you run), or your **own backend** via
+the [SDKs](./sdk) (Node, Python, Go, PHP, Ruby).
+
+## When Crisp is the better choice
+
+You're past one or two operators, you need a real shared inbox with
+internal notes and assignment, you want co-browse and a CRM around the
+chat, and you're happy paying as your team scales. Crisp is mature and
+polished, and replacing it with a chat widget alone would be a downgrade.
+
+## When PocketPing is the better choice
+
+You want a lean chat widget — not a CRM — replies on your phone via
+Telegram or Discord or Slack, no per-seat pricing, MIT source you can fork,
+and the option to deploy **serverless** with no infrastructure. PocketPing
+is a tool for indie hackers, small teams, and self-hosters; Crisp is a
+product for sales/CS organizations.
+
+## Try it in 60 seconds
+
+<a href="https://deploy.workers.cloudflare.com/?url=https://github.com/Ruwad-io/pocketping/tree/main/cloudflare-workers/telegram-relay"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" /></a>
+
+Full serverless setup guide: **[Serverless (Lite)](./serverless.mdx)**.

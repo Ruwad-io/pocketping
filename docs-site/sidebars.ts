@@ -35,6 +35,12 @@ const sidebars: SidebarsConfig = {
     'community-edition',
     'ai-fallback',
     'api',
+    {
+      type: 'category',
+      label: 'Compare',
+      collapsed: true,
+      items: ['vs-intergram', 'vs-tawk', 'vs-crisp'],
+    },
   ],
 }
 

@@ -1,0 +1,109 @@
+---
+title: PocketPing vs Intergram — open-source Telegram chat widgets compared
+description: An honest comparison of PocketPing and Intergram, two MIT-licensed chat widgets that bridge website visitors to Telegram. Threading, deployment, multi-bridge support, and when each is the right choice.
+keywords:
+  - intergram alternative
+  - open source telegram chat widget
+  - pocketping vs intergram
+  - telegram chat for website
+---
+
+# PocketPing vs Intergram
+
+Both **PocketPing** and **[Intergram](https://github.com/idoco/intergram)** are
+open-source projects that let visitors on your website chat with you through
+Telegram. Intergram pioneered the idea in 2017 with a single-shared-chat
+approach. PocketPing extends the same idea with **per-visitor threading**,
+**multi-bridge** support, **SDKs for self-hosted backends**, and a free
+**serverless** deployment mode.
+
+If you're searching for an *Intergram alternative*, this page exists to help
+you pick honestly.
+
+## TL;DR
+
+- **Pick Intergram** if you want the simplest possible single-chat anonymous
+  widget, you only need Telegram, and you don't mind that all visitors land in
+  one shared conversation.
+- **Pick PocketPing** if you want one **Telegram Forum Topic per visitor**,
+  support for **Discord/Slack** too, optional **edit/delete sync, attachments,
+  AI fallback**, **first-class React bindings**, and a **1-click serverless
+  deploy** that needs no server and no database.
+
+## At a glance
+
+|                                       | Intergram                          | PocketPing                                         |
+| ------------------------------------- | ---------------------------------- | -------------------------------------------------- |
+| License                               | MIT                                | MIT                                                |
+| Visitor → operator routing            | One shared Telegram chat           | One **forum topic** per visitor                    |
+| Bridges                               | Telegram                           | Telegram · Discord · Slack                         |
+| Reply UX on operator's phone          | Single noisy chat                  | Discrete topic per conversation                    |
+| Self-host modes                       | Node.js server                     | Serverless Worker · Bridge-server (Go) · Your own backend via SDK |
+| Backend SDKs                          | —                                  | Node · Python · Go · PHP · Ruby                    |
+| React bindings                        | —                                  | `@pocketping/react` (provider + hook)              |
+| Message edit / delete sync            | —                                  | ✅ (SDK / bridge-server modes)                     |
+| File attachments                      | —                                  | ✅ (SDK / bridge-server modes)                     |
+| Free 1-click deploy                   | —                                  | ✅ (Cloudflare Workers)                            |
+| Last active                           | Sparse since ~2020                 | Active                                             |
+
+## Where the projects diverge
+
+### Threading model
+
+Intergram puts every visitor's messages into the **same Telegram chat**. The
+visitor's name appears inline so you can tell conversations apart, but the
+chronology is interleaved. PocketPing maps each visitor to a dedicated
+**Telegram Forum Topic** in a supergroup — your phone shows them as separate
+threads you can read, pin, mute, or close one by one. For more than a couple
+of visitors a day this is the difference between a tractable inbox and a
+firehose.
+
+### Bridges
+
+Intergram is Telegram-only. PocketPing supports **Telegram, Discord, and
+Slack** as send/receive bridges, including Discord forum channels and Slack
+threaded replies. You can route different sites or projects to different
+channels.
+
+### Self-host shape
+
+Intergram ships a Node.js server you run yourself. PocketPing offers
+**three deployment modes** behind the same widget API:
+
+- **Serverless lite** — a free Cloudflare Worker, no database. Closest spirit
+  to Intergram's "just deploy something" feel, but with no server you own.
+- **Bridge-server** — a Go binary you run with Docker; full feature set, no
+  code to write.
+- **SDK in your backend** — Node, Python, Go, PHP, or Ruby. Your DB, your
+  routes, your auth.
+
+Switching modes is just changing the widget's `endpoint`. The visitor
+experience and the API stay the same.
+
+### Features beyond text chat
+
+PocketPing's SDK and bridge-server modes support **edit/delete sync to the
+bridge**, **file attachments** in both directions, **read receipts**, **AI
+fallback** when you're offline, and **custom events** for product-led
+workflows. Intergram stays focused on plain text in/out.
+
+## When Intergram is the better choice
+
+You want the minimum possible piece of code that puts visitor chat into your
+existing Telegram, you really only need a single shared chat, and you'd
+rather copy a small repo than evaluate three deployment modes. Nothing wrong
+with that, and Intergram's simplicity has aged well.
+
+## When PocketPing is the better choice
+
+You want a clean inbox (one topic per visitor), the option of Discord or
+Slack later, a real React component instead of a `window.PocketPing` global,
+and either *no server* (Cloudflare Worker) or *your own backend* (SDK in 5
+languages) — with a path to add edit/delete sync, attachments, and AI
+fallback without rewriting your widget integration.
+
+## Try it in 60 seconds
+
+<a href="https://deploy.workers.cloudflare.com/?url=https://github.com/Ruwad-io/pocketping/tree/main/cloudflare-workers/telegram-relay"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" /></a>
+
+Full serverless setup guide: **[Serverless (Lite)](./serverless.mdx)**.

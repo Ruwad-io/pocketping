@@ -1,0 +1,99 @@
+---
+title: PocketPing vs Tawk.to — an open-source, self-hosted alternative
+description: How PocketPing differs from Tawk.to. Data ownership, the agent-app question, branding, monetization model, multi-channel — and when Tawk is still the right pick.
+keywords:
+  - tawk.to alternative
+  - open source tawk alternative
+  - self hosted chat widget
+  - tawk vs pocketping
+---
+
+# PocketPing vs Tawk.to
+
+**[Tawk.to](https://www.tawk.to)** is the most popular *"free forever"* SaaS
+chat widget — by a margin. It's polished, has mobile apps for operators, and
+its zero-cost model makes it the default for small sites that need basic
+chat. **PocketPing** is a different shape: **open-source, self-hostable**,
+with operators replying from **Telegram, Discord, or Slack** — apps already on
+their phone — instead of a separate Tawk app.
+
+If you're searching for a *Tawk.to alternative*, here's what actually changes.
+
+## TL;DR
+
+- **Pick Tawk.to** if you want zero setup, are fine running on Tawk's
+  infrastructure, want their polished agent dashboard and mobile app, and
+  don't mind their "Tawk.to" branding (or paying $19/mo to remove it).
+- **Pick PocketPing** if you want **your data on your infrastructure**,
+  prefer to **reply from a messaging app you already use**, want **MIT
+  source** you can fork, and need **zero-server** deployment as an option
+  (free Cloudflare Worker) — without a per-seat or branding pricing model.
+
+## At a glance
+
+|                                       | Tawk.to                          | PocketPing                                          |
+| ------------------------------------- | -------------------------------- | --------------------------------------------------- |
+| Pricing                               | Free + paid extras               | Free (open-source)                                  |
+| Monetization                          | Paid agents, branding removal, AI add-ons, translation | None — MIT, no upsells              |
+| Data hosting                          | Tawk's servers                   | Your Cloudflare account · your server · or pocketping.io SaaS |
+| Self-hostable                         | No                               | Yes (Worker · Go bridge-server · Your own backend) |
+| Operator app                          | Tawk's iOS/Android app           | Telegram / Discord / Slack (no extra app)           |
+| Widget branding                       | "Powered by Tawk" (paid removal) | None                                                |
+| Source code                           | Closed                           | MIT, GitHub                                         |
+| React component                       | —                                | `@pocketping/react`                                 |
+| AI fallback                           | Paid add-on                      | Built-in (bring your own key)                       |
+
+## Where the projects diverge
+
+### Where your chat data lives
+
+Tawk runs everything on Tawk's infrastructure — visitor conversations,
+operator messages, IPs, history. That's the trade-off you accept for free
+SaaS. PocketPing gives you **three places it can live**: a Cloudflare Worker
+in your account (state in Cloudflare KV + Telegram itself), a Go
+bridge-server on a box you own, or your own backend behind one of the SDKs.
+Same widget, same API across all three.
+
+### The agent app question
+
+Tawk's polished dashboard and mobile app are genuinely a strength if you
+*want* a dedicated chat app. PocketPing flips it: operators reply from
+**Telegram, Discord, or Slack** — apps they already check, with native
+notifications, photos, voice messages, and in Telegram's case **forum topics
+per visitor** that keep the inbox sane. There's no separate dashboard to log
+into and nothing extra on your phone.
+
+### Branding and monetization
+
+PocketPing has no upsell surface. There is no "Powered by PocketPing"
+sticker, no per-seat pricing if you self-host, no premium feature tier on
+the OSS side. (We offer a paid SaaS at pocketping.io because it costs us
+money to run, but the widget you embed is the same code that ships
+serverless and self-hosted.)
+
+### Multi-bridge
+
+Tawk is one inbox. PocketPing can route the same widget to **Telegram,
+Discord, and Slack** simultaneously — useful if your customer-success team
+prefers Slack and your founders prefer Telegram on their phones.
+
+## When Tawk.to is the better choice
+
+You want a polished SaaS that works out of the box with zero infrastructure
+on your side, you're OK with Tawk hosting your data, you want a dedicated
+operator app, and you'll either accept the branding or pay to remove it.
+For a small-business storefront that just wants a chat bubble fast,
+Tawk is still hard to beat.
+
+## When PocketPing is the better choice
+
+You don't want a SaaS owning your customer conversations, you'd rather
+reply from your existing Telegram/Discord/Slack, and either *no server*
+(Cloudflare Worker) or *your own backend* (SDK) is more comfortable than
+trusting a third party. MIT license means you can fork it.
+
+## Try it in 60 seconds
+
+<a href="https://deploy.workers.cloudflare.com/?url=https://github.com/Ruwad-io/pocketping/tree/main/cloudflare-workers/telegram-relay"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" /></a>
+
+Full serverless setup guide: **[Serverless (Lite)](./serverless.mdx)**.
