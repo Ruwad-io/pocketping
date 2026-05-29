@@ -80,7 +80,7 @@ Pricing & feature audit against each vendor's public docs, Nov 2026.
 | **Discord** | Native | — | Channel | — | — |
 | **Slack** | Native | Native* | Add-on | Channel | — |
 | **Cross-bridge sync** | Yes | — | — | — | — |
-| **Custom Events** | Yes | Paid | Limited | — | — |
+| **Bidirectional events** | Yes | Outbound only | Rule-based | [Requested 4 yr](https://github.com/chatwoot/chatwoot/issues/2995) | — |
 | **AI fallback** | BYO key | Fin AI | Hugo | Captain | AI Assist |
 | **AI cost / conversation** | **~$0.001** | $0.99 | $0.05–0.10 | $0.02 | $0.02–0.03 |
 | **License** | MIT | Closed | Closed | MIT (CE) | Closed |
@@ -100,6 +100,24 @@ PocketPing lets you bring your own OpenAI / Anthropic / Gemini key. With GPT-4o-
 | **PocketPing (BYO OpenAI key)** | **~$0.40** |
 
 Caveat: PocketPing's AI is your model, your prompt, your scope. No packaged RAG, no fine-tuning UI. For a "answer FAQ when the team is offline" fallback that's all you need. For a fully autonomous agent with multi-step tool use, you'll build more yourself.
+
+### Bidirectional events: PLG without the Pendo
+
+Custom events go **both ways** — widget emits product events, your server broadcasts UI events back. No other OSS chat widget ships this in real time (Chatwoot has had the [request open since 2021](https://github.com/chatwoot/chatwoot/issues/2995)).
+
+```ts
+// widget → server (track what the visitor did)
+pp.emit('viewed_pricing')
+pp.emit('cart_abandoned', { cartId, total: 42 })
+pp.emit('trial_day_13')
+
+// server → widget (script in-product moments without a separate PLG tool)
+pp.broadcast(visitorId, 'show_demo_offer')
+pp.broadcast(visitorId, 'open_chat_proactive')
+pp.broadcast(visitorId, 'highlight_pricing')
+```
+
+The widget exposes `pp.on('show_demo_offer', handler)` so your site code reacts. This is how a dev tool team scripts contextual chat without paying for a Chameleon / Pendo on top of the chat itself.
 
 **[See full comparison](docs/COMPARISON.md)** - Detailed analysis vs Intercom, Crisp, Chatwoot, Tawk.to, Drift, Zendesk
 
