@@ -149,7 +149,7 @@ A comprehensive comparison of PocketPing with other live chat solutions.
 | Feature | PocketPing | Intercom | Crisp | Chatwoot |
 |---------|------------|----------|-------|----------|
 | **AI Provider** | OpenAI, Gemini, Claude | Fin (proprietary) | Crisp AI | Limited |
-| **Cost model** | Your API key (~$0.01/conv) | $0.99/resolution | $45+/month | N/A |
+| **Cost model** | Your API key (~$0.001/conv) | $0.99/resolution | $45+/month | N/A |
 | **Custom training** | System prompt | Knowledge base | Knowledge base | N/A |
 | **Fallback to human** | Configurable delay | Yes | Yes | N/A |
 | **Multiple providers** | Yes | No | No | No |

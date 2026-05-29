@@ -82,14 +82,14 @@ Pricing & feature audit against each vendor's public docs. Prices as of 2026-05;
 | **Cross-bridge sync** | Yes | — | — | — | — |
 | **Bidirectional events** | Yes | Outbound only | Rule-based | [Requested 4 yr](https://github.com/chatwoot/chatwoot/issues/2995) | — |
 | **AI fallback** | BYO key | Fin AI | Hugo | Captain | AI Assist |
-| **AI cost / conversation** | **~$0.01** | $0.99 | $0.05–0.10 | $0.02 | $0.02–0.03 |
+| **AI cost / conversation** | **~$0.001** | $0.99 | $0.05–0.10 | $0.02 | $0.02–0.03 |
 | **License** | MIT | Closed | Closed | MIT (CE) | Closed |
 
 > **Channel** = the tool ingests that messaging app as an inbound channel into its own agent inbox. **Native** = you reply from the messaging app itself. **Native\*** (Intercom Slack) = reply from Slack works, but Intercom remains the inbox.
 
-### AI fallback: ~100× cheaper than Intercom Fin
+### AI fallback: ~1000× cheaper than Intercom Fin
 
-PocketPing lets you bring your own OpenAI / Anthropic / Gemini key. A typical AI resolution costs **~$0.01** — about $10/month for 1000 conversations. Intercom Fin AI bills **$0.99 per outcome** with a 50/month minimum and no cap: the same 1000 conversations costs **$990/month**.
+PocketPing lets you bring your own OpenAI / Anthropic / Gemini key. With the default `gpt-4o-mini`, a typical AI resolution costs **~$0.001** (≈$0.0004 per single resolution) — about $1/month for 1000 conversations. Intercom Fin AI bills **$0.99 per outcome** with a 50/month minimum and no cap: the same 1000 conversations costs **$990/month**.
 
 | AI cost @ 1000 conversations / month | |
 |---|---|
@@ -97,7 +97,7 @@ PocketPing lets you bring your own OpenAI / Anthropic / Gemini key. A typical AI
 | Crisp Hugo | $50–100 (+ $45+ plan) |
 | Tawk.to AI Assist | $29–99 |
 | Chatwoot Captain | ~$20 |
-| **PocketPing (BYO OpenAI key)** | **~$10** |
+| **PocketPing (BYO OpenAI key)** | **~$1** |
 
 Caveat: PocketPing's AI is your model, your prompt, your scope. No packaged RAG, no fine-tuning UI. For a "answer FAQ when the team is offline" fallback that's all you need. For a fully autonomous agent with multi-step tool use, you'll build more yourself.
 
