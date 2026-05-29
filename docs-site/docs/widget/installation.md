@@ -53,7 +53,7 @@ The CDN always serves the latest version. You automatically get new features and
 
 ```html
 <!-- Pin to specific version (no auto-updates) -->
-<script src="https://cdn.pocketping.io/widget@0.3.0.js"></script>
+<script src="https://cdn.pocketping.io/widget@2.6.0.js"></script>
 
 <!-- Alternative: jsdelivr or unpkg -->
 <script src="https://cdn.jsdelivr.net/npm/@pocketping/widget/dist/pocketping.min.global.js"></script>
@@ -183,7 +183,6 @@ The widget uses `beforeunload` to send disconnect notifications when visitors le
 
 The widget manages its own lifecycle - just call `init()` once and let it handle cleanup automatically.
 :::
-```
 
 ### Vue.js / Nuxt
 
@@ -323,7 +322,7 @@ If self-hosting, configure your bridge server to allow requests from your domain
 - [ ] Project ID is correct (matches dashboard)
 - [ ] Bridge server is running (if self-hosted)
 - [ ] At least one bridge is connected (Telegram/Discord/Slack)
-- [ ] No firewall blocking WebSocket connections
+- [ ] No firewall blocking HTTP / SSE connections
 - [ ] Browser allows third-party cookies (if using CDN)
 
 ---

@@ -27,8 +27,14 @@ pp = PocketPing(...)
 
 @app.get("/admin/sessions")
 async def list_sessions(user = Depends(require_admin)):
-    """List all active chat sessions."""
-    sessions = await pp.storage.get_all_sessions()
+    """List active chat sessions.
+
+    Note: the SDK storage interface exposes per-record lookups
+    (`get_session(id)` / `get_session_by_visitor_id(...)`), not a list-all
+    method. To list every session, query your storage backend directly
+    (e.g. a SQL `SELECT` on your sessions table, or iterating your store).
+    """
+    sessions = await query_my_sessions_table()  # your storage-specific query
     return {"sessions": sessions}
 
 @app.get("/admin/sessions/{session_id}")
@@ -279,7 +285,7 @@ We're considering a hosted admin dashboard for those who want it:
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  Your PocketPing  ←──API Key──→  Hosted Dashboard           │
-│   (self-hosted)                   (cloud.pocketping.dev)    │
+│   (self-hosted)                   (app.pocketping.io)       │
 │                                                             │
 │  Features:                                                  │
 │  - Web dashboard                                            │

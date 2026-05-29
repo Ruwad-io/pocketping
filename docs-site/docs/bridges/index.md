@@ -78,7 +78,7 @@ sequenceDiagram
 ```bash title=".env"
 # Connect both Telegram and Discord
 TELEGRAM_BOT_TOKEN=your_telegram_token
-TELEGRAM_FORUM_CHAT_ID=-1001234567890
+TELEGRAM_CHAT_ID=-1001234567890
 
 DISCORD_BOT_TOKEN=your_discord_token
 DISCORD_CHANNEL_ID=1234567890123456789
@@ -122,10 +122,10 @@ import { PocketPing, TelegramBridge, DiscordBridge } from '@pocketping/sdk-node'
 
 const pp = new PocketPing();
 
-pp.addBridge(new TelegramBridge({
-  botToken: process.env.TELEGRAM_BOT_TOKEN,
-  chatId: process.env.TELEGRAM_CHAT_ID,
-}));
+pp.addBridge(new TelegramBridge(
+  process.env.TELEGRAM_BOT_TOKEN,
+  process.env.TELEGRAM_CHAT_ID
+));
 
 pp.addBridge(DiscordBridge.bot(
   process.env.DISCORD_BOT_TOKEN,

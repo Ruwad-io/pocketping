@@ -32,8 +32,11 @@
 |-----------|----------|-----------|-----------------|
 | Widget | `packages/widget` | Vitest + Testing Library | 80% |
 | SDK Python | `packages/sdk-python` | pytest + pytest-asyncio | 90% |
-| Bridge Server | `bridge-server` | Bun test / Vitest | 85% |
+| Bridge Server | `bridge-server` | Go (`go test ./...`) | 85% |
 | E2E | `tests/e2e` | Playwright | Critical paths |
+
+> All test suites are run via Docker through the repo-wide `make test` flow (see CLAUDE.md).
+> Per-component `make` targets exist too: `make test-go`, `make test-node`, `make test-python`, etc.
 
 ---
 
@@ -50,7 +53,7 @@ See: `docs/TESTING_BRIDGES_E2E.md`
 ```bash
 # Setup
 cd packages/widget
-bun add -d vitest @testing-library/preact jsdom
+pnpm add -D vitest @testing-library/preact jsdom
 ```
 
 **Test files structure:**
@@ -106,27 +109,40 @@ packages/sdk-python/
 
 ### Bridge Server (`bridge-server`)
 
+The bridge-server is a Go binary, so it uses Go's built-in test runner.
+
 ```bash
-# Setup (Bun has built-in test runner)
+# Setup
 cd bridge-server
+go mod download
+
+# Run the tests
+go test ./...
+
+# With coverage
+go test -cover ./...
+
+# Or via Docker (repo-wide flow)
+make test-go
 ```
 
-**Test files structure:**
+**Test files structure:** Go tests live alongside the code they cover (`*_test.go`):
 ```
 bridge-server/
-├── src/
+├── cmd/
+│   └── server/          # main package (entry point)
+├── internal/
 │   ├── bridges/
-│   ├── api/
-│   └── config.ts
-└── tests/
-    ├── bridges/
-    │   ├── telegram.test.ts
-    │   ├── slack.test.ts
-    │   └── discord.test.ts
-    ├── api/
-    │   └── routes.test.ts
-    └── mocks/
-        └── telegram-bot.ts
+│   │   ├── telegram.go
+│   │   ├── telegram_test.go
+│   │   ├── slack.go
+│   │   ├── slack_test.go
+│   │   ├── discord.go
+│   │   └── discord_test.go
+│   └── api/
+│       ├── routes.go
+│       └── routes_test.go
+└── go.mod
 ```
 
 **What to test:**
@@ -169,7 +185,7 @@ tests/integration/
 
 ```bash
 # Setup
-bun add -d @playwright/test
+pnpm add -D @playwright/test
 npx playwright install
 ```
 
@@ -230,12 +246,15 @@ addopts = -v --cov=src/pocketping --cov-report=html --cov-report=term
 filterwarnings = ignore::DeprecationWarning
 ```
 
-### `bunfig.toml` (Bridge Server)
+### Bridge Server (Go)
 
-```toml
-[test]
-coverage = true
-coverageDir = "./coverage"
+The bridge-server needs no extra test config — Go's toolchain handles it. Run with
+coverage and emit a profile like so:
+
+```bash
+cd bridge-server
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out   # view the report
 ```
 
 ### `playwright.config.ts` (E2E)
@@ -260,7 +279,7 @@ export default defineConfig({
     { name: 'mobile', use: { ...devices['iPhone 13'] } },
   ],
   webServer: {
-    command: 'bun run dev',
+    command: 'pnpm dev',
     url: 'http://localhost:8000',
     reuseExistingServer: !process.env.CI,
   },
@@ -283,6 +302,15 @@ on:
     branches: [main]
 
 jobs:
+  # Easiest path: run everything through Docker, matching local `make test`.
+  all-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run all SDK + bridge-server tests via Docker
+        run: make test
+
+  # Or run components individually:
   unit-tests:
     runs-on: ubuntu-latest
     strategy:
@@ -292,8 +320,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - name: Setup Node + pnpm
+        if: matrix.component == 'widget'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Go
+        if: matrix.component == 'bridge-server'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
 
       - name: Setup Python
         if: matrix.component == 'sdk-python'
@@ -301,25 +338,25 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: |
-          if [ "${{ matrix.component }}" = "sdk-python" ]; then
-            cd packages/sdk-python
-            pip install -e ".[dev]"
-          else
-            cd packages/${{ matrix.component }} || cd ${{ matrix.component }}
-            bun install
-          fi
-
       - name: Run tests
         run: |
-          if [ "${{ matrix.component }}" = "sdk-python" ]; then
-            cd packages/sdk-python
-            pytest
-          else
-            cd packages/${{ matrix.component }} || cd ${{ matrix.component }}
-            bun test
-          fi
+          case "${{ matrix.component }}" in
+            sdk-python)
+              cd packages/sdk-python
+              pip install -e ".[dev]"
+              pytest
+              ;;
+            bridge-server)
+              cd bridge-server
+              go test ./...
+              ;;
+            widget)
+              corepack enable
+              cd packages/widget
+              pnpm install
+              pnpm test
+              ;;
+          esac
 
       - name: Upload coverage
         uses: codecov/codecov-action@v3
@@ -332,11 +369,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
 
       - name: Install Playwright
         run: |
-          bun install
+          corepack enable
+          pnpm install
           npx playwright install --with-deps
 
       - name: Start services
@@ -348,7 +391,7 @@ jobs:
 
           # Start bridge server (mock mode)
           cd ../bridge-server
-          MOCK_BRIDGES=true bun run dev &
+          MOCK_BRIDGES=true go run ./cmd/server &
 
           # Wait for services
           sleep 5
@@ -368,21 +411,29 @@ jobs:
 
 ## 6. Test Commands
 
-Add to root `package.json`:
+The canonical entry point is the repo-wide Docker flow (see CLAUDE.md):
+
+```bash
+make test          # Run all SDK + bridge-server tests via Docker
+make test-go       # Bridge-server + sdk-go (Go)
+make test-node     # sdk-node
+make test-python   # sdk-python
+make test-php      # sdk-php
+make test-ruby     # sdk-ruby
+```
+
+The bridge-server is Go, so it is tested with `go test ./...` (wrapped by
+`make test-go`). The TypeScript packages keep their own npm scripts in
+`package.json`:
 
 ```json
 {
   "scripts": {
-    "test": "bun run test:unit && bun run test:integration",
-    "test:unit": "bun run test:widget && bun run test:sdk && bun run test:bridge",
-    "test:widget": "cd packages/widget && bun test",
-    "test:sdk": "cd packages/sdk-python && pytest",
-    "test:bridge": "cd bridge-server && bun test",
-    "test:integration": "bun run tests/integration/run.ts",
+    "test:widget": "cd packages/widget && vitest run",
+    "test:sdk-node": "cd packages/sdk-node && vitest run",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:coverage": "bun run test:unit --coverage",
-    "test:watch": "bun run test:widget --watch"
+    "test:watch": "cd packages/widget && vitest --watch"
   }
 }
 ```
@@ -422,40 +473,48 @@ Add to root `package.json`:
 
 ## 8. Mocking Strategy
 
-### Telegram Bot API Mock
+### Telegram Bot API Mock (bridge-server, Go)
 
-```typescript
-// tests/mocks/telegram-server.ts
-import { Hono } from 'hono';
+The bridge-server's Telegram bridge is exercised against an `httptest` server.
+Point the bridge at the test server's base URL and assert on the captured requests:
 
-export function createMockTelegramServer() {
-  const app = new Hono();
-  const messages: any[] = [];
+```go
+// internal/bridges/telegram_test.go
+func newMockTelegramServer() (*httptest.Server, *[]map[string]any) {
+	var messages []map[string]any
+	mux := http.NewServeMux()
 
-  app.post('/bot:token/sendMessage', async (c) => {
-    const body = await c.req.json();
-    const msg = {
-      message_id: Date.now(),
-      chat: { id: body.chat_id },
-      text: body.text,
-      date: Math.floor(Date.now() / 1000),
-    };
-    messages.push(msg);
-    return c.json({ ok: true, result: msg });
-  });
+	mux.HandleFunc("/sendMessage", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		messages = append(messages, body)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"message_id": time.Now().UnixNano(),
+				"chat":       map[string]any{"id": body["chat_id"]},
+				"text":       body["text"],
+			},
+		})
+	})
 
-  app.post('/bot:token/createForumTopic', async (c) => {
-    return c.json({
-      ok: true,
-      result: { message_thread_id: Date.now() },
-    });
-  });
+	mux.HandleFunc("/createForumTopic", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":     true,
+			"result": map[string]any{"message_thread_id": time.Now().UnixNano()},
+		})
+	})
 
-  return { app, messages };
+	srv := httptest.NewServer(mux)
+	return srv, &messages
 }
 ```
 
-### WebSocket Test Client
+### Widget Stream Test Client
+
+Helper for widget-side tests. The widget connects over WebSocket or SSE depending on
+deployment mode (the bridge-server uses SSE via `GET /api/events/stream`); this WebSocket
+client covers the WS path:
 
 ```typescript
 // tests/helpers/ws-client.ts

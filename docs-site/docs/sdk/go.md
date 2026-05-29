@@ -11,7 +11,7 @@ Integrate PocketPing into your Go backend.
 ## Installation
 
 ```bash
-go get github.com/pocketping/pocketping-go
+go get github.com/Ruwad-io/pocketping/sdk-go
 ```
 
 ## Quick Start
@@ -23,12 +23,11 @@ package main
 
 import (
     "net/http"
-    pocketping "github.com/pocketping/pocketping-go"
+    pocketping "github.com/Ruwad-io/pocketping/sdk-go"
 )
 
 func main() {
     pp := pocketping.New(pocketping.Config{
-        BridgeURL:      "http://localhost:3001",
         WelcomeMessage: "Hi! How can we help?",
     })
 
@@ -44,13 +43,13 @@ package main
 
 import (
     "github.com/gin-gonic/gin"
-    pocketping "github.com/pocketping/pocketping-go"
+    pocketping "github.com/Ruwad-io/pocketping/sdk-go"
 )
 
 func main() {
     r := gin.Default()
     pp := pocketping.New(pocketping.Config{
-        BridgeURL: "http://localhost:3001",
+        WelcomeMessage: "Hi! How can we help?",
     })
 
     r.Any("/pocketping/*path", gin.WrapH(pp.Handler("/pocketping")))
@@ -65,13 +64,13 @@ package main
 
 import (
     "github.com/labstack/echo/v4"
-    pocketping "github.com/pocketping/pocketping-go"
+    pocketping "github.com/Ruwad-io/pocketping/sdk-go"
 )
 
 func main() {
     e := echo.New()
     pp := pocketping.New(pocketping.Config{
-        BridgeURL: "http://localhost:3001",
+        WelcomeMessage: "Hi! How can we help?",
     })
 
     e.Any("/pocketping/*", echo.WrapHandler(pp.Handler("/pocketping")))
@@ -89,7 +88,7 @@ package main
 import (
     "log"
     "os"
-    pocketping "github.com/pocketping/pocketping-go"
+    pocketping "github.com/Ruwad-io/pocketping/sdk-go"
 )
 
 func main() {
@@ -189,11 +188,11 @@ Use **Bot mode** for full bidirectional communication. Webhooks are simpler but 
 
 ```go
 pp := pocketping.New(pocketping.Config{
-    // Bridge server URL (alternative to built-in bridges)
-    BridgeURL: "http://localhost:3001",
-
     // Welcome message for new visitors
     WelcomeMessage: "Hi! How can we help?",
+
+    // Built-in bridges (or add later with pp.AddBridge(...))
+    Bridges: []pocketping.Bridge{},
 
     // Event handlers
     OnSessionStart: func(s *pocketping.Session) {
@@ -216,27 +215,24 @@ pp := pocketping.New(pocketping.Config{
 ### Sessions
 
 ```go
-// Get all active sessions
-sessions, err := pp.GetSessions(ctx)
-
 // Get a specific session
 session, err := pp.GetSession(ctx, "sess_xxx")
 
 // Get session messages
 messages, err := pp.GetMessages(ctx, "sess_xxx")
-
-// Close a session
-err := pp.CloseSession(ctx, "sess_xxx")
 ```
+
+:::note Sessions live in your storage
+The SDK does not keep an in-memory list of "all sessions". To enumerate
+conversations, query your `Storage` implementation directly, or track sessions
+in the `OnSessionStart` handler.
+:::
 
 ### Messages
 
 ```go
-// Send a message to a session
-err := pp.SendMessage(ctx, "sess_xxx", pocketping.Message{
-    Content: "Hello from the server!",
-    Type:    pocketping.MessageTypeOperator,
-})
+// Send an operator reply to a session
+err := pp.SendOperatorMessage(ctx, "sess_xxx", "Hello from the server!")
 ```
 
 ### Custom Events
@@ -326,7 +322,7 @@ pp := pocketping.New(pocketping.Config{
 ### Manual Filtering
 
 ```go
-import pocketping "github.com/pocketping/pocketping-go"
+import pocketping "github.com/Ruwad-io/pocketping/sdk-go"
 
 // Quick bot check
 if pocketping.IsBot(r.UserAgent()) {

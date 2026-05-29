@@ -89,7 +89,7 @@ If you prefer not to use the plugin, add this to your theme's `footer.php` befor
 
 ```html
 <script
-  src="https://widget.pocketping.io/widget.js"
+  src="https://cdn.pocketping.io/widget.js"
   data-project-id="proj_xxxxxxxxxxxxx"
 ></script>
 ```
@@ -100,7 +100,7 @@ Or in your theme's `functions.php`:
 add_action('wp_footer', function() {
     ?>
     <script
-      src="https://widget.pocketping.io/widget.js"
+      src="https://cdn.pocketping.io/widget.js"
       data-project-id="<?php echo esc_attr(get_option('pocketping_project_id')); ?>"
     ></script>
     <?php

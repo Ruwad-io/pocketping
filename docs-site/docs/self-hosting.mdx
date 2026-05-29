@@ -17,7 +17,7 @@ A self-hosted PocketPing setup consists of three components:
 
 | Component | Description |
 |-----------|-------------|
-| **Chat Widget** | Embedded on your website, connects via WebSocket |
+| **Chat Widget** | Embedded on your website, connects via HTTP + SSE |
 | **Bridge Server** | Routes messages between widget and platforms |
 | **Messaging Platforms** | Telegram, Discord, or Slack for notifications |
 
@@ -34,11 +34,11 @@ npm install @pocketping/sdk-node
 
 ```javascript title="server.js"
 const express = require('express');
-const { PocketPing } = require('@pocketping/sdk-node');
+const { PocketPing, TelegramBridge } = require('@pocketping/sdk-node');
 
 const app = express();
 const pp = new PocketPing({
-  bridgeUrl: 'http://localhost:3001', // Bridge server URL
+  bridges: [new TelegramBridge(process.env.TELEGRAM_BOT_TOKEN, process.env.TELEGRAM_CHAT_ID)],
 });
 
 // Mount routes
@@ -65,7 +65,7 @@ pp = PocketPing(
     bridge=TelegramBridge(
         token="YOUR_BOT_TOKEN",
         chat_id="YOUR_CHAT_ID"
-    )
+    ),
 )
 
 # Mount routes at /pocketping
@@ -78,7 +78,7 @@ pp.mount_fastapi(app, prefix="/pocketping")
 <TabItem value="go" label="Go">
 
 ```bash
-go get github.com/pocketping/pocketping-go
+go get github.com/Ruwad-io/pocketping/sdk-go
 ```
 
 ```go title="main.go"
@@ -86,12 +86,17 @@ package main
 
 import (
     "net/http"
-    pocketping "github.com/pocketping/pocketping-go"
+    "os"
+
+    pocketping "github.com/Ruwad-io/pocketping/sdk-go"
 )
 
 func main() {
     pp := pocketping.New(pocketping.Config{
-        BridgeURL: "http://localhost:3001",
+        Bridge: pocketping.NewTelegramBridge(pocketping.TelegramConfig{
+            Token:  os.Getenv("TELEGRAM_BOT_TOKEN"),
+            ChatID: os.Getenv("TELEGRAM_CHAT_ID"),
+        }),
     })
 
     http.Handle("/pocketping/", pp.Handler("/pocketping"))
@@ -103,18 +108,23 @@ func main() {
 <TabItem value="php" label="PHP">
 
 ```bash
-composer require pocketping/pocketping-php
+composer require pocketping/sdk
 ```
 
 ```php title="routes/web.php"
 <?php
 use PocketPing\PocketPing;
+use PocketPing\Bridges\TelegramBridge;
 
 $pp = new PocketPing([
-    'bridgeUrl' => 'http://localhost:3001',
+    'bridge' => new TelegramBridge([
+        'token'   => getenv('TELEGRAM_BOT_TOKEN'),
+        'chat_id' => getenv('TELEGRAM_CHAT_ID'),
+    ]),
 ]);
 
-Route::any('/pocketping/{path?}', [$pp, 'handleRequest']);
+// Mount the SDK handlers under /pocketping
+Route::any('/pocketping/{path?}', fn ($path = '') => $pp->handle($path));
 ```
 
 </TabItem>
@@ -127,7 +137,12 @@ gem install pocketping
 ```ruby title="config/routes.rb"
 require 'pocketping'
 
-pp = PocketPing.new(bridge_url: 'http://localhost:3001')
+pp = PocketPing.new(
+  bridge: PocketPing::Bridges::TelegramBridge.new(
+    token: ENV['TELEGRAM_BOT_TOKEN'],
+    chat_id: ENV['TELEGRAM_CHAT_ID']
+  )
+)
 
 Rails.application.routes.draw do
   mount pp.rack_app => '/pocketping'
@@ -153,7 +168,7 @@ services:
       - "3001:3001"
     environment:
       - TELEGRAM_BOT_TOKEN=your_token
-      - TELEGRAM_FORUM_CHAT_ID=your_chat_id
+      - TELEGRAM_CHAT_ID=your_chat_id
       - DISCORD_BOT_TOKEN=your_discord_token
       - DISCORD_CHANNEL_ID=your_channel_id
     restart: unless-stopped
@@ -161,69 +176,23 @@ services:
 # Run: docker compose up -d
 ```
 
-### 2. Configure Backend
+### 2. Point the Widget at the Bridge Server
 
-Point your backend SDK to the bridge server:
-
-<Tabs groupId="sdk-language">
-<TabItem value="nodejs" label="Node.js" default>
-
-```javascript
-const pp = new PocketPing({
-    bridgeUrl: 'http://bridge:3001'  // Docker network or public URL
-});
-```
-
-</TabItem>
-<TabItem value="python" label="Python">
-
-```python
-pp = PocketPing(
-    bridge_url="http://bridge:3001"  # Docker network or public URL
-)
-```
-
-</TabItem>
-<TabItem value="go" label="Go">
-
-```go
-pp := pocketping.New(pocketping.Config{
-    BridgeURL: "http://bridge:3001",  // Docker network or public URL
-})
-```
-
-</TabItem>
-<TabItem value="php" label="PHP">
-
-```php
-$pp = new PocketPing([
-    'bridgeUrl' => 'http://bridge:3001',  // Docker network or public URL
-]);
-```
-
-</TabItem>
-<TabItem value="ruby" label="Ruby">
-
-```ruby
-pp = PocketPing.new(
-  bridge_url: 'http://bridge:3001'  # Docker network or public URL
-)
-```
-
-</TabItem>
-</Tabs>
-
-### 3. Add Widget to Frontend
+The standalone bridge server is self-contained — there is no separate backend or SDK
+in between. Your widget connects to it directly via its `endpoint`. Expose the bridge
+on a public HTTPS URL (e.g. behind a reverse proxy) and use that URL:
 
 ```html
 <script src="https://cdn.pocketping.io/widget.js"></script>
 <script>
   PocketPing.init({
-    endpoint: 'https://yourbackend.com/pocketping',
+    endpoint: 'https://bridge.yourdomain.com',  // your bridge server URL
     operatorName: 'Support',
   });
 </script>
 ```
+
+That's it — open your site, send a message, and it appears in your messaging platform.
 
 ## Storage Options
 
@@ -372,7 +341,7 @@ const storage = new PostgresStorage('postgresql://user:pass@localhost/pocketping
 
 const pp = new PocketPing({
   storage,
-  bridgeUrl: 'http://localhost:3001',
+  bridges: [new TelegramBridge(process.env.TELEGRAM_BOT_TOKEN, process.env.TELEGRAM_CHAT_ID)],
 });
 ```
 
@@ -451,8 +420,11 @@ func (s *PostgresStorage) CreateSession(ctx context.Context, session *pocketping
 // Usage
 storage, _ := NewPostgresStorage("postgresql://user:pass@localhost/pocketping")
 pp := pocketping.New(pocketping.Config{
-    Storage:   storage,
-    BridgeURL: "http://localhost:3001",
+    Storage: storage,
+    Bridge: pocketping.NewTelegramBridge(pocketping.TelegramConfig{
+        Token:  os.Getenv("TELEGRAM_BOT_TOKEN"),
+        ChatID: os.Getenv("TELEGRAM_CHAT_ID"),
+    }),
 })
 ```
 
@@ -481,7 +453,10 @@ class PostgresStorage implements StorageInterface {
 $storage = new PostgresStorage('pgsql:host=localhost;dbname=pocketping');
 $pp = new PocketPing([
     'storage' => $storage,
-    'bridgeUrl' => 'http://localhost:3001',
+    'bridge'  => new TelegramBridge([
+        'token'   => getenv('TELEGRAM_BOT_TOKEN'),
+        'chat_id' => getenv('TELEGRAM_CHAT_ID'),
+    ]),
 ]);
 ```
 
@@ -510,7 +485,10 @@ end
 storage = PostgresStorage.new('postgresql://user:pass@localhost/pocketping')
 pp = PocketPing.new(
   storage: storage,
-  bridge_url: 'http://localhost:3001'
+  bridge: PocketPing::Bridges::TelegramBridge.new(
+    token: ENV['TELEGRAM_BOT_TOKEN'],
+    chat_id: ENV['TELEGRAM_CHAT_ID']
+  )
 )
 ```
 
@@ -534,7 +512,7 @@ pp = PocketPing.new(
 | `PORT` | No | Bridge server port (default: 3001) |
 | `API_KEY` | No | Secret key for API authentication |
 | `TELEGRAM_BOT_TOKEN` | If using Telegram | Bot token from BotFather |
-| `TELEGRAM_FORUM_CHAT_ID` | If using Telegram | Telegram supergroup ID |
+| `TELEGRAM_CHAT_ID` | If using Telegram | Telegram supergroup ID (starts with -100) |
 | `DISCORD_BOT_TOKEN` | If using Discord | Discord bot token |
 | `DISCORD_CHANNEL_ID` | If using Discord | Discord channel ID for threads |
 | `EVENTS_WEBHOOK_URL` | No | URL to forward custom events (Zapier, Make, n8n) |
@@ -552,7 +530,7 @@ services:
       - "3001:3001"
     environment:
       - TELEGRAM_BOT_TOKEN=your_token
-      - TELEGRAM_FORUM_CHAT_ID=your_chat_id
+      - TELEGRAM_CHAT_ID=your_chat_id
       # Forward events to Zapier, Make, n8n, etc.
       - EVENTS_WEBHOOK_URL=https://hooks.zapier.com/hooks/catch/123456/abcdef
       - EVENTS_WEBHOOK_SECRET=your_secret_key  # Optional

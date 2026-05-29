@@ -29,7 +29,6 @@ gem 'pocketping'
 require 'pocketping'
 
 POCKETPING = PocketPing.new(
-  bridge_url: ENV['BRIDGE_URL'] || 'http://localhost:3001',
   welcome_message: 'Hi! How can we help?'
 )
 
@@ -46,7 +45,7 @@ require 'sinatra'
 require 'pocketping'
 
 pp = PocketPing.new(
-  bridge_url: 'http://localhost:3001'
+  welcome_message: 'Hi! How can we help?'
 )
 
 # Mount at /pocketping
@@ -64,7 +63,7 @@ end
 require 'pocketping'
 
 pp = PocketPing.new(
-  bridge_url: 'http://localhost:3001'
+  welcome_message: 'Hi! How can we help?'
 )
 
 map '/pocketping' do
@@ -181,11 +180,11 @@ Use **Bot mode** for full bidirectional communication. Webhooks are simpler but 
 
 ```ruby
 pp = PocketPing.new(
-  # Bridge server URL (alternative to built-in bridges)
-  bridge_url: 'http://localhost:3001',
-
   # Welcome message for new visitors
   welcome_message: 'Hi! How can we help?',
+
+  # Built-in bridges (or add later with pp.add_bridge(...))
+  bridges: [],
 
   # Event handlers
   on_session_start: ->(session) {
@@ -208,27 +207,24 @@ pp = PocketPing.new(
 ### Sessions
 
 ```ruby
-# Get all active sessions
-sessions = pp.get_sessions
-
 # Get a specific session
 session = pp.get_session('sess_xxx')
 
 # Get session messages
 messages = pp.get_messages('sess_xxx')
-
-# Close a session
-pp.close_session('sess_xxx')
 ```
+
+:::note Sessions live in your storage
+The SDK does not keep an in-memory list of "all sessions". To enumerate
+conversations, query your storage implementation directly, or track sessions
+in the `on_session_start` handler.
+:::
 
 ### Messages
 
 ```ruby
-# Send a message to a session
-pp.send_message('sess_xxx',
-  content: 'Hello from the server!',
-  type: 'operator'
-)
+# Send an operator reply to a session
+pp.send_operator_message('sess_xxx', 'Hello from the server!')
 ```
 
 ### Custom Events

@@ -19,7 +19,7 @@ docker run -d \
   --name pocketping-bridge \
   -p 3001:3001 \
   -e TELEGRAM_BOT_TOKEN=your_token \
-  -e TELEGRAM_FORUM_CHAT_ID=your_chat_id \
+  -e TELEGRAM_CHAT_ID=your_chat_id \
   ghcr.io/pocketping/pocketping-bridge:latest
 ```
 
@@ -41,7 +41,7 @@ services:
 
       # Telegram (optional)
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_FORUM_CHAT_ID=${TELEGRAM_FORUM_CHAT_ID}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
 
       # Discord (optional)
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
@@ -70,7 +70,7 @@ API_KEY=your_secret_api_key
 
 # Telegram
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
-TELEGRAM_FORUM_CHAT_ID=-1001234567890
+TELEGRAM_CHAT_ID=-1001234567890
 
 # Discord
 DISCORD_BOT_TOKEN=your_discord_token
@@ -90,7 +90,7 @@ docker compose up -d
 | `PORT` | No | Server port (default: 3001) |
 | `API_KEY` | No | Secret key for API authentication |
 | `TELEGRAM_BOT_TOKEN` | If using Telegram | Bot token from BotFather |
-| `TELEGRAM_FORUM_CHAT_ID` | If using Telegram | Supergroup ID (starts with -100) |
+| `TELEGRAM_CHAT_ID` | If using Telegram | Supergroup ID (starts with -100) |
 | `DISCORD_BOT_TOKEN` | If using Discord | Discord bot token |
 | `DISCORD_CHANNEL_ID` | If using Discord | Channel ID for threads |
 | `SLACK_BOT_TOKEN` | If using Slack | Slack bot token (xoxb-) |
@@ -105,7 +105,7 @@ services:
     image: ghcr.io/pocketping/pocketping-bridge:latest
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_FORUM_CHAT_ID=${TELEGRAM_FORUM_CHAT_ID}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.pocketping.rule=Host(`bridge.yourdomain.com`)"
@@ -133,7 +133,7 @@ The bridge server exposes a health endpoint:
 
 ```bash
 curl http://localhost:3001/health
-# {"status":"ok","bridges":{"telegram":true,"discord":false,"slack":false}}
+# {"status":"ok","bridges":["telegram"]}
 ```
 
 ## Logs

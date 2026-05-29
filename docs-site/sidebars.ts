@@ -22,6 +22,9 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'SDKs',
       link: { type: 'doc', id: 'sdk/index' },
+      // TODO: add a 'sdk/react' entry here once a docs page exists for the
+      // shipped @pocketping/react package (packages/react). No page yet, so
+      // referencing it would break the build — do not add until the page lands.
       items: ['sdk/nodejs', 'sdk/python', 'sdk/go', 'sdk/php', 'sdk/ruby'],
     },
     {

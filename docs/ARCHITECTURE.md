@@ -6,7 +6,8 @@ This document explains the moving parts and how data flows between them.
 ## Core Components
 
 - Widget: JavaScript client embedded on your site. Handles chat UI, session state,
-  and WebSocket connection to your backend.
+  and the real-time connection to your backend (WebSocket or SSE depending on
+  deployment mode; the bridge-server uses SSE via `GET /api/events/stream`).
 - Your Backend: Receives widget events, applies your business logic, and forwards
   messages to a Bridge.
 - Bridge: Service that translates PocketPing events into chat-app messages

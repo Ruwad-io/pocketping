@@ -17,7 +17,7 @@ PocketPing has a modular architecture with three main components:
 ```mermaid
 flowchart TB
     subgraph website["Your Website"]
-        widget["Widget (~15KB)<br/>Chat UI + Events"]
+        widget["Widget (~60 KB gz)<br/>Chat UI + Events"]
     end
 
     subgraph bridge["Bridge Server"]
@@ -30,7 +30,7 @@ flowchart TB
         sl["Slack<br/>(Channels)"]
     end
 
-    widget <-->|WebSocket| router
+    widget <-->|SSE| router
     router <--> tg
     router <--> dc
     router <--> sl
@@ -40,7 +40,7 @@ flowchart TB
 
 | Component | Size | Role | You Need To... |
 |-----------|------|------|----------------|
-| **Widget** | ~15KB | Chat UI + event handling | Add 2 lines of code |
+| **Widget** | ~60 KB gz | Chat UI + event handling | Add 2 lines of code |
 | **Bridge Server** | - | Message routing + storage | Use SaaS or self-host |
 | **Bridges** | - | Platform integrations | Configure credentials |
 | **Backend SDK** | Optional | Custom logic + webhooks | `npm install` / `pip install` |
@@ -181,7 +181,7 @@ sequenceDiagram
     participant P as Platforms
 
     V->>W: Types message
-    W->>B: WebSocket
+    W->>B: HTTP POST (SSE for replies)
     B->>B: Store message
     B->>P: Broadcast to all bridges
     Note over P: Telegram, Discord, Slack<br/>create/update topics/threads
@@ -350,7 +350,7 @@ flowchart LR
     bridge["Bridge Server<br/>(Encrypted at rest)"]
     platforms["Your Platforms"]
 
-    visitor <-->|HTTPS/WSS| bridge
+    visitor <-->|HTTPS/SSE| bridge
     bridge <-->|HTTPS| platforms
 ```
 

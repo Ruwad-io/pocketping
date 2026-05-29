@@ -1,5 +1,5 @@
 ---
-sidebar_position: 8
+sidebar_position: 9
 title: AI Fallback
 description: Configure AI to handle conversations when you're unavailable
 ---
@@ -160,7 +160,7 @@ The system prompt defines your AI's personality, knowledge, and behavior.
 You are a friendly customer support agent for PocketPing, a customer chat tool.
 
 ## About PocketPing
-- Chat widget for websites (~15KB gzipped, very lightweight)
+- Lightweight chat widget for websites (~60 KB gzipped via CDN, ~32 KB via ESM)
 - Messages go to Telegram, Discord, and Slack
 - AI fallback when team is away (that's you!)
 - Plans: Free (100 sessions/mo), Pro ($19/mo), Team ($49/mo)
@@ -224,42 +224,16 @@ The conversation history is provided below.
 
 ---
 
-## Business Hours Mode
+## Business Hours
 
-Configure AI to only activate outside business hours:
-
-```bash title=".env"
-AI_BUSINESS_HOURS_ONLY=true
-
-# When you're available (AI stays off during these hours)
-AI_BUSINESS_START=09:00        # 9 AM
-AI_BUSINESS_END=18:00          # 6 PM
-AI_BUSINESS_TIMEZONE=America/New_York
-AI_BUSINESS_DAYS=1,2,3,4,5     # Monday (1) to Friday (5)
-```
-
-### How It Works
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    BUSINESS HOURS MODE                           │
-│                                                                 │
-│   Monday-Friday, 9am-6pm EST                                    │
-│   ├── Message received → Normal flow (AI off)                   │
-│   └── You have 2 minutes to reply                               │
-│                                                                 │
-│   Nights, weekends, holidays                                    │
-│   ├── Message received → AI responds immediately                │
-│   └── You can still jump in anytime                             │
-│                                                                 │
-│   Timeline:                                                     │
-│   ──────────────────────────────────────────────────────────    │
-│   |  9am    |    6pm    |    9am    |    6pm    |               │
-│   |---YOU---|----AI-----|---YOU-----|----AI-----|               │
-│      Mon         Mon-Tue     Tue        Tue-Wed                 │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+:::note Dashboard-only feature
+Restricting AI to outside business hours is a **SaaS dashboard** setting (under
+[app.pocketping.io/settings/ai](https://app.pocketping.io/settings/ai)). It is **not**
+configurable via environment variables on the self-hosted bridge server or SDKs — those
+control AI takeover purely through the operator's online/offline status and the
+`aiTakeoverDelay`. To emulate business hours when self-hosting, toggle the operator
+status (online during hours, offline after) from your own scheduler.
+:::
 
 ---
 
@@ -294,14 +268,12 @@ In the visitor's thread:
 @PocketPing ai on
 ```
 
-### From the API
+### From your backend (SDK)
 
-```bash
-# Disable AI for a session
-curl -X POST https://api.pocketping.io/sessions/sess_xxx/ai \
-  -H "Authorization: Bearer sk_xxx" \
-  -d '{"enabled": false}'
-```
+When you embed PocketPing with an SDK, AI takeover is driven by operator status:
+mark the operator **online** to keep AI off, or **offline** to let AI take over after
+`aiTakeoverDelay`. There is no dedicated per-session "toggle AI" REST endpoint — use the
+bridge commands above (`/ai on` / `/ai off`) for per-conversation control.
 
 ---
 

@@ -21,7 +21,7 @@ Traditional live chat tools force you to:
 ```mermaid
 flowchart LR
     subgraph website["Your Website"]
-        widget["Chat Widget<br/>~15KB"]
+        widget["Chat Widget<br/>~60 KB gz"]
     end
 
     subgraph pp["PocketPing"]
@@ -100,14 +100,14 @@ sequenceDiagram
 
 ### 4. Lightweight Widget
 
-Only **~15KB gzipped**—6x smaller than competitors:
+The widget is **~60 KB gzipped via the CDN** (or **~32 KB gzipped** via the npm/ESM build) — lean compared to most hosted chat widgets:
 
 | Widget | Size (gzipped) |
 |--------|----------------|
 | Crisp | ~88KB |
 | Drift | ~61KB |
 | Intercom | ~80KB+ |
-| **PocketPing** | **~15KB** |
+| **PocketPing** | **~60 KB (CDN) / ~32 KB (ESM)** |
 
 Minimal impact on your page load time.
 
@@ -206,7 +206,7 @@ flowchart LR
 
 | Component | Description |
 |-----------|-------------|
-| **Widget** | Chat interface embedded on your website (~15KB gzipped) |
+| **Widget** | Chat interface embedded on your website (~60 KB gz CDN / ~32 KB gz ESM) |
 | **pocketping.io** | Hosted SaaS service (zero setup) |
 | **Bridge Server** | Standalone Go binary for self-hosting |
 | **SDK** | Libraries for Node.js, Python, Go, PHP, Ruby |
@@ -221,7 +221,7 @@ flowchart LR
 | Notifications | ✓ Your existing apps | Yet another app |
 | AI fallback | ✓ Built-in | Premium add-on |
 | Self-hosting | ✓ Free | Enterprise only |
-| Widget size | ~15KB | 60-90KB |
+| Widget size | ~60 KB gz (32 KB ESM) | 60-90KB |
 | Per-seat pricing | None | $15-50/seat |
 
 ---

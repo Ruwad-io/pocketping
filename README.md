@@ -70,11 +70,11 @@ Visitor opens chat -> You get a Telegram ping -> Reply from your phone
 
 ## Comparison with Alternatives
 
-Pricing & feature audit against each vendor's public docs, Nov 2026.
+Pricing & feature audit against each vendor's public docs. Prices as of 2026-05; see [docs/COMPARISON.md](docs/COMPARISON.md) for the canonical, detailed breakdown.
 
 | Feature | PocketPing | Intercom | Crisp | Chatwoot | Tawk.to |
 |---------|------------|----------|-------|----------|---------|
-| **Pricing** | Free / OSS | $29+/seat/mo | Free / $45+/mo | Free / $19+/seat | Free |
+| **Pricing** | Free / OSS | $74+/mo | $25+/mo | Free / $19+/mo | Free |
 | **Self-hosted** | Yes | No | No | Yes | No |
 | **Telegram** | Native | Channel | Channel | Channel | Add-on |
 | **Discord** | Native | — | Channel | — | — |
@@ -82,14 +82,14 @@ Pricing & feature audit against each vendor's public docs, Nov 2026.
 | **Cross-bridge sync** | Yes | — | — | — | — |
 | **Bidirectional events** | Yes | Outbound only | Rule-based | [Requested 4 yr](https://github.com/chatwoot/chatwoot/issues/2995) | — |
 | **AI fallback** | BYO key | Fin AI | Hugo | Captain | AI Assist |
-| **AI cost / conversation** | **~$0.001** | $0.99 | $0.05–0.10 | $0.02 | $0.02–0.03 |
+| **AI cost / conversation** | **~$0.01** | $0.99 | $0.05–0.10 | $0.02 | $0.02–0.03 |
 | **License** | MIT | Closed | Closed | MIT (CE) | Closed |
 
 > **Channel** = the tool ingests that messaging app as an inbound channel into its own agent inbox. **Native** = you reply from the messaging app itself. **Native\*** (Intercom Slack) = reply from Slack works, but Intercom remains the inbox.
 
-### AI fallback: 1000× cheaper than Intercom Fin
+### AI fallback: ~100× cheaper than Intercom Fin
 
-PocketPing lets you bring your own OpenAI / Anthropic / Gemini key. With GPT-4o-mini, a typical AI resolution costs **~$0.0004** — about $0.40/month for 1000 conversations. Intercom Fin AI bills **$0.99 per outcome** with a 50/month minimum and no cap: the same 1000 conversations costs **$990/month**.
+PocketPing lets you bring your own OpenAI / Anthropic / Gemini key. A typical AI resolution costs **~$0.01** — about $10/month for 1000 conversations. Intercom Fin AI bills **$0.99 per outcome** with a 50/month minimum and no cap: the same 1000 conversations costs **$990/month**.
 
 | AI cost @ 1000 conversations / month | |
 |---|---|
@@ -97,7 +97,7 @@ PocketPing lets you bring your own OpenAI / Anthropic / Gemini key. With GPT-4o-
 | Crisp Hugo | $50–100 (+ $45+ plan) |
 | Tawk.to AI Assist | $29–99 |
 | Chatwoot Captain | ~$20 |
-| **PocketPing (BYO OpenAI key)** | **~$0.40** |
+| **PocketPing (BYO OpenAI key)** | **~$10** |
 
 Caveat: PocketPing's AI is your model, your prompt, your scope. No packaged RAG, no fine-tuning UI. For a "answer FAQ when the team is offline" fallback that's all you need. For a fully autonomous agent with multi-step tool use, you'll build more yourself.
 
@@ -251,7 +251,7 @@ Add to your `.env` file:
 
 ```env
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
-TELEGRAM_FORUM_CHAT_ID=-1001234567890
+TELEGRAM_CHAT_ID=-1001234567890
 ```
 
 #### How it looks
@@ -444,7 +444,7 @@ Widget  ◀──────────────▶  bridge-server  ◀─�
 ```bash
 docker run -d -p 3001:3001 \
   -e TELEGRAM_BOT_TOKEN=your-token \
-  -e TELEGRAM_FORUM_CHAT_ID=-100123456789 \
+  -e TELEGRAM_CHAT_ID=-100123456789 \
   pocketping/bridge-server
 ```
 
@@ -691,9 +691,9 @@ Location: Paris, France
 | [@pocketping/cli](packages/cli) | Interactive setup CLI | Ready |
 | [pocketping](packages/sdk-python) | Python SDK (FastAPI, Django, Flask) | Ready |
 | [@pocketping/sdk-node](packages/sdk-node) | Node.js SDK (Express) | Ready |
-| [pocketping-go](packages/sdk-go) | Go SDK (net/http, Gin, Echo) | Ready |
-| [pocketping-php](packages/sdk-php) | PHP SDK (Laravel, Symfony) | Ready |
-| [pocketping-ruby](packages/sdk-ruby) | Ruby SDK (Rails, Sinatra) | Ready |
+| [github.com/Ruwad-io/pocketping/sdk-go](packages/sdk-go) | Go SDK (net/http, Gin, Echo) | Ready |
+| [pocketping/sdk](packages/sdk-php) | PHP SDK (Composer; Laravel, Symfony) | Ready |
+| [pocketping](packages/sdk-ruby) | Ruby SDK (gem; Rails, Sinatra) | Ready |
 | [bridge-server](bridge-server) | Standalone bridge server (Go) | Ready |
 
 ---
@@ -753,7 +753,7 @@ pp = PocketPing(
 
     # Bridges
     bridges=[
-        TelegramBridge(bot_token="...", forum_chat_id="..."),
+        TelegramBridge(bot_token="...", chat_id="..."),
         DiscordBridge(bot_token="...", channel_id=123),
         SlackBridge(bot_token="...", channel_id="..."),
     ],

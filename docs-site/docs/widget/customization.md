@@ -93,15 +93,23 @@ Adjust the widget dimensions:
 
 ## Custom Launcher Button
 
-Hide the default button and create your own:
+### Change the launcher icon
+
+Use `toggleIcon` to swap the floating button's icon. Pass one of the built-in
+keywords (`'chat'`, `'message'`, `'help'`) or your own icon URL / SVG string:
 
 ```javascript
 PocketPing.init({
   projectId: 'proj_xxx',
-  hideLauncher: true,
+  toggleIcon: 'help', // 'chat' | 'message' | 'help' | a custom URL/SVG string
 });
+```
 
-// Then trigger with your own button
+### Trigger the chat from your own element
+
+You can also open the widget programmatically from any element on your page:
+
+```javascript
 document.getElementById('my-chat-button').addEventListener('click', () => {
   PocketPing.open();
 });
@@ -144,7 +152,7 @@ PocketPing.init({
 ```javascript
 PocketPing.init({
   projectId: 'proj_xxx',
-  logo: 'https://example.com/logo.svg',
+  logoUrl: 'https://example.com/logo.svg',
 });
 ```
 

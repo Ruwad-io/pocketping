@@ -18,10 +18,11 @@ Thank you for wanting to contribute to PocketPing! This guide will help you get 
 
 ### Prerequisites
 
-- **Node.js** 20+ (for widget, sdk-node, and bridge-server)
+- **Node.js** 20+ (for widget and sdk-node)
 - **pnpm** (package manager) - Install with `npm install -g pnpm`
-- **Bun** (for bridge-server) - Install from [bun.sh](https://bun.sh)
+- **Go** 1.21+ (for bridge-server and sdk-go) - Install from [go.dev](https://go.dev/dl/)
 - **Python 3.10+** (for SDK development)
+- **Docker** (for the repo-wide `make test` flow)
 - **Git**
 
 ### Quick Setup
@@ -65,19 +66,27 @@ pnpm dev
 
 ### Bridge Server Development
 
+The bridge-server is a standalone Go binary.
+
 ```bash
 cd bridge-server
 
-# Install dependencies
-bun install
+# Download Go module dependencies
+go mod download
 
 # Copy environment file
 cp .env.example .env
 # Edit .env with your test credentials
 
-# Run in development mode (with hot reload)
-bun run dev
+# Run in development mode
+go run ./cmd/server
+
+# Run the tests
+go test ./...
 ```
+
+You can also run it via Docker — see the bridge-server README and the
+repo-wide `make` targets.
 
 ### Node.js SDK Development
 
@@ -157,13 +166,16 @@ pocketping/
 │       │   └── fastapi.py   # FastAPI integration
 │       └── tests/           # Unit tests (pytest)
 │
-├── bridge-server/           # Standalone bridge server (Bun + Hono)
-│   ├── src/
-│   │   ├── index.ts         # Server entry point
+├── bridge-server/           # Standalone bridge server (Go)
+│   ├── cmd/
+│   │   └── server/          # Server entry point (main package)
+│   ├── internal/
 │   │   └── bridges/         # Bridge implementations
-│   │       ├── telegram.ts
-│   │       ├── discord.ts
-│   │       └── slack.ts
+│   │       ├── telegram.go
+│   │       ├── discord.go
+│   │       └── slack.go
+│   ├── go.mod
+│   ├── Makefile
 │   └── Dockerfile
 │
 ├── tests/
@@ -230,11 +242,14 @@ pnpm test           # Run once
 pnpm test -- --watch  # Watch mode
 ```
 
-### Integration Tests
+### Bridge Server Tests
 
 ```bash
 cd bridge-server
-bun test
+go test ./...
+
+# Or via the repo-wide Docker flow
+make test-go
 ```
 
 ### E2E Tests
@@ -350,37 +365,44 @@ Want to add support for a new platform (WhatsApp, SMS, etc.)?
 
 ### 1. Bridge Server Implementation
 
-Create a new file in `bridge-server/src/bridges/`:
+Create a new file in `bridge-server/internal/bridges/` (the bridge-server is Go):
 
-```typescript
-// bridge-server/src/bridges/whatsapp.ts
-import type { BridgeConfig, BridgeCallbacks } from './types';
+```go
+// bridge-server/internal/bridges/whatsapp.go
+package bridges
 
-export interface WhatsAppConfig extends BridgeConfig {
-  apiKey: string;
-  phoneNumber: string;
+type WhatsAppConfig struct {
+	APIKey      string
+	PhoneNumber string
 }
 
-export class WhatsAppBridge {
-  constructor(config: WhatsAppConfig, callbacks: BridgeCallbacks) {
-    // Initialize
-  }
+type WhatsAppBridge struct {
+	config    WhatsAppConfig
+	callbacks BridgeCallbacks
+}
 
-  async start(): Promise<void> {
-    // Connect to WhatsApp API
-  }
+func NewWhatsAppBridge(config WhatsAppConfig, callbacks BridgeCallbacks) *WhatsAppBridge {
+	return &WhatsAppBridge{config: config, callbacks: callbacks}
+}
 
-  async stop(): Promise<void> {
-    // Disconnect
-  }
+func (b *WhatsAppBridge) Start(ctx context.Context) error {
+	// Connect to the WhatsApp API
+	return nil
+}
 
-  async onNewSession(session: Session): Promise<void> {
-    // Send notification for new session
-  }
+func (b *WhatsAppBridge) Stop(ctx context.Context) error {
+	// Disconnect
+	return nil
+}
 
-  async onVisitorMessage(message: Message, session: Session): Promise<void> {
-    // Forward visitor message
-  }
+func (b *WhatsAppBridge) OnNewSession(ctx context.Context, session Session) error {
+	// Send notification for the new session
+	return nil
+}
+
+func (b *WhatsAppBridge) OnVisitorMessage(ctx context.Context, message Message, session Session) error {
+	// Forward the visitor message
+	return nil
 }
 ```
 
@@ -408,7 +430,9 @@ class WhatsAppBridge(Bridge):
 
 ### 3. Add Tests
 
-Create `tests/integration/whatsapp-bridge.test.ts` with mock server.
+For the bridge-server, add a Go test alongside the implementation:
+`bridge-server/internal/bridges/whatsapp_test.go` (use a mock HTTP server).
+For SDK-level integration tests, add the corresponding test in each SDK's suite.
 
 ### 4. Document
 

@@ -2,6 +2,9 @@
 
 A comprehensive comparison of PocketPing with other live chat solutions.
 
+> Competitor prices as of 2026-05. This document is the canonical source for pricing
+> and AI-cost figures; the README mirrors these numbers.
+
 ## Quick Overview
 
 | Feature | PocketPing | Intercom | Crisp | Chatwoot | Tawk.to | Drift |
@@ -118,7 +121,7 @@ A comprehensive comparison of PocketPing with other live chat solutions.
 | **Setup** | Minutes | Hours |
 | **Mobile notifications** | Telegram, Discord, Slack | Zendesk app |
 | **Self-hosted** | Yes | No |
-| **Modern stack** | Yes (TypeScript, Bun) | Legacy |
+| **Modern stack** | Yes (Go) | Legacy |
 | **AI** | BYO key | Add-on ($$$) |
 
 **Choose PocketPing if:** You want modern, lightweight, mobile-first.
@@ -156,7 +159,7 @@ A comprehensive comparison of PocketPing with other live chat solutions.
 | Aspect | PocketPing | Chatwoot | Others |
 |--------|------------|----------|--------|
 | **Docker support** | Yes | Yes | N/A |
-| **Single binary** | Yes (Bun) | No | N/A |
+| **Single binary** | Yes (Go binary) | No | N/A |
 | **Dependencies** | None | Redis, Postgres, Sidekiq | N/A |
 | **RAM usage** | ~50MB | ~1GB+ | N/A |
 | **Setup time** | 5 minutes | 30+ minutes | N/A |

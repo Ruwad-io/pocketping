@@ -109,10 +109,10 @@ import { PocketPing, TelegramBridge, DiscordBridge, SlackBridge } from '@pocketp
 const pp = new PocketPing({ /* ... */ });
 
 // Add Telegram bridge
-pp.addBridge(new TelegramBridge({
-  botToken: process.env.TELEGRAM_BOT_TOKEN,
-  chatIds: process.env.TELEGRAM_CHAT_ID,
-}));
+pp.addBridge(new TelegramBridge(
+  process.env.TELEGRAM_BOT_TOKEN,
+  process.env.TELEGRAM_CHAT_ID
+));
 
 // Add Discord bridge (bot mode for bidirectional)
 pp.addBridge(DiscordBridge.bot(

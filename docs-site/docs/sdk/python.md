@@ -26,10 +26,12 @@ from pocketping.bridges import TelegramBridge
 app = FastAPI()
 
 pp = PocketPing(
-    bridge=TelegramBridge(
-        token="YOUR_BOT_TOKEN",
-        chat_id="YOUR_CHAT_ID"
-    )
+    bridges=[
+        TelegramBridge(
+            bot_token="YOUR_BOT_TOKEN",
+            chat_id="YOUR_CHAT_ID"
+        )
+    ]
 )
 
 # Mount routes at /pocketping
@@ -48,10 +50,12 @@ from pocketping.bridges import TelegramBridge
 app = Flask(__name__)
 
 pp = PocketPing(
-    bridge=TelegramBridge(
-        token="YOUR_BOT_TOKEN",
-        chat_id="YOUR_CHAT_ID"
-    )
+    bridges=[
+        TelegramBridge(
+            bot_token="YOUR_BOT_TOKEN",
+            chat_id="YOUR_CHAT_ID"
+        )
+    ]
 )
 
 # Register blueprint
@@ -66,7 +70,7 @@ if __name__ == "__main__":
 ```python
 # settings.py
 POCKETPING_CONFIG = {
-    "bridge_url": "http://localhost:3001",
+    "welcome_message": "Hi! How can we help?",
 }
 
 # urls.py
@@ -150,7 +154,7 @@ If configuration is missing or invalid, you'll see a helpful setup guide:
 
 | Bridge | Mode | Constructor | Features |
 |--------|------|-------------|----------|
-| Telegram | Bot | `TelegramBridge(token=..., chat_id=...)` | Send, edit, delete |
+| Telegram | Bot | `TelegramBridge(bot_token=..., chat_id=...)` | Send, edit, delete |
 | Discord | Webhook | `DiscordBridge(webhook_url=...)` | Send only |
 | Discord | Bot | `DiscordBridge(bot_token=..., channel_id=...)` | Send, edit, delete |
 | Slack | Webhook | `SlackBridge(webhook_url=...)` | Send only |
@@ -186,13 +190,12 @@ from pocketping.storage import PostgresStorage
 from pocketping.bridges import TelegramBridge, DiscordBridge
 
 pp = PocketPing(
-    # Option 1: Use external bridge server (alternative to built-in bridges)
-    bridge_url="http://localhost:3001",
-    api_key="your_api_key",
+    # Welcome message for new visitors
+    welcome_message="Hi! How can we help?",
 
-    # Option 2: Use built-in bridges directly
+    # Built-in bridges (or add later with pp.add_bridge(...))
     bridges=[
-        TelegramBridge(token="...", chat_id="..."),
+        TelegramBridge(bot_token="...", chat_id="..."),
         DiscordBridge.bot(token="...", channel_id="..."),
     ],
 
@@ -210,27 +213,24 @@ pp = PocketPing(
 ### Sessions
 
 ```python
-# Get all active sessions
-sessions = await pp.get_sessions()
-
 # Get a specific session
 session = await pp.get_session("sess_xxx")
 
 # Get session messages
 messages = await pp.get_messages("sess_xxx")
-
-# Close a session
-await pp.close_session("sess_xxx")
 ```
+
+:::note Sessions live in your storage
+The SDK does not keep an in-memory list of "all sessions". To enumerate
+conversations, query your `Storage` implementation directly, or track sessions
+in the `on_session_start` handler.
+:::
 
 ### Messages
 
 ```python
-# Send a message to a session
-await pp.send_message("sess_xxx", {
-    "content": "Hello from the server!",
-    "type": "operator",
-})
+# Send an operator reply to a session
+await pp.send_operator_message("sess_xxx", "Hello from the server!")
 ```
 
 ### Visitor Identification
@@ -278,13 +278,12 @@ def handle_event(event, session):
 
     # Trigger automation
     if event.name == "clicked_pricing":
-        pp.send_message(session.id, {
-            "content": "I see you're checking our pricing! Need help?",
-            "type": "operator",
-        })
+        pp.send_operator_message(
+            session.id,
+            "I see you're checking our pricing! Need help?",
+        )
 
 pp = PocketPing(
-    bridge_url="http://localhost:3001",
     on_event=handle_event,
 )
 ```
@@ -376,7 +375,7 @@ def on_new_message(session: Session, message: Message) -> None:
     print(f"Message in {session.id}: {message.content}")
 
 pp = PocketPing(
-    bridge_url="http://localhost:3001",
+    welcome_message="Hi! How can we help?",
     on_session_start=on_new_session,
     on_message=on_new_message,
 )

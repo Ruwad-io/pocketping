@@ -127,7 +127,7 @@ Add to your `.env` file:
 
 ```bash title=".env"
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
-TELEGRAM_FORUM_CHAT_ID=-1001234567890
+TELEGRAM_CHAT_ID=-1001234567890
 ```
 
 Then restart your bridge server:
@@ -222,7 +222,7 @@ You can route different projects to different Telegram groups:
 ```bash title=".env"
 # Project 1 → Support group
 TELEGRAM_BOT_TOKEN=xxx
-TELEGRAM_FORUM_CHAT_ID=-1001111111111
+TELEGRAM_CHAT_ID=-1001111111111
 
 # For multiple projects, use the SDK:
 # See SDK documentation for per-project routing

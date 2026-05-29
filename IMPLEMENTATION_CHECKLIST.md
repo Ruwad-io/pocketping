@@ -289,7 +289,6 @@ Plugins and integrations for popular platforms:
 | Platform | Type | Package/Plugin | Features |
 |----------|------|----------------|----------|
 | WordPress | Plugin | `pocketping` | Settings page, auto-inject widget |
-| Shopify | App | TBD | Coming soon |
 | Webflow | Embed | Manual | CDN script |
 
 ### Implementation Status
@@ -297,7 +296,12 @@ Plugins and integrations for popular platforms:
 | Platform | Settings UI | Widget Injection | User Auth | E-commerce |
 |----------|-------------|------------------|-----------|------------|
 | WordPress | ✅ | ✅ | ⬜ | ⬜ |
-| Shopify | ⬜ | ⬜ | ⬜ | ⬜ |
+
+### Roadmap
+
+| Platform | Type | Status |
+|----------|------|--------|
+| Shopify | App | Planned (not yet started) |
 
 ---
 
@@ -317,6 +321,6 @@ packages/sdk-python/src/pocketping/models.py      # SessionMetadata class
 packages/sdk-python/src/pocketping/fastapi.py     # Server-side enrichment
 packages/sdk-node/src/types.ts                    # SessionMetadata interface
 packages/sdk-node/src/pocketping.ts               # Server-side enrichment
-bridge-server/src/types.ts                        # SessionMetadata interface
+bridge-server/internal/types.go                   # SessionMetadata struct (Go)
 packages/widget/src/client.ts                     # Client-side metadata collection
 ```

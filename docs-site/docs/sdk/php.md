@@ -11,7 +11,7 @@ Integrate PocketPing into your PHP backend.
 ## Installation
 
 ```bash
-composer require pocketping/pocketping-php
+composer require pocketping/sdk
 ```
 
 ## Quick Start
@@ -234,8 +234,8 @@ $pp = new PocketPing(
     welcomeMessage: 'Hi! How can we help?',
 
     // Widget version management (optional)
-    minWidgetVersion: '0.2.0',
-    latestWidgetVersion: '0.3.0',
+    minWidgetVersion: '2.0.0',
+    latestWidgetVersion: '2.6.0',
 
     // Event callbacks
     onNewSession: function ($session) {

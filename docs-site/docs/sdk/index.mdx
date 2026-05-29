@@ -38,8 +38,8 @@ flowchart LR
 |-----|----------|---------|
 | [**Node.js**](./nodejs) | JavaScript/TypeScript | `@pocketping/sdk-node` |
 | [**Python**](./python) | Python 3.10+ | `pocketping` |
-| [**Go**](./go) | Go 1.21+ | `github.com/pocketping/pocketping-go` |
-| [**PHP**](./php) | PHP 8.1+ | `pocketping/pocketping-php` |
+| [**Go**](./go) | Go 1.21+ | `github.com/Ruwad-io/pocketping/sdk-go` |
+| [**PHP**](./php) | PHP 8.1+ | `pocketping/sdk` |
 | [**Ruby**](./ruby) | Ruby 3.1+ | `pocketping` |
 
 ## When to Use an SDK
@@ -62,8 +62,6 @@ React to widget events in your backend:
 
 ```javascript
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL,
-
   onSessionStart: (session) => {
     analytics.track('chat_started', { country: session.metadata.country });
   },
@@ -105,7 +103,6 @@ Forward events to Zapier, Make, n8n, or custom endpoints:
 
 ```javascript
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL,
   webhookUrl: 'https://hooks.zapier.com/hooks/catch/123/abc',
   webhookSecret: 'whsec_xxx', // HMAC signature
 });
@@ -135,7 +132,6 @@ Auto-respond when operators are away:
 
 ```javascript
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL,
   aiProvider: new OpenAIProvider({ apiKey: process.env.OPENAI_API_KEY }),
   aiTakeoverDelay: 300, // 5 minutes
   aiSystemPrompt: 'You are a helpful support assistant for Acme Inc...',
@@ -183,7 +179,7 @@ const { PocketPing } = require('@pocketping/sdk-node');
 
 const app = express();
 const pp = new PocketPing({
-  bridgeUrl: process.env.BRIDGE_URL,
+  welcomeMessage: 'Hi! How can we help?',
 });
 
 app.use('/pocketping', pp.middleware());
@@ -202,7 +198,7 @@ from fastapi import FastAPI
 from pocketping import PocketPing
 
 app = FastAPI()
-pp = PocketPing(bridge_url="http://localhost:3001")
+pp = PocketPing(welcome_message="Hi! How can we help?")
 
 pp.mount_fastapi(app, prefix="/pocketping")
 ```
@@ -211,7 +207,7 @@ pp.mount_fastapi(app, prefix="/pocketping")
 <TabItem value="go" label="Go">
 
 ```bash
-go get github.com/pocketping/pocketping-go
+go get github.com/Ruwad-io/pocketping/sdk-go
 ```
 
 ```go
@@ -219,12 +215,12 @@ package main
 
 import (
     "net/http"
-    pocketping "github.com/pocketping/pocketping-go"
+    pocketping "github.com/Ruwad-io/pocketping/sdk-go"
 )
 
 func main() {
     pp := pocketping.New(pocketping.Config{
-        BridgeURL: "http://localhost:3001",
+        WelcomeMessage: "Hi! How can we help?",
     })
 
     http.Handle("/pocketping/", pp.Handler("/pocketping"))
@@ -236,19 +232,22 @@ func main() {
 <TabItem value="php" label="PHP">
 
 ```bash
-composer require pocketping/pocketping-php
+composer require pocketping/sdk
 ```
 
 ```php
 <?php
 use PocketPing\PocketPing;
+use PocketPing\Models\ConnectRequest;
 
-$pp = new PocketPing([
-    'bridgeUrl' => 'http://localhost:3001',
-]);
+$pp = new PocketPing(
+    welcomeMessage: 'Hi! How can we help?',
+);
 
-// Laravel
-Route::any('/pocketping/{path?}', [$pp, 'handleRequest']);
+// Laravel — call the SDK handlers from your own routes
+Route::post('/pocketping/connect', function (\Illuminate\Http\Request $request) use ($pp) {
+    return response()->json($pp->handleConnect(ConnectRequest::fromArray($request->all())));
+});
 ```
 
 </TabItem>
@@ -261,7 +260,7 @@ gem install pocketping
 ```ruby
 require 'pocketping'
 
-pp = PocketPing.new(bridge_url: 'http://localhost:3001')
+pp = PocketPing.new(welcome_message: 'Hi! How can we help?')
 
 # Rails
 Rails.application.routes.draw do
