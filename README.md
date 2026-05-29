@@ -70,18 +70,36 @@ Visitor opens chat -> You get a Telegram ping -> Reply from your phone
 
 ## Comparison with Alternatives
 
+Pricing & feature audit against each vendor's public docs, Nov 2026.
+
 | Feature | PocketPing | Intercom | Crisp | Chatwoot | Tawk.to |
 |---------|------------|----------|-------|----------|---------|
-| **Pricing** | Free | $74+/mo | $25+/mo | Free | Free |
+| **Pricing** | Free / OSS | $29+/seat/mo | Free / $45+/mo | Free / $19+/seat | Free |
 | **Self-hosted** | Yes | No | No | Yes | No |
-| **Telegram** | Native | No | Channel | Channel | No |
-| **Discord** | Native | No | No | No | No |
-| **Slack** | Native | Add-on | Add-on | Channel | No |
-| **Multi-channel sync** | Yes | No | No | No | No |
-| **Custom Events** | Yes | Paid | Limited | No | No |
-| **Open source** | MIT | No | No | AGPL | No |
+| **Telegram** | Native | Channel | Channel | Channel | Add-on |
+| **Discord** | Native | — | Channel | — | — |
+| **Slack** | Native | Native* | Add-on | Channel | — |
+| **Cross-bridge sync** | Yes | — | — | — | — |
+| **Custom Events** | Yes | Paid | Limited | — | — |
+| **AI fallback** | BYO key | Fin AI | Hugo | Captain | AI Assist |
+| **AI cost / conversation** | **~$0.001** | $0.99 | $0.05–0.10 | $0.02 | $0.02–0.03 |
+| **License** | MIT | Closed | Closed | MIT (CE) | Closed |
 
-> "Channel" means the tool can ingest that messaging app as an inbound channel into its agent inbox. PocketPing's angle is different: **phone-first, two-way sync across Telegram/Discord/Slack with no separate agent inbox to manage** — you reply from the app you already use.
+> **Channel** = the tool ingests that messaging app as an inbound channel into its own agent inbox. **Native** = you reply from the messaging app itself. **Native\*** (Intercom Slack) = reply from Slack works, but Intercom remains the inbox.
+
+### AI fallback: 1000× cheaper than Intercom Fin
+
+PocketPing lets you bring your own OpenAI / Anthropic / Gemini key. With GPT-4o-mini, a typical AI resolution costs **~$0.0004** — about $0.40/month for 1000 conversations. Intercom Fin AI bills **$0.99 per outcome** with a 50/month minimum and no cap: the same 1000 conversations costs **$990/month**.
+
+| AI cost @ 1000 conversations / month | |
+|---|---|
+| Intercom Fin AI | $990 |
+| Crisp Hugo | $50–100 (+ $45+ plan) |
+| Tawk.to AI Assist | $29–99 |
+| Chatwoot Captain | ~$20 |
+| **PocketPing (BYO OpenAI key)** | **~$0.40** |
+
+Caveat: PocketPing's AI is your model, your prompt, your scope. No packaged RAG, no fine-tuning UI. For a "answer FAQ when the team is offline" fallback that's all you need. For a fully autonomous agent with multi-step tool use, you'll build more yourself.
 
 **[See full comparison](docs/COMPARISON.md)** - Detailed analysis vs Intercom, Crisp, Chatwoot, Tawk.to, Drift, Zendesk
 
