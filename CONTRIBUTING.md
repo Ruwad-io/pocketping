@@ -218,7 +218,7 @@ pocketping/
 - Bug fixes
 - Documentation improvements
 - Test coverage improvements
-- New bridge implementations (WhatsApp, SMS, etc.)
+- New bridge implementations (SMS, Matrix, etc.)
 - Performance improvements
 - Accessibility improvements
 - Translations
@@ -329,7 +329,7 @@ Use clear, conventional commit messages:
 
 ```bash
 # Good examples
-git commit -m "feat: add WhatsApp bridge support"
+git commit -m "feat: add Matrix bridge support"
 git commit -m "fix: resolve WebSocket reconnection issue"
 git commit -m "docs: improve Telegram setup guide"
 git commit -m "test: add integration tests for Slack bridge"
@@ -361,46 +361,47 @@ Then open a Pull Request on GitHub.
 
 ## Adding a New Bridge
 
-Want to add support for a new platform (WhatsApp, SMS, etc.)?
+Want to add support for a new platform (SMS, Matrix, etc.)?
 
 ### 1. Bridge Server Implementation
 
 Create a new file in `bridge-server/internal/bridges/` (the bridge-server is Go):
 
 ```go
-// bridge-server/internal/bridges/whatsapp.go
+// bridge-server/internal/bridges/matrix.go
 package bridges
 
-type WhatsAppConfig struct {
-	APIKey      string
-	PhoneNumber string
+type MatrixConfig struct {
+	HomeserverURL string
+	AccessToken   string
+	RoomID        string
 }
 
-type WhatsAppBridge struct {
-	config    WhatsAppConfig
+type MatrixBridge struct {
+	config    MatrixConfig
 	callbacks BridgeCallbacks
 }
 
-func NewWhatsAppBridge(config WhatsAppConfig, callbacks BridgeCallbacks) *WhatsAppBridge {
-	return &WhatsAppBridge{config: config, callbacks: callbacks}
+func NewMatrixBridge(config MatrixConfig, callbacks BridgeCallbacks) *MatrixBridge {
+	return &MatrixBridge{config: config, callbacks: callbacks}
 }
 
-func (b *WhatsAppBridge) Start(ctx context.Context) error {
-	// Connect to the WhatsApp API
+func (b *MatrixBridge) Start(ctx context.Context) error {
+	// Connect to the Matrix homeserver
 	return nil
 }
 
-func (b *WhatsAppBridge) Stop(ctx context.Context) error {
+func (b *MatrixBridge) Stop(ctx context.Context) error {
 	// Disconnect
 	return nil
 }
 
-func (b *WhatsAppBridge) OnNewSession(ctx context.Context, session Session) error {
+func (b *MatrixBridge) OnNewSession(ctx context.Context, session Session) error {
 	// Send notification for the new session
 	return nil
 }
 
-func (b *WhatsAppBridge) OnVisitorMessage(ctx context.Context, message Message, session Session) error {
+func (b *MatrixBridge) OnVisitorMessage(ctx context.Context, message Message, session Session) error {
 	// Forward the visitor message
 	return nil
 }
@@ -411,13 +412,13 @@ func (b *WhatsAppBridge) OnVisitorMessage(ctx context.Context, message Message, 
 Create in `packages/sdk-python/src/pocketping/bridges/`:
 
 ```python
-# whatsapp.py
+# matrix.py
 from ..types import Bridge, Session, Message
 
-class WhatsAppBridge(Bridge):
-    def __init__(self, api_key: str, phone_number: str):
-        self.api_key = api_key
-        self.phone_number = phone_number
+class MatrixBridge(Bridge):
+    def __init__(self, homeserver_url: str, access_token: str):
+        self.homeserver_url = homeserver_url
+        self.access_token = access_token
 
     async def start(self) -> None:
         # Connect
@@ -431,7 +432,7 @@ class WhatsAppBridge(Bridge):
 ### 3. Add Tests
 
 For the bridge-server, add a Go test alongside the implementation:
-`bridge-server/internal/bridges/whatsapp_test.go` (use a mock HTTP server).
+`bridge-server/internal/bridges/matrix_test.go` (use a mock HTTP server).
 For SDK-level integration tests, add the corresponding test in each SDK's suite.
 
 ### 4. Document

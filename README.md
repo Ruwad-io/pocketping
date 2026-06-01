@@ -42,7 +42,6 @@ Most chat tools force the whole team onto one platform (Intercom, Crisp, Chatwoo
 | 💬 **Discord** | Native · OSS | One **thread** per visitor in a forum channel |
 | 💼 **Slack** | Native · OSS | Threaded reply in your `#support` channel |
 | 🔶 **HubSpot** | Hosted (via [pocketping.io](https://pocketping.io)) | Conversation inbox + CRM context |
-| 🟢 **WhatsApp** | On the roadmap | Group + DM routing via WhatsApp Business API |
 
 - **Bob on Telegram, Alice on Slack, marketing on HubSpot** — same conversation, native sync.
 - **Edit a reply in Slack** → it updates in Telegram and in the widget. **Edit in Discord** → same.

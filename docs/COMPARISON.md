@@ -141,7 +141,6 @@ A comprehensive comparison of PocketPing with other live chat solutions.
 | **Slack** | Threads | Add-on | Add-on | Yes | No | Yes | Add-on |
 | **Email** | Via bridges | Yes | Yes | Yes | Yes | Yes | Yes |
 | **SMS** | Roadmap | Yes | Yes | Yes | No | Yes | Yes |
-| **WhatsApp** | Roadmap | Yes | Yes | Yes | No | Yes | Yes |
 | **Custom app** | Not needed | Required | Required | Optional | Required | Required | Required |
 
 ### AI Features
