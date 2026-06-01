@@ -10,14 +10,15 @@ database to run. The bot token never leaves the Worker (it is a Worker secret).
 
 ---
 
-## Deploy in ~60 seconds (1-click)
+## Deploy as a Cloudflare Worker (1 click + a few minutes)
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Ruwad-io/pocketping/tree/main/cloudflare-workers/telegram-relay)
 
-The button forks this folder into your GitHub account, walks you through connecting
-Cloudflare, **auto-creates the `PP` KV namespace**, lets you set `TELEGRAM_GROUP_ID`
-in the UI, and ships your first deploy. After it finishes you have **three things**
-left to do — they take ~30 seconds together.
+The button forks this folder into your GitHub account and deploys it to **your**
+Cloudflare account — so you'll need a (free) Cloudflare account. Cloudflare's flow
+handles the GitHub connection, provisions the `PP` KV namespace, and lets you set
+`TELEGRAM_GROUP_ID` in the UI. Once it's deployed, wire it to Telegram — the
+**three short steps** below (a few minutes total).
 
 ### 1. Create the Telegram bot + group (skip if you already have one)
 

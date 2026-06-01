@@ -7,13 +7,13 @@
 <p align="center">
   <strong>Open-source chat widget — each teammate replies from their own messaging app.</strong><br>
   One on <strong>Telegram</strong>, one on <strong>Slack</strong>, one on <strong>Discord</strong>. Replies sync across all of them.<br>
-  No dashboard. No database. <a href="#60-second-quick-start">Free serverless deploy in 60 seconds.</a>
+  No dashboard. No database. <a href="#quick-start-serverless-relay">Free serverless deploy — no account on us.</a>
 </p>
 
 <p align="center">
   <a href="https://pocketping.io">Website</a> &bull;
   <a href="https://docs.pocketping.io">Documentation</a> &bull;
-  <a href="#60-second-quick-start">Quick Start</a> &bull;
+  <a href="#quick-start-serverless-relay">Quick Start</a> &bull;
   <a href="#three-deployment-options">Deployment modes</a> &bull;
   <a href="https://github.com/Ruwad-io/pocketping/issues">Get Help</a>
 </p>
@@ -122,9 +122,9 @@ The widget exposes `pp.on('show_demo_offer', handler)` so your site code reacts.
 
 ---
 
-## 60-Second Quick Start
+## Quick Start: Serverless Relay
 
-The shortest path: **no server, no database, no SaaS account**. A free Cloudflare Worker relays
+The lightest path: **no server, no database, no SaaS account**. A free Cloudflare Worker relays
 chat between your widget and a Telegram group where each visitor gets a **forum topic**.
 
 ### 1. Deploy the relay (1 click)
