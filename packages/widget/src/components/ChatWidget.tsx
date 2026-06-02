@@ -746,13 +746,13 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
                 <div class="pp-header-title">
                   {config.operatorName ?? 'Support'}
                 </div>
-                <div class="pp-header-status">
+                <div class="pp-header-status" role="status" aria-live="polite">
                   {operatorOnline ? (
-                    <><span class="pp-status-dot pp-online" /> Active now</>
+                    <><span class="pp-status-dot pp-online" aria-hidden="true" /> Active now</>
                   ) : operatorReachable ? (
-                    <><span class="pp-status-dot pp-reachable" /> Replies in a few minutes</>
+                    <><span class="pp-status-dot pp-reachable" aria-hidden="true" /> Replies in a few minutes</>
                   ) : (
-                    <><span class="pp-status-dot" /> Leave a message</>
+                    <><span class="pp-status-dot" aria-hidden="true" /> Leave a message</>
                   )}
                 </div>
               </div>
