@@ -498,6 +498,17 @@ X-PocketPing-Signature: sha256=<hex>
 Hosted: project → **Webhooks** tab (URL, signing secret, "send test"). Self-hosted:
 `EVENTS_WEBHOOK_URL` + `EVENTS_WEBHOOK_SECRET`. **[Docs →](https://docs.pocketping.io/webhooks)**
 
+### Operator commands (`!ss`, `!sss`, `!help`)
+
+Reply to a visitor and you can also **run commands** by typing `!` in your bridge —
+they're intercepted and never reach the visitor. Built in: **on-demand screen
+capture** of the visitor's viewport (`!ss` visible, `!sss` silent). Commands live in a
+small registry, so adding your own (e.g. `!note`, `!ban`) is a one-object change.
+
+Screen capture is **opt-in per project** (Settings → Operator commands) — enabling it
+means you're responsible for disclosing capture to visitors.
+**[Docs →](https://docs.pocketping.io/operator-commands)**
+
 ### Read Receipts (Check Marks)
 
 Like WhatsApp:
