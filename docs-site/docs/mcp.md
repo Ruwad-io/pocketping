@@ -16,11 +16,39 @@ assistant closes the loop, it doesn't just summarize.
 
 ## Setup
 
-1. Create an API key: dashboard → **Settings → API keys** → *Create key*. Copy it (it's
-   shown once).
-2. Add the server to your MCP client.
+First, create an API key: dashboard → **Settings → API keys** → *Create key*. Copy it
+(it's shown once).
 
-**Claude Desktop / Cursor** — add to `claude_desktop_config.json` or `.cursor/mcp.json`:
+### Hosted (recommended)
+
+The fastest path — no install. Add a **custom connector** pointing at the hosted server
+and authenticate with your key as a Bearer token.
+
+- **Connector URL:** `https://app.pocketping.io/api/mcp`
+- **Auth:** `Authorization: Bearer ppk_…`
+
+For config-file clients (Claude Desktop, Cursor):
+
+```json
+{
+  "mcpServers": {
+    "pocketping": {
+      "url": "https://app.pocketping.io/api/mcp",
+      "headers": { "Authorization": "Bearer ppk_your_key_here" }
+    }
+  }
+}
+```
+
+The endpoint speaks **Streamable HTTP** (the current MCP transport; legacy SSE is
+disabled). Some clients — notably the Claude web connector UI — currently expect OAuth
+rather than a Bearer header; use Cursor, Claude Desktop, the Claude API connector, or the
+local option below until OAuth lands.
+
+### Local (npx)
+
+Prefer to run it on your machine, or self-hosting PocketPing? Use the
+[`@pocketping/mcp`](https://www.npmjs.com/package/@pocketping/mcp) package over stdio:
 
 ```json
 {
@@ -28,20 +56,16 @@ assistant closes the loop, it doesn't just summarize.
     "pocketping": {
       "command": "npx",
       "args": ["-y", "@pocketping/mcp"],
-      "env": { "POCKETPING_API_KEY": "ppk_your_key_here" }
+      "env": {
+        "POCKETPING_API_KEY": "ppk_your_key_here",
+        "POCKETPING_API_URL": "https://app.pocketping.io"
+      }
     }
   }
 }
 ```
 
-Self-hosting PocketPing? Point the server at your instance:
-
-```json
-"env": {
-  "POCKETPING_API_KEY": "ppk_…",
-  "POCKETPING_API_URL": "https://your-pocketping.example.com"
-}
-```
+Self-hosting? Point `POCKETPING_API_URL` at your own instance.
 
 ## Tools
 
@@ -79,6 +103,6 @@ ask you to confirm before it sends.
 
 ## Behind the scenes
 
-The MCP server is a thin stdio wrapper over the PocketPing management API. Every tool maps
-to a `/api/v1` endpoint, so anything the MCP can do, your own scripts and agents can do too
-with the same API key.
+Both modes expose the same tools. The hosted endpoint (`/api/mcp`) runs in-process; the
+npx package is a thin stdio wrapper over the same [`/api/v1`](/api) management API. So
+anything the MCP can do, your own scripts and agents can do too with the same API key.
