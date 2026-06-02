@@ -34,7 +34,6 @@ ${chalk.bold('Step 1: Create a Telegram Bot')}
 
   const botToken = await p.password({
     message: 'Paste your Bot Token:',
-    placeholder: '123456789:ABCdefGHIjklMNOpqrsTUVwxyz',
     validate: (value) => {
       if (!value) return 'Bot token is required'
       if (!/^\d+:[A-Za-z0-9_-]+$/.test(value)) return 'Invalid token format'

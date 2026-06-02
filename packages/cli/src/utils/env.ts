@@ -6,6 +6,47 @@ const ENV_FILE = join(process.cwd(), '.env')
 const ENV_EXAMPLE_FILE = join(process.cwd(), '.env.example')
 const CONFIG_EXAMPLE_FILE = join(process.cwd(), 'pocketping.config.example.ts')
 
+/**
+ * Parse the contents of a dotenv file into a key/value map.
+ *
+ * Tolerates the common real-world shapes the previous naive regex missed:
+ *   - `export KEY=value` prefixes
+ *   - single- or double-quoted values
+ *   - values that themselves contain `=` (e.g. base64, URLs with query strings)
+ *   - blank lines and `#` comments
+ *   - surrounding whitespace
+ */
+export function parseEnvContent(content: string): Record<string, string> {
+  const vars: Record<string, string> = {}
+  for (const rawLine of content.split('\n')) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#')) continue
+
+    const withoutExport = line.startsWith('export ') ? line.slice(7).trim() : line
+    const eq = withoutExport.indexOf('=')
+    if (eq === -1) continue
+
+    const key = withoutExport.slice(0, eq).trim()
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue
+
+    let value = withoutExport.slice(eq + 1).trim()
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+    vars[key] = value
+  }
+  return vars
+}
+
+/** Read and parse a dotenv file. Returns an empty map if the file is absent. */
+export async function loadEnv(path: string = ENV_FILE): Promise<Record<string, string>> {
+  if (!existsSync(path)) return {}
+  return parseEnvContent(await readFile(path, 'utf-8'))
+}
+
 export async function saveEnvFile(newVars: Record<string, string>): Promise<void> {
   let existingContent = ''
 
@@ -15,13 +56,7 @@ export async function saveEnvFile(newVars: Record<string, string>): Promise<void
   }
 
   // Parse existing variables
-  const existingVars: Record<string, string> = {}
-  for (const line of existingContent.split('\n')) {
-    const match = line.match(/^([A-Z_]+)=(.*)$/)
-    if (match) {
-      existingVars[match[1]] = match[2]
-    }
-  }
+  const existingVars = parseEnvContent(existingContent)
 
   // Merge with new variables (new ones override)
   const mergedVars = { ...existingVars, ...newVars }
@@ -60,14 +95,17 @@ export async function saveEnvFile(newVars: Record<string, string>): Promise<void
 
   await writeFile(ENV_FILE, lines.join('\n'))
 
-  // Also update .env.example with placeholder values
-  const exampleLines = lines.map((line) => {
-    if (line.includes('TOKEN=') || line.includes('SECRET=')) {
-      return line.replace(/=.+$/, '=your_token_here')
-    }
-    return line
-  })
-  await writeFile(ENV_EXAMPLE_FILE, exampleLines.join('\n'))
+  // Write a .env.example with placeholder values — but never clobber an
+  // existing one (it may be hand-maintained and committed to the repo).
+  if (!existsSync(ENV_EXAMPLE_FILE)) {
+    const exampleLines = lines.map((line) => {
+      if (line.includes('TOKEN=') || line.includes('SECRET=')) {
+        return line.replace(/=.+$/, '=your_token_here')
+      }
+      return line
+    })
+    await writeFile(ENV_EXAMPLE_FILE, exampleLines.join('\n'))
+  }
 }
 
 export async function generateConfigExample(bridges: string[]): Promise<void> {

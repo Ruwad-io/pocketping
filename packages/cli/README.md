@@ -1,6 +1,14 @@
 # @pocketping/cli
 
-Interactive CLI for setting up PocketPing bridges.
+[![npm](https://img.shields.io/npm/v/@pocketping/cli.svg)](https://www.npmjs.com/package/@pocketping/cli)
+[![license](https://img.shields.io/npm/l/@pocketping/cli.svg)](https://github.com/Ruwad-io/pocketping/blob/main/LICENSE)
+
+Interactive setup wizard and health-check for [PocketPing](https://pocketping.io) — the
+open-source, phone-first chat widget you answer from Telegram, Discord or Slack.
+
+`init` walks you through creating each bot and **validates every token against the live
+Telegram / Discord / Slack API** before writing your `.env`. `doctor` re-checks that
+everything is still reachable.
 
 ## Installation
 
@@ -43,34 +51,24 @@ Validates your configuration and tests connectivity.
 npx @pocketping/cli doctor
 ```
 
+All three bridges are checked **concurrently**, and the result is exit-code aware
+(`doctor` exits non-zero when any bridge is misconfigured — handy in CI):
+
+```
+┌─ Telegram ─────────────────────────────┐
+│ ✓ Bot Token: Valid — @mysupport_bot    │
+│ ✓ Chat: Support HQ (Forum)             │
+└────────────────────────────────────────┘
+
+┌─ Discord ──────────────────────────────┐
+│ ○ Configuration: Not configured        │
+└────────────────────────────────────────┘
+```
+
 **What it checks:**
-- Bot token validity
+- Bot token validity (live API call)
 - Channel/chat access
-- Required permissions (forum/threads enabled)
-
-## Example
-
-```
-┌  PocketPing Setup Wizard
-│
-◆  Which bridges do you want to set up?
-│  ◼ Telegram
-│
-◆  Enter your Telegram Bot Token
-│  123456789:ABCdefGHIjklMNOpqrsTUVwxyz
-│
-◆  Enter your Telegram Chat ID
-│  -1001234567890
-│
-◇  Telegram configured!
-◇  Configuration saved!
-│
-└  Setup complete!
-
-   Next steps:
-     1. Review your .env file
-     2. Run npx @pocketping/cli doctor to verify
-```
+- Required permissions (forum/topics/threads enabled)
 
 ## Environment Variables
 

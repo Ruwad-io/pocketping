@@ -25,6 +25,8 @@ jobs:
       sdk-node-version: ${{ steps.release-sdk-node.outputs.new_release_version }}
       react-released: ${{ steps.release-react.outputs.new_release_published }}
       react-version: ${{ steps.release-react.outputs.new_release_version }}
+      cli-released: ${{ steps.release-cli.outputs.new_release_published }}
+      cli-version: ${{ steps.release-cli.outputs.new_release_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -58,6 +60,7 @@ jobs:
           pnpm --filter @pocketping/widget build
           pnpm --filter @pocketping/sdk-node build
           pnpm --filter @pocketping/react build
+          pnpm --filter @pocketping/cli build
 
       - name: Release Widget
         id: release-widget
@@ -116,6 +119,30 @@ jobs:
       - name: Publish React to npm
         if: steps.release-react.outputs.new_release_published == 'true'
         working-directory: packages/react
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ''
+
+      - name: Release CLI
+        id: release-cli
+        uses: cycjimmy/semantic-release-action@v6
+        with:
+          working_directory: packages/cli
+          semantic_version: 24
+          extra_plugins: |
+            @semantic-release/exec
+            semantic-release-monorepo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish CLI to npm
+        if: steps.release-cli.outputs.new_release_published == 'true'
+        # continue-on-error so the FIRST release doesn't break the whole run if
+        # the OIDC trusted publisher for @pocketping/cli isn't configured yet.
+        # Configure it once at npmjs.com → @pocketping/cli → Settings →
+        # Trusted Publisher (or use a pending publisher before first publish).
+        continue-on-error: true
+        working-directory: packages/cli
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ''
