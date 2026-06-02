@@ -709,7 +709,7 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
           {unreadCount > 0 && (
             <span class="pp-unread-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
           )}
-          {unreadCount === 0 && operatorOnline && <span class="pp-online-dot" />}
+          {unreadCount === 0 && operatorOnline && <span class="pp-online-dot" aria-hidden="true" />}
         </button>
       )}
 
