@@ -15,7 +15,7 @@ A comprehensive comparison of PocketPing with other live chat solutions.
 | **Discord notifications** | Yes | No | No | No | No | No |
 | **Slack notifications** | Yes | Add-on | Add-on | Yes | No | Yes |
 | **AI fallback** | Yes (BYO key) | Yes ($$$) | Yes ($$$) | Limited | No | Yes ($$$) |
-| **Webhooks / Events API** | Yes (HMAC, free) | Paid plans | Yes | Yes | No | Paid plans |
+| **Webhooks / Events API** | Yes (HMAC, free) | Yes (paid workspace) | Yes | Yes | Yes (HMAC) | Yes |
 | **Open source** | Yes (MIT) | No | No | Yes (AGPL) | No | No |
 | **No vendor lock-in** | Yes | No | No | Partial | No | No |
 
