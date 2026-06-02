@@ -141,12 +141,12 @@ jobs:
       - name: Publish CLI to npm
         if: steps.release-cli.outputs.new_release_published == 'true'
         working-directory: packages/cli
-        # Tokenless: authenticated via OIDC trusted publishing (configured on npm).
+        # Token-based publish (provenance still signed via id-token: write).
+        # Tokenless OIDC needs a Trusted Publisher configured in the npmjs.com UI,
+        # which is gated behind 2FA — flip NODE_AUTH_TOKEN to '' once that's set up.
         run: npm publish --provenance --access public
         env:
-          # Blank out any injected token so npm cannot fall back to it —
-          # this guarantees the publish goes through OIDC trusted publishing.
-          NODE_AUTH_TOKEN: ''
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Release MCP
         id: release-mcp
