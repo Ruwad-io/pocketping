@@ -1,8 +1,7 @@
 import * as p from '@clack/prompts'
 import chalk from 'chalk'
-import { existsSync } from 'fs'
-import { readFile } from 'fs/promises'
-import { join } from 'path'
+import { loadEnv } from '../utils/env.js'
+import { box, COLORS, banner } from '../utils/ui.js'
 import {
   validateDiscordToken,
   validateDiscordChannel,
@@ -18,273 +17,163 @@ interface CheckResult {
   message: string
 }
 
+interface BridgeReport {
+  bridge: string
+  color: string
+  checks: CheckResult[]
+}
+
+async function checkDiscord(env: Record<string, string>): Promise<BridgeReport> {
+  const checks: CheckResult[] = []
+  if (!env.DISCORD_BOT_TOKEN) {
+    checks.push({ name: 'Configuration', status: 'skip', message: 'Not configured' })
+    return { bridge: 'Discord', color: COLORS.discord, checks }
+  }
+
+  const token = await validateDiscordToken(env.DISCORD_BOT_TOKEN)
+  if (!token.valid) {
+    checks.push({ name: 'Bot Token', status: 'error', message: token.error || 'Invalid token' })
+    return { bridge: 'Discord', color: COLORS.discord, checks }
+  }
+  checks.push({ name: 'Bot Token', status: 'ok', message: `Valid — ${token.botName}` })
+
+  if (!env.DISCORD_CHANNEL_ID) {
+    checks.push({ name: 'Channel', status: 'warn', message: 'DISCORD_CHANNEL_ID not set' })
+  } else {
+    const channel = await validateDiscordChannel(env.DISCORD_BOT_TOKEN, env.DISCORD_CHANNEL_ID)
+    checks.push(
+      channel.valid
+        ? { name: 'Channel', status: 'ok', message: `#${channel.channelName} (${channel.channelType})` }
+        : { name: 'Channel', status: 'error', message: channel.error || 'Invalid channel' }
+    )
+  }
+  return { bridge: 'Discord', color: COLORS.discord, checks }
+}
+
+async function checkSlack(env: Record<string, string>): Promise<BridgeReport> {
+  const checks: CheckResult[] = []
+  if (!env.SLACK_BOT_TOKEN) {
+    checks.push({ name: 'Configuration', status: 'skip', message: 'Not configured' })
+    return { bridge: 'Slack', color: COLORS.slack, checks }
+  }
+
+  const token = await validateSlackToken(env.SLACK_BOT_TOKEN)
+  if (!token.valid) {
+    checks.push({ name: 'Bot Token', status: 'error', message: token.error || 'Invalid token' })
+    return { bridge: 'Slack', color: COLORS.slack, checks }
+  }
+  checks.push({ name: 'Bot Token', status: 'ok', message: `Valid — ${token.teamName}` })
+
+  if (!env.SLACK_CHANNEL_ID) {
+    checks.push({ name: 'Channel', status: 'warn', message: 'SLACK_CHANNEL_ID not set' })
+  } else {
+    const channel = await validateSlackChannel(env.SLACK_BOT_TOKEN, env.SLACK_CHANNEL_ID)
+    checks.push(
+      channel.valid
+        ? { name: 'Channel', status: 'ok', message: `#${channel.channelName}${channel.isPrivate ? ' (private)' : ''}` }
+        : { name: 'Channel', status: 'error', message: channel.error || 'Invalid channel' }
+    )
+  }
+  return { bridge: 'Slack', color: COLORS.slack, checks }
+}
+
+async function checkTelegram(env: Record<string, string>): Promise<BridgeReport> {
+  const checks: CheckResult[] = []
+  if (!env.TELEGRAM_BOT_TOKEN) {
+    checks.push({ name: 'Configuration', status: 'skip', message: 'Not configured' })
+    return { bridge: 'Telegram', color: COLORS.telegram, checks }
+  }
+
+  const token = await validateTelegramToken(env.TELEGRAM_BOT_TOKEN)
+  if (!token.valid) {
+    checks.push({ name: 'Bot Token', status: 'error', message: token.error || 'Invalid token' })
+    return { bridge: 'Telegram', color: COLORS.telegram, checks }
+  }
+  checks.push({ name: 'Bot Token', status: 'ok', message: `Valid — @${token.botUsername}` })
+
+  if (!env.TELEGRAM_CHAT_ID) {
+    checks.push({ name: 'Chat', status: 'warn', message: 'TELEGRAM_CHAT_ID not set' })
+  } else {
+    const chat = await validateTelegramChat(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID)
+    if (!chat.valid) {
+      checks.push({ name: 'Chat', status: 'error', message: chat.error || 'Invalid chat' })
+    } else {
+      checks.push(
+        chat.isForum
+          ? { name: 'Chat', status: 'ok', message: `${chat.chatTitle} (Forum)` }
+          : { name: 'Chat', status: 'warn', message: `${chat.chatTitle} — Topics not enabled` }
+      )
+    }
+  }
+  return { bridge: 'Telegram', color: COLORS.telegram, checks }
+}
+
+function icon(status: CheckResult['status']): string {
+  switch (status) {
+    case 'ok':
+      return chalk.green('✓')
+    case 'warn':
+      return chalk.yellow('⚠')
+    case 'error':
+      return chalk.red('✗')
+    default:
+      return chalk.gray('○')
+  }
+}
+
+function paintMessage(check: CheckResult): string {
+  switch (check.status) {
+    case 'error':
+      return chalk.red(check.message)
+    case 'warn':
+      return chalk.yellow(check.message)
+    case 'skip':
+      return chalk.gray(check.message)
+    default:
+      return check.message
+  }
+}
+
 export async function doctor() {
   console.clear()
+  p.intro(chalk.bgHex(COLORS.brand).white(' PocketPing Doctor '))
+  console.log(banner() + '\n')
 
-  p.intro(chalk.bgHex('#6366f1').white(' PocketPing Doctor '))
+  const env = await loadEnv()
 
-  p.log.info('Checking your PocketPing configuration...\n')
+  const s = p.spinner()
+  s.start('Checking your bridges…')
 
-  // Load .env file
-  const envPath = join(process.cwd(), '.env')
-  const envVars: Record<string, string> = {}
+  // All three bridges are validated concurrently — no reason to wait serially
+  // on three independent sets of network round-trips.
+  const reports = await Promise.all([checkDiscord(env), checkSlack(env), checkTelegram(env)])
 
-  if (existsSync(envPath)) {
-    const content = await readFile(envPath, 'utf-8')
-    for (const line of content.split('\n')) {
-      const match = line.match(/^([A-Z_]+)=(.+)$/)
-      if (match) {
-        envVars[match[1]] = match[2]
-      }
-    }
-  }
-
-  const results: { bridge: string; checks: CheckResult[] }[] = []
-
-  // Check Discord
-  const discordChecks: CheckResult[] = []
-
-  if (envVars.DISCORD_BOT_TOKEN) {
-    const s = p.spinner()
-    s.start('Checking Discord...')
-
-    const tokenResult = await validateDiscordToken(envVars.DISCORD_BOT_TOKEN)
-
-    if (tokenResult.valid) {
-      discordChecks.push({
-        name: 'Bot Token',
-        status: 'ok',
-        message: `Valid - ${tokenResult.botName}`,
-      })
-
-      if (envVars.DISCORD_CHANNEL_ID) {
-        const channelResult = await validateDiscordChannel(
-          envVars.DISCORD_BOT_TOKEN,
-          envVars.DISCORD_CHANNEL_ID
-        )
-
-        if (channelResult.valid) {
-          discordChecks.push({
-            name: 'Channel',
-            status: 'ok',
-            message: `#${channelResult.channelName} (${channelResult.channelType})`,
-          })
-        } else {
-          discordChecks.push({
-            name: 'Channel',
-            status: 'error',
-            message: channelResult.error || 'Invalid channel',
-          })
-        }
-      } else {
-        discordChecks.push({
-          name: 'Channel',
-          status: 'warn',
-          message: 'DISCORD_CHANNEL_ID not set',
-        })
-      }
-    } else {
-      discordChecks.push({
-        name: 'Bot Token',
-        status: 'error',
-        message: tokenResult.error || 'Invalid token',
-      })
-    }
-
-    s.stop('Discord checked')
-  } else {
-    discordChecks.push({
-      name: 'Configuration',
-      status: 'skip',
-      message: 'Not configured',
-    })
-  }
-
-  results.push({ bridge: 'Discord', checks: discordChecks })
-
-  // Check Slack
-  const slackChecks: CheckResult[] = []
-
-  if (envVars.SLACK_BOT_TOKEN) {
-    const s = p.spinner()
-    s.start('Checking Slack...')
-
-    const tokenResult = await validateSlackToken(envVars.SLACK_BOT_TOKEN)
-
-    if (tokenResult.valid) {
-      slackChecks.push({
-        name: 'Bot Token',
-        status: 'ok',
-        message: `Valid - ${tokenResult.teamName}`,
-      })
-
-      if (envVars.SLACK_CHANNEL_ID) {
-        const channelResult = await validateSlackChannel(
-          envVars.SLACK_BOT_TOKEN,
-          envVars.SLACK_CHANNEL_ID
-        )
-
-        if (channelResult.valid) {
-          slackChecks.push({
-            name: 'Channel',
-            status: 'ok',
-            message: `#${channelResult.channelName}${channelResult.isPrivate ? ' (private)' : ''}`,
-          })
-        } else {
-          slackChecks.push({
-            name: 'Channel',
-            status: 'error',
-            message: channelResult.error || 'Invalid channel',
-          })
-        }
-      } else {
-        slackChecks.push({
-          name: 'Channel',
-          status: 'warn',
-          message: 'SLACK_CHANNEL_ID not set',
-        })
-      }
-    } else {
-      slackChecks.push({
-        name: 'Bot Token',
-        status: 'error',
-        message: tokenResult.error || 'Invalid token',
-      })
-    }
-
-    s.stop('Slack checked')
-  } else {
-    slackChecks.push({
-      name: 'Configuration',
-      status: 'skip',
-      message: 'Not configured',
-    })
-  }
-
-  results.push({ bridge: 'Slack', checks: slackChecks })
-
-  // Check Telegram
-  const telegramChecks: CheckResult[] = []
-
-  if (envVars.TELEGRAM_BOT_TOKEN) {
-    const s = p.spinner()
-    s.start('Checking Telegram...')
-
-    const tokenResult = await validateTelegramToken(envVars.TELEGRAM_BOT_TOKEN)
-
-    if (tokenResult.valid) {
-      telegramChecks.push({
-        name: 'Bot Token',
-        status: 'ok',
-        message: `Valid - @${tokenResult.botUsername}`,
-      })
-
-      if (envVars.TELEGRAM_CHAT_ID) {
-        const chatResult = await validateTelegramChat(
-          envVars.TELEGRAM_BOT_TOKEN,
-          envVars.TELEGRAM_CHAT_ID
-        )
-
-        if (chatResult.valid) {
-          telegramChecks.push({
-            name: 'Chat',
-            status: chatResult.isForum ? 'ok' : 'warn',
-            message: chatResult.isForum
-              ? `${chatResult.chatTitle} (Forum)`
-              : `${chatResult.chatTitle} - Topics not enabled`,
-          })
-        } else {
-          telegramChecks.push({
-            name: 'Chat',
-            status: 'error',
-            message: chatResult.error || 'Invalid chat',
-          })
-        }
-      } else {
-        telegramChecks.push({
-          name: 'Chat',
-          status: 'warn',
-          message: 'TELEGRAM_CHAT_ID not set',
-        })
-      }
-    } else {
-      telegramChecks.push({
-        name: 'Bot Token',
-        status: 'error',
-        message: tokenResult.error || 'Invalid token',
-      })
-    }
-
-    s.stop('Telegram checked')
-  } else {
-    telegramChecks.push({
-      name: 'Configuration',
-      status: 'skip',
-      message: 'Not configured',
-    })
-  }
-
-  results.push({ bridge: 'Telegram', checks: telegramChecks })
-
-  // Display results
+  s.stop('Checks complete')
   console.log('')
 
-  for (const { bridge, checks } of results) {
-    const bridgeColor =
-      bridge === 'Discord' ? '#5865F2' : bridge === 'Slack' ? '#4A154B' : '#0088cc'
-
-    console.log(chalk.hex(bridgeColor).bold(`┌─ ${bridge} ─────────────────────────────────────────┐`))
-
-    for (const check of checks) {
-      const icon =
-        check.status === 'ok'
-          ? chalk.green('✓')
-          : check.status === 'warn'
-          ? chalk.yellow('⚠')
-          : check.status === 'error'
-          ? chalk.red('✗')
-          : chalk.gray('○')
-
-      const message =
-        check.status === 'error' ? chalk.red(check.message) :
-        check.status === 'warn' ? chalk.yellow(check.message) :
-        check.status === 'skip' ? chalk.gray(check.message) :
-        check.message
-
-      console.log(`  ${icon} ${check.name}: ${message}`)
-    }
-
-    console.log(chalk.hex(bridgeColor)('└──────────────────────────────────────────────────┘'))
+  for (const { bridge, color, checks } of reports) {
+    const lines = checks.map((c) => `${icon(c.status)} ${chalk.bold(c.name)}: ${paintMessage(c)}`)
+    console.log(box(bridge, lines, color))
     console.log('')
   }
 
-  // Summary
-  const configured = results.filter(
-    (r) => !r.checks.some((c) => c.status === 'skip')
-  ).length
-
-  const hasErrors = results.some((r) => r.checks.some((c) => c.status === 'error'))
-  const hasWarnings = results.some((r) => r.checks.some((c) => c.status === 'warn'))
+  const configured = reports.filter((r) => !r.checks.some((c) => c.status === 'skip')).length
+  const hasErrors = reports.some((r) => r.checks.some((c) => c.status === 'error'))
+  const hasWarnings = reports.some((r) => r.checks.some((c) => c.status === 'warn'))
 
   if (hasErrors) {
     p.outro(
-      chalk.red(`${configured}/3 bridges configured with errors.`) +
-        '\nRun ' +
-        chalk.cyan('npx @pocketping/cli init') +
-        ' to fix issues.'
+      chalk.red(`${configured}/3 bridges configured, with errors.`) +
+        '\nRun ' + chalk.cyan('npx @pocketping/cli init') + ' to fix them.'
     )
-  } else if (hasWarnings) {
-    p.outro(
-      chalk.yellow(`${configured}/3 bridges configured with warnings.`) +
-        '\nSome optional configuration is missing.'
-    )
+    process.exitCode = 1
   } else if (configured === 0) {
     p.outro(
-      chalk.gray('No bridges configured.') +
-        '\nRun ' +
-        chalk.cyan('npx @pocketping/cli init') +
-        ' to get started.'
+      chalk.gray('No bridges configured yet.') +
+        '\nRun ' + chalk.cyan('npx @pocketping/cli init') + ' to get started.'
     )
+  } else if (hasWarnings) {
+    p.outro(chalk.yellow(`${configured}/3 bridges configured, with warnings.`))
   } else {
     p.outro(chalk.green(`${configured}/3 bridges configured and healthy!`))
   }

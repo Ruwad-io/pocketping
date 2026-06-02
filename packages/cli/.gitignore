@@ -1,0 +1,8 @@
+dist/
+node_modules/
+
+# Stray TypeScript build artifacts must never live next to sources in src/
+# (they shadow the .ts files at test/runtime). Only *.ts belongs in src/.
+src/**/*.js
+src/**/*.d.ts
+src/**/*.map

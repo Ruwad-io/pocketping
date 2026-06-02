@@ -1,7 +1,7 @@
 {
   "name": "@pocketping/cli",
   "version": "0.1.0",
-  "description": "CLI tool for setting up PocketPing bridges",
+  "description": "Interactive setup wizard and health-check for PocketPing — wire up Telegram, Discord & Slack bridges in seconds.",
   "type": "module",
   "bin": {
     "pocketping": "./dist/index.js"
@@ -10,6 +10,8 @@
     "build": "tsup src/index.ts --format esm --dts --clean",
     "dev": "tsup src/index.ts --format esm --watch",
     "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "prepublishOnly": "npm run build"
   },
   "files": [
@@ -22,14 +24,25 @@
     "slack",
     "telegram",
     "chat",
-    "support"
+    "support",
+    "live-chat",
+    "setup",
+    "wizard"
   ],
   "author": "PocketPing",
   "license": "MIT",
+  "homepage": "https://pocketping.io",
+  "bugs": {
+    "url": "https://github.com/Ruwad-io/pocketping/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/pocketping/pocketping.git",
+    "url": "git+https://github.com/Ruwad-io/pocketping.git",
     "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "dependencies": {
     "@clack/prompts": "^0.7.0",
@@ -41,9 +54,27 @@
   "devDependencies": {
     "@types/node": "^20.14.0",
     "tsup": "^8.1.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^2.0.0"
   },
   "engines": {
     "node": ">=18"
+  },
+  "release": {
+    "extends": "semantic-release-monorepo",
+    "branches": [
+      "main"
+    ],
+    "plugins": [
+      "@semantic-release/commit-analyzer",
+      "@semantic-release/release-notes-generator",
+      [
+        "@semantic-release/exec",
+        {
+          "prepareCmd": "npm pkg set version=${nextRelease.version}"
+        }
+      ],
+      "@semantic-release/github"
+    ]
   }
 }

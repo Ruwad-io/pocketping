@@ -4,6 +4,7 @@ import { setupDiscord } from '../prompts/discord.js'
 import { setupSlack } from '../prompts/slack.js'
 import { setupTelegram } from '../prompts/telegram.js'
 import { saveEnvFile, generateConfigExample } from '../utils/env.js'
+import { COLORS, isInteractive } from '../utils/ui.js'
 
 type BridgeType = 'discord' | 'slack' | 'telegram'
 
@@ -26,9 +27,17 @@ const BRIDGES: Record<BridgeType, { name: string; color: string; setup: () => Pr
 }
 
 export async function init(bridge?: string) {
+  if (!isInteractive()) {
+    console.error(
+      chalk.red('`pocketping init` is interactive and needs a terminal (TTY).') +
+        '\nRun it directly in your shell, or set the bridge env vars manually — see https://pocketping.io/docs.'
+    )
+    process.exit(1)
+  }
+
   console.clear()
 
-  p.intro(chalk.bgHex('#6366f1').white(' PocketPing Setup Wizard '))
+  p.intro(chalk.bgHex(COLORS.brand).white(' PocketPing Setup Wizard '))
 
   let selectedBridges: BridgeType[]
 
