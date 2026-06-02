@@ -471,7 +471,7 @@ jobs:
           python -m build || echo "Build completed"
 
       - name: Upload widget artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: widget-dist
           path: packages/widget/dist/
@@ -532,7 +532,7 @@ jobs:
           BASE_URL: http://demo:3000
 
       - name: Upload Playwright report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report
@@ -540,7 +540,7 @@ jobs:
           retention-days: 7
 
       - name: Upload test screenshots
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-screenshots
