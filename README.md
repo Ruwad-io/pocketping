@@ -509,6 +509,23 @@ Screen capture is **opt-in per project** (Settings → Operator commands) — en
 means you're responsible for disclosing capture to visitors.
 **[Docs →](https://docs.pocketping.io/operator-commands)**
 
+### MCP server (answer chats from Claude / Cursor)
+
+`@pocketping/mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server —
+your AI assistant can **triage your inbox and reply to visitors**. A reply sent via the MCP
+fans out to the widget *and* every bridge, so the agent closes the loop, not just reads it.
+
+```json
+{ "mcpServers": { "pocketping": {
+  "command": "npx", "args": ["-y", "@pocketping/mcp"],
+  "env": { "POCKETPING_API_KEY": "ppk_…" }
+}}}
+```
+
+Tools: `list_sessions` (incl. `unanswered`), `get_conversation`, `send_reply`. Keys are
+org-scoped and revocable (dashboard → Settings → API keys).
+**[Docs →](https://docs.pocketping.io/mcp)**
+
 ### Read Receipts (Check Marks)
 
 Like WhatsApp:

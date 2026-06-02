@@ -39,6 +39,7 @@ const sidebars: SidebarsConfig = {
     'ai-fallback',
     'operator-commands',
     'webhooks',
+    'mcp',
     'api',
     {
       type: 'category',
