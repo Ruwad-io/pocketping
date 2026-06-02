@@ -138,15 +138,12 @@ jobs:
       - name: Publish CLI to npm
         if: steps.release-cli.outputs.new_release_published == 'true'
         working-directory: packages/cli
-        # BOOTSTRAP: npm (unlike PyPI) requires a package to already exist before
-        # a trusted publisher can be configured, so the very first publish cannot
-        # use tokenless OIDC. We use NPM_TOKEN for this initial release (provenance
-        # still works via id-token: write). Once @pocketping/cli exists on npm,
-        # configure its Trusted Publisher at npmjs.com and switch this step to
-        # `NODE_AUTH_TOKEN: ''` to match widget/sdk-node/react.
+        # Tokenless: authenticated via OIDC trusted publishing (configured on npm).
         run: npm publish --provenance --access public
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Blank out any injected token so npm cannot fall back to it —
+          # this guarantees the publish goes through OIDC trusted publishing.
+          NODE_AUTH_TOKEN: ''
 
   publish-python:
     name: Publish Python SDK
