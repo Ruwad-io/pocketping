@@ -41,9 +41,10 @@ For config-file clients (Claude Desktop, Cursor):
 ```
 
 The endpoint speaks **Streamable HTTP** (the current MCP transport; legacy SSE is
-disabled). Some clients — notably the Claude web connector UI — currently expect OAuth
-rather than a Bearer header; use Cursor, Claude Desktop, the Claude API connector, or the
-local option below until OAuth lands.
+disabled) and authenticates with your API key as a Bearer token — so it works in any
+client that lets you set a header or token: **Cursor, Claude Desktop, the Claude API
+connector, ChatGPT**, or the local option below. (Claude's *web* "Add connector" UI
+expects an OAuth flow rather than a Bearer header, so use one of those clients there.)
 
 ### Local (npx)
 
