@@ -43,6 +43,11 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
+      # OIDC trusted publishing needs npm >= 11.5.1; Node 20 ships npm 10.x.
+      # Without this the publish silently falls back to NODE_AUTH_TOKEN.
+      - name: Upgrade npm for OIDC trusted publishing
+        run: npm install -g npm@latest
+
       - name: Install dependencies
         run: pnpm install
 
@@ -69,9 +74,8 @@ jobs:
       - name: Publish Widget to npm
         if: steps.release-widget.outputs.new_release_published == 'true'
         working-directory: packages/widget
+        # Tokenless: authenticated via OIDC trusted publishing (configured on npm).
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Release SDK Node
         id: release-sdk-node
@@ -90,8 +94,6 @@ jobs:
         continue-on-error: true
         working-directory: packages/sdk-node
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Release React
         id: release-react
@@ -109,8 +111,6 @@ jobs:
         if: steps.release-react.outputs.new_release_published == 'true'
         working-directory: packages/react
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-python:
     name: Publish Python SDK
