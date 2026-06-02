@@ -33,7 +33,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 9
 
@@ -61,7 +61,7 @@ jobs:
 
       - name: Release Widget
         id: release-widget
-        uses: cycjimmy/semantic-release-action@v4
+        uses: cycjimmy/semantic-release-action@v6
         with:
           working_directory: packages/widget
           semantic_version: 24
@@ -79,7 +79,7 @@ jobs:
 
       - name: Release SDK Node
         id: release-sdk-node
-        uses: cycjimmy/semantic-release-action@v4
+        uses: cycjimmy/semantic-release-action@v6
         with:
           working_directory: packages/sdk-node
           semantic_version: 24
@@ -97,7 +97,7 @@ jobs:
 
       - name: Release React
         id: release-react
-        uses: cycjimmy/semantic-release-action@v4
+        uses: cycjimmy/semantic-release-action@v6
         with:
           working_directory: packages/react
           semantic_version: 24
