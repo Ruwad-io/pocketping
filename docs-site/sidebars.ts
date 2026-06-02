@@ -37,6 +37,7 @@ const sidebars: SidebarsConfig = {
     'self-hosting',
     'community-edition',
     'ai-fallback',
+    'webhooks',
     'api',
     {
       type: 'category',

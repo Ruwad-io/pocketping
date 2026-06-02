@@ -481,6 +481,23 @@ The SDK provides:
 
 ## Features
 
+### Webhooks (events → your endpoint)
+
+PocketPing **POSTs every chat event to a URL you control** — `new_session`,
+`visitor_message`, `operator_message`, and more — HMAC-signed, for Zapier / Make /
+n8n or your own backend. Same payload whether you self-host or use the hosted SaaS.
+
+```http
+POST https://example.com/webhooks/pocketping
+X-PocketPing-Event: visitor_message
+X-PocketPing-Signature: sha256=<hex>
+
+{ "type": "visitor_message", "data": { … }, "sentAt": "2026-06-02T12:00:00Z" }
+```
+
+Hosted: project → **Webhooks** tab (URL, signing secret, "send test"). Self-hosted:
+`EVENTS_WEBHOOK_URL` + `EVENTS_WEBHOOK_SECRET`. **[Docs →](https://docs.pocketping.io/webhooks)**
+
 ### Read Receipts (Check Marks)
 
 Like WhatsApp:
