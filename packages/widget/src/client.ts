@@ -121,6 +121,7 @@ export class PocketPingClient {
       sessionId: response.sessionId,
       visitorId: response.visitorId,
       operatorOnline: response.operatorOnline ?? false,
+      operatorReachable: response.operatorReachable ?? true,
       messages: response.messages ?? [],
       identity: response.identity || storedIdentity || undefined,
       preChatForm: response.preChatForm,

@@ -243,6 +243,12 @@ export interface Session {
   sessionId: string;
   visitorId: string;
   operatorOnline: boolean;
+  /**
+   * Whether the team is reachable via a connected bridge (Telegram/Slack/…),
+   * even when no operator is actively online right now. Drives the "replies in
+   * a few minutes" status instead of a discouraging "Away". Defaults to true.
+   */
+  operatorReachable?: boolean;
   messages: Message[];
   /** User identity if identified via PocketPing.identify() */
   identity?: UserIdentity;
@@ -275,6 +281,8 @@ export interface ConnectResponse {
   sessionId: string;
   visitorId: string;
   operatorOnline?: boolean;
+  /** Whether the team is reachable via a connected bridge (defaults to true). */
+  operatorReachable?: boolean;
   welcomeMessage?: string;
   messages?: Message[];
   /** User identity if provided on connect */

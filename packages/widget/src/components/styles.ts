@@ -373,6 +373,10 @@ function adjustBrightness(hex: string, percent: number): string {
       box-shadow: 0 0 0 2px rgba(255, 95, 212, 0.3);
     }
 
+    .pp-status-dot.pp-reachable {
+      background: #ffcf5f;
+    }
+
     .pp-close-btn {
       background: transparent;
       border: none;

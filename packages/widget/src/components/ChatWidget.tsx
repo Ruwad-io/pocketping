@@ -55,6 +55,7 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [operatorOnline, setOperatorOnline] = useState(false);
+  const [operatorReachable, setOperatorReachable] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
@@ -97,6 +98,8 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
       setIsConnected(true);
       setMessages(client.getMessages());
       setOperatorOnline(client.getSession()?.operatorOnline ?? false);
+
+      setOperatorReachable(client.getSession()?.operatorReachable ?? true);
       // Update config with server values after connect
       setConfig(client.getConfig());
       // Set pre-chat form config from session
@@ -116,6 +119,8 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
       setIsConnected(true);
       setMessages(client.getMessages());
       setOperatorOnline(client.getSession()?.operatorOnline ?? false);
+
+      setOperatorReachable(client.getSession()?.operatorReachable ?? true);
       setConfig(client.getConfig());
       setPreChatForm(client.getSession()?.preChatForm);
     }
@@ -743,9 +748,11 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
                 </div>
                 <div class="pp-header-status">
                   {operatorOnline ? (
-                    <><span class="pp-status-dot pp-online" /> Online</>
+                    <><span class="pp-status-dot pp-online" /> Active now</>
+                  ) : operatorReachable ? (
+                    <><span class="pp-status-dot pp-reachable" /> Replies in a few minutes</>
                   ) : (
-                    <><span class="pp-status-dot" /> Away</>
+                    <><span class="pp-status-dot" /> Leave a message</>
                   )}
                 </div>
               </div>
