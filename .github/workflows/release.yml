@@ -27,6 +27,8 @@ jobs:
       react-version: ${{ steps.release-react.outputs.new_release_version }}
       cli-released: ${{ steps.release-cli.outputs.new_release_published }}
       cli-version: ${{ steps.release-cli.outputs.new_release_version }}
+      mcp-released: ${{ steps.release-mcp.outputs.new_release_published }}
+      mcp-version: ${{ steps.release-mcp.outputs.new_release_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -61,6 +63,7 @@ jobs:
           pnpm --filter @pocketping/sdk-node build
           pnpm --filter @pocketping/react build
           pnpm --filter @pocketping/cli build
+          pnpm --filter @pocketping/mcp build
 
       - name: Release Widget
         id: release-widget
@@ -144,6 +147,29 @@ jobs:
           # Blank out any injected token so npm cannot fall back to it —
           # this guarantees the publish goes through OIDC trusted publishing.
           NODE_AUTH_TOKEN: ''
+
+      - name: Release MCP
+        id: release-mcp
+        uses: cycjimmy/semantic-release-action@v6
+        with:
+          working_directory: packages/mcp
+          semantic_version: 24
+          extra_plugins: |
+            @semantic-release/exec
+            semantic-release-monorepo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish MCP to npm
+        if: steps.release-mcp.outputs.new_release_published == 'true'
+        working-directory: packages/mcp
+        # BOOTSTRAP: npm requires a package to exist before a trusted publisher can
+        # be configured, so the first publish uses NPM_TOKEN (provenance still works
+        # via id-token: write). Once @pocketping/mcp exists on npm, configure its
+        # Trusted Publisher and switch this to `NODE_AUTH_TOKEN: ''`.
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-python:
     name: Publish Python SDK
