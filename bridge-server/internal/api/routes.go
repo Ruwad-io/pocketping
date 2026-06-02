@@ -377,6 +377,10 @@ func (s *Server) EmitEvent(event types.OutgoingEvent) {
 	if s.config.BackendWebhookURL != "" {
 		go s.sendToWebhook(event)
 	}
+
+	// Also forward outgoing events (operator messages, edits, deletes, …) to the
+	// events webhook, so automations see the full conversation in both directions.
+	s.emitWebhookEvent(event.EventType(), map[string]interface{}{"event": event})
 }
 
 // sendToWebhook sends an event to the backend webhook
@@ -515,6 +519,7 @@ func (s *Server) processNewSession(event *types.NewSessionEvent) error {
 			log.Printf("[%s] OnNewSession error: %v", bridge.Name(), err)
 		}
 	}
+	s.emitWebhookEvent("new_session", map[string]interface{}{"session": event.Session})
 	return nil
 }
 
@@ -543,6 +548,10 @@ func (s *Server) processVisitorMessage(event *types.VisitorMessageEvent) error {
 			s.saveBridgeIDs(event.Message.ID, ids)
 		}
 	}
+	s.emitWebhookEvent("visitor_message", map[string]interface{}{
+		"message": event.Message,
+		"session": event.Session,
+	})
 	return nil
 }
 
@@ -552,12 +561,14 @@ func (s *Server) processAITakeover(event *types.AITakeoverEvent) error {
 			log.Printf("[%s] OnAITakeover error: %v", bridge.Name(), err)
 		}
 	}
+	s.emitWebhookEvent("ai_takeover", map[string]interface{}{"session": event.Session, "reason": event.Reason})
 	return nil
 }
 
 func (s *Server) processOperatorStatus(event *types.OperatorStatusEvent) error {
 	// Operator status is typically handled at the app level
 	// Bridges can react to this if needed
+	s.emitWebhookEvent("operator_status", map[string]interface{}{"online": event.Online})
 	return nil
 }
 
@@ -567,6 +578,11 @@ func (s *Server) processMessageRead(event *types.MessageReadEvent) error {
 			log.Printf("[%s] OnMessageRead error: %v", bridge.Name(), err)
 		}
 	}
+	s.emitWebhookEvent("message_read", map[string]interface{}{
+		"sessionId":  event.SessionID,
+		"messageIds": event.MessageIDs,
+		"status":     event.Status,
+	})
 	return nil
 }
 
@@ -577,10 +593,10 @@ func (s *Server) processCustomEvent(event *types.CustomEventEvent) error {
 		}
 	}
 
-	// Forward to events webhook if configured
-	if s.config.EventsWebhookURL != "" {
-		go s.forwardToEventsWebhook(event)
-	}
+	s.emitWebhookEvent("custom_event", map[string]interface{}{
+		"event":   event.Event,
+		"session": event.Session,
+	})
 
 	return nil
 }
@@ -591,6 +607,7 @@ func (s *Server) processIdentityUpdate(event *types.IdentityUpdateEvent) error {
 			log.Printf("[%s] OnIdentityUpdate error: %v", bridge.Name(), err)
 		}
 	}
+	s.emitWebhookEvent("identity_update", map[string]interface{}{"session": event.Session})
 	return nil
 }
 
@@ -612,6 +629,11 @@ func (s *Server) processVisitorMessageEdited(event *types.VisitorMessageEditedEv
 			s.saveBridgeIDs(event.MessageID, ids)
 		}
 	}
+	s.emitWebhookEvent("visitor_message_edited", map[string]interface{}{
+		"sessionId": event.SessionID,
+		"messageId": event.MessageID,
+		"content":   event.Content,
+	})
 	return nil
 }
 
@@ -627,6 +649,10 @@ func (s *Server) processVisitorMessageDeleted(event *types.VisitorMessageDeleted
 			log.Printf("[%s] OnVisitorMessageDeleted error: %v", bridge.Name(), err)
 		}
 	}
+	s.emitWebhookEvent("visitor_message_deleted", map[string]interface{}{
+		"sessionId": event.SessionID,
+		"messageId": event.MessageID,
+	})
 	return nil
 }
 
@@ -672,23 +698,30 @@ func (s *Server) processDisconnect(event *types.VisitorDisconnectEvent) error {
 			log.Printf("[%s] OnVisitorDisconnect error: %v", bridge.Name(), err)
 		}
 	}
+	s.emitWebhookEvent("visitor_disconnect", map[string]interface{}{
+		"session":  event.Session,
+		"duration": event.Duration,
+		"reason":   event.Reason,
+	})
 	return nil
 }
 
-// forwardToEventsWebhook forwards custom events to the events webhook
-func (s *Server) forwardToEventsWebhook(event *types.CustomEventEvent) {
+// emitWebhookEvent forwards an event to the configured events webhook (Zapier,
+// Make, n8n, or any custom endpoint). No-op when no webhook is configured, and
+// runs in the background so it never blocks bridge delivery.
+func (s *Server) emitWebhookEvent(eventType string, data map[string]interface{}) {
+	if s.config.EventsWebhookURL == "" {
+		return
+	}
+	go s.sendEventsWebhook(eventType, data)
+}
+
+// sendEventsWebhook POSTs a {type, data, sentAt} envelope, HMAC-signed with the
+// events webhook secret (X-PocketPing-Signature: sha256=<hex>).
+func (s *Server) sendEventsWebhook(eventType string, data map[string]interface{}) {
 	payload := map[string]interface{}{
-		"event": map[string]interface{}{
-			"name":      event.Event.Name,
-			"data":      event.Event.Data,
-			"timestamp": event.Event.Timestamp,
-			"sessionId": event.Event.SessionID,
-		},
-		"session": map[string]interface{}{
-			"id":        event.Session.ID,
-			"visitorId": event.Session.VisitorID,
-			"metadata":  event.Session.Metadata,
-		},
+		"type":   eventType,
+		"data":   data,
 		"sentAt": time.Now().UTC().Format(time.RFC3339),
 	}
 
@@ -702,6 +735,7 @@ func (s *Server) forwardToEventsWebhook(event *types.CustomEventEvent) {
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-PocketPing-Event", eventType)
 
 	// Add HMAC signature if secret is configured
 	if s.config.EventsWebhookSecret != "" {
