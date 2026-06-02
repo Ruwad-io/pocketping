@@ -1,0 +1,7 @@
+dist/
+node_modules/
+
+# Stray TS build artifacts must never live next to sources in src/.
+src/**/*.js
+src/**/*.d.ts
+src/**/*.map

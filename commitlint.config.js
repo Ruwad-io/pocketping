@@ -11,6 +11,7 @@ module.exports = {
       'sdk-php',
       'sdk-ruby',
       'cli',
+      'mcp',
       'bridge',
       'docs',
       'ci',
