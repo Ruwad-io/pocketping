@@ -57,12 +57,16 @@ or operator. Respond with any `2xx` to acknowledge.
 | `new_session` | A visitor starts a new conversation |
 | `visitor_message` | A visitor sends a message |
 | `operator_message` | An operator replies (from any bridge) |
-| `message_read` | Messages are marked read *(bridge-server)* |
-| `identity_update` | A visitor is identified via `PocketPing.identify()` *(bridge-server)* |
-| `custom_event` | A `PocketPing.trigger(name, data)` custom event *(bridge-server)* |
-| `visitor_message_edited` / `visitor_message_deleted` | Visitor edits/deletes *(bridge-server)* |
-| `visitor_disconnect` | A visitor leaves the page *(bridge-server)* |
+| `visitor_message_edited` / `visitor_message_deleted` | A visitor edits or deletes a message |
+| `message_read` | Messages are marked read |
+| `identity_update` | A visitor is identified via `PocketPing.identify()` |
+| `visitor_disconnect` | A visitor leaves the page |
+| `custom_event` | A `PocketPing.trigger(name, data)` custom event *(bridge-server only)* |
 | `test` | Sent by the dashboard's **Send test event** button |
+
+All events fire on both the hosted SaaS and the self-hosted bridge-server, except
+`custom_event`, which the bridge-server forwards (the SaaS doesn't ingest custom
+events server-side).
 
 ## Verifying the signature
 
