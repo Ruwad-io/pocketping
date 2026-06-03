@@ -1674,5 +1674,141 @@ function adjustBrightness(hex: string, percent: number): string {
     .pp-prechat-skip:hover {
       color: ${isDark ? '#aebac1' : '#3b4a54'};
     }
+
+    /* ── CSAT rating card ─────────────────────────────────────────── */
+    .pp-csat {
+      margin: 10px 8px 4px;
+      padding: 14px 14px 10px;
+      border: 1px solid ${colors.border};
+      border-radius: 12px;
+      background: ${isDark ? '#1d282f' : '#f7f8fa'};
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      animation: pp-csat-in 0.25s ease;
+    }
+
+    @keyframes pp-csat-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .pp-csat-title {
+      font-size: 14px;
+      font-weight: 600;
+      text-align: center;
+      color: ${isDark ? '#e9edef' : '#111b21'};
+    }
+
+    .pp-csat-faces {
+      display: flex;
+      justify-content: space-between;
+      gap: 4px;
+    }
+
+    .pp-csat-face {
+      flex: 1;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: transparent;
+      font-size: 26px;
+      line-height: 1;
+      padding: 8px 0;
+      cursor: pointer;
+      transition: transform 0.12s, background 0.15s, border-color 0.15s;
+      filter: grayscale(0.4);
+      opacity: 0.85;
+    }
+
+    .pp-csat-face:hover:not(:disabled) {
+      transform: scale(1.18);
+      filter: grayscale(0);
+      opacity: 1;
+    }
+
+    .pp-csat-face.selected {
+      background: ${primaryColor}15;
+      border-color: ${primaryColor};
+      filter: grayscale(0);
+      opacity: 1;
+    }
+
+    .pp-csat-face:disabled {
+      cursor: default;
+    }
+
+    .pp-csat-comment {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .pp-csat-textarea {
+      width: 100%;
+      min-height: 52px;
+      max-height: 120px;
+      resize: vertical;
+      box-sizing: border-box;
+      padding: 8px 10px;
+      border: 1px solid ${colors.border};
+      border-radius: 8px;
+      background: ${isDark ? '#111b21' : '#ffffff'};
+      color: ${isDark ? '#e9edef' : '#111b21'};
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+    }
+
+    .pp-csat-textarea:focus {
+      border-color: ${primaryColor};
+    }
+
+    .pp-csat-submit {
+      align-self: flex-end;
+      height: 34px;
+      padding: 0 18px;
+      border: none;
+      border-radius: 8px;
+      background: ${primaryColor};
+      color: #fff;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .pp-csat-submit:hover:not(:disabled) { opacity: 0.9; }
+    .pp-csat-submit:active:not(:disabled) { transform: scale(0.97); }
+    .pp-csat-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .pp-csat-dismiss {
+      align-self: center;
+      border: none;
+      background: transparent;
+      color: ${colors.textSecondary};
+      font-size: 12px;
+      cursor: pointer;
+      padding: 2px 8px;
+    }
+
+    .pp-csat-dismiss:hover { color: ${isDark ? '#aebac1' : '#3b4a54'}; }
+
+    .pp-csat-error {
+      font-size: 12px;
+      color: #ef4444;
+      text-align: center;
+    }
+
+    .pp-csat-thanks {
+      align-items: center;
+      flex-direction: row;
+      justify-content: center;
+      gap: 8px;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: ${isDark ? '#e9edef' : '#111b21'};
+    }
+
+    .pp-csat-thanks-emoji { font-size: 20px; }
   `;
 }
