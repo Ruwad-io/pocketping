@@ -4,6 +4,7 @@ import (
 	"log"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/pocketping/bridge-server/internal/types"
 )
@@ -29,13 +30,20 @@ func parseOperatorCommand(content string) *operatorCommand {
 		return nil
 	}
 
-	name, args, _ := strings.Cut(trimmed[1:], " ")
+	// Split on the first whitespace rune (space, tab, newline, …) so multiline
+	// messages like "!csat\nplease rate us" still resolve to the "csat" command.
+	body := trimmed[1:]
+	name, args := body, ""
+	if idx := strings.IndexFunc(body, unicode.IsSpace); idx >= 0 {
+		name = body[:idx]
+		args = strings.TrimSpace(body[idx:])
+	}
 	if name == "" {
 		return nil
 	}
 	return &operatorCommand{
 		Name: strings.ToLower(name),
-		Args: strings.TrimSpace(args),
+		Args: args,
 	}
 }
 

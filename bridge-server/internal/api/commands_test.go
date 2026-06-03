@@ -17,6 +17,8 @@ func TestParseOperatorCommand(t *testing.T) {
 	}{
 		{"!csat", false, "csat", ""},
 		{"!csat please rate us", false, "csat", "please rate us"},
+		{"!csat\nplease rate this chat", false, "csat", "please rate this chat"},
+		{"!csat\tnow", false, "csat", "now"},
 		{"  !CSAT  ", false, "csat", ""},
 		{"!Csat  extra ", false, "csat", "extra"},
 		{"hello there", true, "", ""},
