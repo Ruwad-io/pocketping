@@ -21,6 +21,8 @@ export type {
   AttachmentStatus,
   ConnectRequest,
   ConnectResponse,
+  CsatRequest,
+  CsatResponse,
   CustomEvent,
   CustomEventHandler,
   DeleteMessageRequest,
@@ -35,6 +37,7 @@ export type {
   SendMessageRequest,
   SendMessageResponse,
   Session,
+  SessionCsat,
   TrackedElement,
   TriggerOptions,
   UploadRequest,
@@ -44,6 +47,8 @@ export type {
   VisibilityResponse,
   WebhookPayload,
 } from './types';
+export type { SdkStats } from './stats';
+export { computeStats } from './stats';
 export type {
   OperatorAttachment,
   OperatorMessageCallback,

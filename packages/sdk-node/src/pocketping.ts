@@ -8,10 +8,13 @@ import type { AIProvider } from './ai/types';
 import type { Bridge } from './bridges/types';
 import { MemoryStorage } from './storage/memory';
 import type { Storage } from './storage/types';
+import { computeStats, type SdkStats } from './stats';
 import type {
   Attachment,
   ConnectRequest,
   ConnectResponse,
+  CsatRequest,
+  CsatResponse,
   CustomEvent,
   CustomEventHandler,
   DeleteMessageRequest,
@@ -431,6 +434,9 @@ export class PocketPing {
             break;
           case 'disconnect':
             result = await this.handleDisconnect(body as DisconnectRequest);
+            break;
+          case 'csat':
+            result = await this.handleCsat(body as CsatRequest);
             break;
           case 'visibility':
             result = await this.handleVisibility(body as VisibilityRequest);
@@ -942,6 +948,144 @@ export class PocketPing {
     }
 
     return { ok: true };
+  }
+
+  /**
+   * Ask the visitor to rate the conversation. Sets the session's CSAT request
+   * and pushes a `csat_request` event so the widget shows the rating card.
+   * Typically called from an operator command or after a resolved conversation.
+   */
+  async requestCsat(sessionId: string): Promise<{ ok: boolean }> {
+    const session = await this.storage.getSession(sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+    session.csat = { ...session.csat, pending: true, requestedAt: new Date() };
+    await this.storage.updateSession(session);
+
+    this.broadcastToSession(sessionId, {
+      type: 'csat_request',
+      data: { requestedAt: session.csat.requestedAt?.toISOString() },
+    });
+    return { ok: true };
+  }
+
+  /**
+   * Handle a visitor's CSAT submission (POST /csat). Stores the score, clears
+   * the pending flag, notifies bridges, fires the `csat_submitted` webhook, and
+   * runs the `onCsat` callback. Idempotent once a rating exists.
+   */
+  async handleCsat(request: CsatRequest): Promise<CsatResponse> {
+    const session = await this.storage.getSession(request.sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+    if (!Number.isInteger(request.score) || request.score < 1 || request.score > 5) {
+      throw new Error('CSAT score must be an integer 1-5');
+    }
+    if (session.csat?.respondedAt) {
+      return { ok: true, alreadyRated: true };
+    }
+
+    const comment = request.comment?.trim() || undefined;
+    session.csat = {
+      ...session.csat,
+      pending: false,
+      score: request.score,
+      comment,
+      respondedAt: new Date(),
+    };
+    await this.storage.updateSession(session);
+
+    await this.notifyBridgesCsat(session, request.score, comment);
+    this.forwardCsatToWebhook(session, request.score, comment);
+    await this.config.onCsat?.(session, { score: request.score, comment });
+
+    return { ok: true };
+  }
+
+  /** Emoji face for a 1..5 score (matches the widget card and SaaS bridge notif). */
+  private csatFace(score: number): string {
+    return ['😡', '😕', '😐', '🙂', '😍'][Math.min(5, Math.max(1, Math.round(score))) - 1];
+  }
+
+  /** Notify bridges of a CSAT rating with a one-line caption. */
+  private async notifyBridgesCsat(
+    session: Session,
+    score: number,
+    comment?: string
+  ): Promise<void> {
+    const caption = `⭐ ${this.csatFace(score)} ${score}/5${comment ? ` — "${comment}"` : ''}`;
+    for (const bridge of this.bridges) {
+      try {
+        if ('notifyDisconnect' in bridge && typeof bridge.notifyDisconnect === 'function') {
+          // Reuse the bridge's plain-notification path (same one-liner channel).
+          await (
+            bridge as { notifyDisconnect: (session: Session, message: string) => Promise<void> }
+          ).notifyDisconnect(session, caption);
+        }
+      } catch (error) {
+        console.error(`[PocketPing] Bridge CSAT notification failed:`, error);
+      }
+    }
+  }
+
+  /** Fire a `csat_submitted` webhook (same `{ type, data, sentAt }` shape as SaaS). */
+  private forwardCsatToWebhook(session: Session, score: number, comment?: string): void {
+    if (!this.config.webhookUrl) return;
+
+    const body = JSON.stringify({
+      type: 'csat_submitted',
+      data: {
+        sessionId: session.id,
+        score,
+        comment: comment ?? null,
+        respondedAt: (session.csat?.respondedAt ?? new Date()).toISOString(),
+      },
+      sentAt: new Date().toISOString(),
+    });
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.config.webhookSecret) {
+      headers['X-PocketPing-Signature'] =
+        `sha256=${createHmac('sha256', this.config.webhookSecret).update(body).digest('hex')}`;
+    }
+
+    const timeout = this.config.webhookTimeout ?? 5000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    fetch(this.config.webhookUrl, { method: 'POST', headers, body, signal: controller.signal })
+      .then(() => clearTimeout(timeoutId))
+      .catch((err) => {
+        clearTimeout(timeoutId);
+        console.error(`[PocketPing] CSAT webhook error:`, err?.message ?? err);
+      });
+  }
+
+  /**
+   * Compute mini support stats over your storage for a time window.
+   * Requires the storage adapter to implement `listSessions`.
+   *
+   * @param opts.from - window start (default: 7 days ago)
+   * @param opts.to - window end (default: now)
+   */
+  async getStats(opts?: { from?: Date; to?: Date }): Promise<SdkStats> {
+    if (typeof this.storage.listSessions !== 'function') {
+      throw new Error(
+        'getStats requires Storage.listSessions(). The bundled MemoryStorage implements it; ' +
+          'add it to your custom storage adapter to use stats.'
+      );
+    }
+    const to = opts?.to ?? new Date();
+    const from = opts?.from ?? new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const sessions = await this.storage.listSessions({ since: from });
+    const entries = await Promise.all(
+      sessions.map(async (session) => ({
+        session,
+        messages: await this.storage.getMessages(session.id, undefined, 1000),
+      }))
+    );
+    return computeStats(entries, { from, to });
   }
 
   /**
