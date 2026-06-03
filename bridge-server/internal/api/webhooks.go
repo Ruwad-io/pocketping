@@ -72,6 +72,14 @@ func (s *Server) getAllowedBotIDs() []string {
 }
 
 func (s *Server) RecordOperatorMessage(sessionID, content, operatorName, sourceBridge string, attachments []pocketping.Attachment, replyToBridgeMessageID *int, bridgeMessageID string) {
+	// Operator commands (e.g. "!csat") are consumed by the relay rather than
+	// relayed to the visitor as a chat message.
+	if cmd := parseOperatorCommand(content); cmd != nil {
+		if s.handleOperatorCommand(sessionID, cmd) {
+			return
+		}
+	}
+
 	// Convert attachments and collect URLs for cross-bridge sync
 	var bridgeAttachments []*types.Attachment
 	for _, att := range attachments {
