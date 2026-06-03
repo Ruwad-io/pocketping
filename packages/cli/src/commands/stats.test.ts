@@ -60,6 +60,12 @@ describe('stats command', () => {
     expect(logSpy).toHaveBeenCalledWith(JSON.stringify(SAMPLE, null, 2))
   })
 
+  it('rejects an invalid --period instead of coercing', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(SAMPLE))
+    await expect(stats({ period: '14d' })).rejects.toThrow(/Invalid --period.*7d or 30d/)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('surfaces the API error message on non-2xx', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ error: 'Invalid or missing API key.' }, false, 401))
     await expect(stats({})).rejects.toThrow('Invalid or missing API key.')

@@ -66,6 +66,11 @@ export async function stats(options: StatsOptions = {}): Promise<void> {
     )
   }
 
+  // Validate rather than silently coercing — `--period 14d` should error, not
+  // quietly return a 7-day window that looks correct.
+  if (options.period !== undefined && options.period !== '7d' && options.period !== '30d') {
+    throw new Error(`Invalid --period "${options.period}". Use 7d or 30d.`)
+  }
   const period = options.period === '30d' ? '30d' : '7d'
   const qs = new URLSearchParams({ period })
   if (options.project) qs.set('projectId', options.project)
