@@ -78,6 +78,12 @@ interface BridgeInterface
     public function onAiTakeover(Session $session, string $reason): void;
 
     /**
+     * Send a plain one-line notification for a session (e.g. a CSAT rating
+     * caption). Bridges that support it post the message to their channel.
+     */
+    public function notifyDisconnect(Session $session, string $message): void;
+
+    /**
      * Cleanup when bridge is removed.
      */
     public function destroy(): void;

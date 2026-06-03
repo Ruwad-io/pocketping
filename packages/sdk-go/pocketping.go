@@ -28,6 +28,13 @@ var (
 	ErrInvalidMimeType    = errors.New("invalid mime type")
 	ErrFileTooLarge       = errors.New("file too large")
 	ErrAttachmentNotFound = errors.New("attachment not found")
+	// ErrInvalidCsatScore is returned when a CSAT score is not an integer 1-5.
+	ErrInvalidCsatScore = errors.New("CSAT score must be an integer 1-5")
+	// ErrListSessionsUnsupported is returned by GetStats when the storage adapter
+	// does not implement StorageWithListSessions.
+	ErrListSessionsUnsupported = errors.New(
+		"GetStats requires Storage to implement listSessions (ListSessions). " +
+			"The bundled MemoryStorage implements it; add it to your custom storage adapter to use stats.")
 )
 
 // Config holds the configuration for PocketPing.
@@ -52,6 +59,9 @@ type Config struct {
 
 	// Callback when a user identifies themselves
 	OnIdentify SessionHandler
+
+	// Callback when a visitor submits a CSAT rating (1..5 + optional comment).
+	OnCsat CsatHandler
 
 	// Webhook URL to forward custom events (Zapier, Make, n8n, etc.)
 	WebhookURL string
@@ -733,6 +743,221 @@ func (pp *PocketPing) HandleIdentify(ctx context.Context, request IdentifyReques
 // GetSession retrieves a session by ID.
 func (pp *PocketPing) GetSession(ctx context.Context, sessionID string) (*Session, error) {
 	return pp.storage.GetSession(ctx, sessionID)
+}
+
+// RequestCsat asks the visitor to rate the conversation. It sets the session's
+// CSAT request state and pushes a csat_request event so the widget shows the
+// rating card. Typically called from an operator command or after a resolved
+// conversation.
+func (pp *PocketPing) RequestCsat(ctx context.Context, sessionID string) error {
+	session, err := pp.storage.GetSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if session == nil {
+		return ErrSessionNotFound
+	}
+
+	now := time.Now()
+	if session.Csat == nil {
+		session.Csat = &SessionCsat{}
+	}
+	session.Csat.Pending = true
+	session.Csat.RequestedAt = &now
+
+	if err := pp.storage.UpdateSession(ctx, session); err != nil {
+		return err
+	}
+
+	pp.BroadcastToSession(sessionID, WebSocketEvent{
+		Type: "csat_request",
+		Data: map[string]interface{}{
+			"requestedAt": now.Format(time.RFC3339),
+		},
+	})
+	return nil
+}
+
+// HandleCsat handles a visitor's CSAT submission (POST /csat). It validates the
+// score (integer 1..5), stores the score/trimmed comment/responded-at, clears
+// the pending flag, notifies bridges, fires the csat_submitted webhook, and runs
+// the OnCsat callback. Idempotent once a rating exists.
+func (pp *PocketPing) HandleCsat(ctx context.Context, request CsatRequest) (*CsatResponse, error) {
+	session, err := pp.storage.GetSession(ctx, request.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session == nil {
+		return nil, ErrSessionNotFound
+	}
+
+	if request.Score < 1 || request.Score > 5 {
+		return nil, ErrInvalidCsatScore
+	}
+
+	if session.Csat != nil && session.Csat.RespondedAt != nil {
+		return &CsatResponse{OK: true, AlreadyRated: true}, nil
+	}
+
+	comment := strings.TrimSpace(request.Comment)
+	now := time.Now()
+	score := request.Score
+
+	if session.Csat == nil {
+		session.Csat = &SessionCsat{}
+	}
+	session.Csat.Pending = false
+	session.Csat.Score = &score
+	if comment != "" {
+		session.Csat.Comment = &comment
+	} else {
+		session.Csat.Comment = nil
+	}
+	session.Csat.RespondedAt = &now
+
+	if err := pp.storage.UpdateSession(ctx, session); err != nil {
+		return nil, err
+	}
+
+	pp.notifyBridgesCsat(ctx, session, score, comment)
+
+	if pp.config.WebhookURL != "" {
+		go pp.forwardCsatToWebhook(ctx, session, score, comment)
+	}
+
+	if pp.config.OnCsat != nil {
+		pp.config.OnCsat(session, CsatRating{Score: score, Comment: comment})
+	}
+
+	return &CsatResponse{OK: true}, nil
+}
+
+// csatFace returns the emoji face for a 1..5 score (matches the widget card and
+// the SaaS bridge notification).
+func (pp *PocketPing) csatFace(score int) string {
+	faces := []string{"😡", "😕", "😐", "🙂", "😍"}
+	if score < 1 {
+		score = 1
+	}
+	if score > 5 {
+		score = 5
+	}
+	return faces[score-1]
+}
+
+// notifyBridgesCsat notifies bridges of a CSAT rating with a one-line caption.
+// Uses the bridge's plain-notification channel (BridgeWithNotify) when available.
+func (pp *PocketPing) notifyBridgesCsat(ctx context.Context, session *Session, score int, comment string) {
+	caption := fmt.Sprintf("⭐ %s %d/5", pp.csatFace(score), score)
+	if comment != "" {
+		caption += fmt.Sprintf(" — %q", comment)
+	}
+	for _, bridge := range pp.bridges {
+		if notifier, ok := bridge.(BridgeWithNotify); ok {
+			if err := notifier.Notify(ctx, session, caption); err != nil {
+				log.Printf("[PocketPing] Bridge %s CSAT notification failed: %v", bridge.Name(), err)
+			}
+		}
+	}
+}
+
+// forwardCsatToWebhook fires a csat_submitted webhook (same {type, data, sentAt}
+// shape as the SaaS), HMAC-signed like other webhooks.
+func (pp *PocketPing) forwardCsatToWebhook(ctx context.Context, session *Session, score int, comment string) {
+	if pp.config.WebhookURL == "" {
+		return
+	}
+
+	respondedAt := time.Now()
+	if session.Csat != nil && session.Csat.RespondedAt != nil {
+		respondedAt = *session.Csat.RespondedAt
+	}
+
+	var commentValue interface{}
+	if comment != "" {
+		commentValue = comment
+	}
+
+	payload := map[string]interface{}{
+		"type": "csat_submitted",
+		"data": map[string]interface{}{
+			"sessionId":   session.ID,
+			"score":       score,
+			"comment":     commentValue,
+			"respondedAt": respondedAt.Format(time.RFC3339),
+		},
+		"sentAt": time.Now().Format(time.RFC3339),
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", pp.config.WebhookURL, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	if pp.config.WebhookSecret != "" {
+		h := hmac.New(sha256.New, []byte(pp.config.WebhookSecret))
+		h.Write(body)
+		signature := hex.EncodeToString(h.Sum(nil))
+		req.Header.Set("X-PocketPing-Signature", "sha256="+signature)
+	}
+
+	resp, err := pp.httpClient.Do(req)
+	if err != nil {
+		return
+	}
+	resp.Body.Close()
+}
+
+// GetStatsOptions configures the GetStats time window.
+type GetStatsOptions struct {
+	// From is the window start (default: 7 days ago).
+	From *time.Time
+	// To is the window end (default: now).
+	To *time.Time
+}
+
+// GetStats computes mini support stats over the store for a time window.
+// Requires the storage adapter to implement StorageWithListSessions. The bundled
+// MemoryStorage implements it; custom adapters must add ListSessions to use stats.
+//
+// The default window is the last 7 days.
+func (pp *PocketPing) GetStats(ctx context.Context, opts *GetStatsOptions) (*SdkStats, error) {
+	lister, ok := pp.storage.(StorageWithListSessions)
+	if !ok {
+		return nil, ErrListSessionsUnsupported
+	}
+
+	to := time.Now()
+	if opts != nil && opts.To != nil {
+		to = *opts.To
+	}
+	from := to.Add(-7 * 24 * time.Hour)
+	if opts != nil && opts.From != nil {
+		from = *opts.From
+	}
+
+	sessions, err := lister.ListSessions(ctx, &from)
+	if err != nil {
+		return nil, err
+	}
+
+	entries := make([]StatsEntry, 0, len(sessions))
+	for _, session := range sessions {
+		messages, err := pp.storage.GetMessages(ctx, session.ID, "", 1000)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, StatsEntry{Session: session, Messages: messages})
+	}
+
+	stats := ComputeStats(entries, from, to)
+	return &stats, nil
 }
 
 // GetStorage returns the storage adapter.

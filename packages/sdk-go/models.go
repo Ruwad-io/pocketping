@@ -231,6 +231,22 @@ type Session struct {
 	UserPhone string `json:"userPhone,omitempty"`
 	// UserPhoneCountry is the user's phone country code (ISO: FR, US, etc.).
 	UserPhoneCountry string `json:"userPhoneCountry,omitempty"`
+	// Csat holds the post-conversation CSAT rating state.
+	Csat *SessionCsat `json:"csat,omitempty"`
+}
+
+// SessionCsat is the CSAT rating state stored on a session.
+type SessionCsat struct {
+	// Pending is true when a rating has been requested and is awaiting an answer.
+	Pending bool `json:"pending,omitempty"`
+	// Score is the submitted score, 1..5 (nil until submitted).
+	Score *int `json:"score,omitempty"`
+	// Comment is the optional free-text comment.
+	Comment *string `json:"comment,omitempty"`
+	// RequestedAt is when the rating was requested.
+	RequestedAt *time.Time `json:"requestedAt,omitempty"`
+	// RespondedAt is when the visitor submitted.
+	RespondedAt *time.Time `json:"respondedAt,omitempty"`
 }
 
 // Message represents a chat message.
@@ -391,6 +407,22 @@ type IdentifyResponse struct {
 	OK bool `json:"ok"`
 }
 
+// CsatRequest is a visitor-submitted CSAT rating (POST /csat).
+type CsatRequest struct {
+	SessionID string `json:"sessionId"`
+	// Score is the rating, 1..5.
+	Score int `json:"score"`
+	// Comment is an optional free-text comment.
+	Comment string `json:"comment,omitempty"`
+}
+
+// CsatResponse is the response after submitting a CSAT rating.
+type CsatResponse struct {
+	OK bool `json:"ok"`
+	// AlreadyRated is true when a rating was already recorded (idempotent no-op).
+	AlreadyRated bool `json:"alreadyRated,omitempty"`
+}
+
 // PresenceResponse is the response for presence check.
 type PresenceResponse struct {
 	Online        bool `json:"online"`
@@ -459,6 +491,17 @@ type MessageHandler func(message *Message, session *Session)
 
 // SessionHandler is a function that handles session events.
 type SessionHandler func(session *Session)
+
+// CsatRating is the rating passed to an OnCsat callback.
+type CsatRating struct {
+	// Score is the submitted score, 1..5.
+	Score int
+	// Comment is the optional trimmed comment ("" when none).
+	Comment string
+}
+
+// CsatHandler is a function that handles a submitted CSAT rating.
+type CsatHandler func(session *Session, rating CsatRating)
 
 // MaxMessageContentLength is the maximum allowed message content length.
 const MaxMessageContentLength = 4000

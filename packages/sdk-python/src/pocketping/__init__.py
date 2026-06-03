@@ -14,18 +14,22 @@ from pocketping.models import (
     BridgeMessageResult,
     ConnectRequest,
     ConnectResponse,
+    CsatRequest,
+    CsatResponse,
     CustomEvent,
     Message,
     PresenceResponse,
     SendMessageRequest,
     SendMessageResponse,
     Session,
+    SessionCsat,
     SessionMetadata,
     TrackedElement,
     TriggerOptions,
     UploadRequest,
     UploadResponse,
 )
+from pocketping.stats import CsatStats, SdkStats
 from pocketping.storage import MemoryStorage, Storage
 from pocketping.utils.ip_filter import IpFilterConfig
 from pocketping.webhooks import OperatorAttachment, WebhookConfig, WebhookHandler
@@ -36,9 +40,14 @@ __all__ = [
     "PocketPing",
     "Message",
     "Session",
+    "SessionCsat",
     "SessionMetadata",
     "ConnectRequest",
     "ConnectResponse",
+    "CsatRequest",
+    "CsatResponse",
+    "SdkStats",
+    "CsatStats",
     "SendMessageRequest",
     "SendMessageResponse",
     "PresenceResponse",

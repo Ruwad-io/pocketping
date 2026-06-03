@@ -12,7 +12,7 @@ use PocketPing\Models\Session;
 /**
  * In-memory storage adapter. Useful for development and testing.
  */
-final class MemoryStorage implements StorageWithBridgeIdsInterface, StorageWithAttachmentsInterface
+final class MemoryStorage implements StorageWithBridgeIdsInterface, StorageWithAttachmentsInterface, StorageWithListSessionsInterface
 {
     /** @var array<string, Session> */
     private array $sessions = [];
@@ -225,6 +225,25 @@ final class MemoryStorage implements StorageWithBridgeIdsInterface, StorageWithA
     public function getAllSessions(): array
     {
         return array_values($this->sessions);
+    }
+
+    /**
+     * List sessions, optionally only those created since a given date.
+     *
+     * @param \DateTimeInterface|null $since Only return sessions created at or after this date
+     * @return Session[]
+     */
+    public function listSessions(?\DateTimeInterface $since = null): array
+    {
+        $all = array_values($this->sessions);
+        if ($since === null) {
+            return $all;
+        }
+
+        return array_values(array_filter(
+            $all,
+            fn (Session $session) => $session->createdAt >= $since
+        ));
     }
 
     /**

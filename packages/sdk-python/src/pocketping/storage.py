@@ -55,6 +55,14 @@ class Storage(ABC):
         """Get a message by ID."""
         pass
 
+    async def list_sessions(self, since: Optional[datetime] = None) -> list[Session]:
+        """List sessions, optionally only those created since a date.
+
+        Required by ``get_stats()``; custom stores that don't implement it can't
+        use stats. The base class raises so the error surfaces clearly.
+        """
+        raise NotImplementedError("Storage.list_sessions() is not implemented")
+
     async def update_message(self, message: Message) -> None:
         """Update an existing message (for edit/delete). Optional to implement."""
         await self.save_message(message)
@@ -115,6 +123,12 @@ class MemoryStorage(Storage):
     async def delete_session(self, session_id: str) -> None:
         self._sessions.pop(session_id, None)
         self._messages.pop(session_id, None)
+
+    async def list_sessions(self, since: Optional[datetime] = None) -> list[Session]:
+        sessions = list(self._sessions.values())
+        if since is None:
+            return sessions
+        return [s for s in sessions if s.created_at >= since]
 
     async def save_message(self, message: Message) -> None:
         if message.session_id not in self._messages:

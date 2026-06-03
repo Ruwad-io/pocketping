@@ -124,6 +124,23 @@ class SessionMetadata(BaseModel):
     os: Optional[str] = None
 
 
+class SessionCsat(BaseModel):
+    """Post-conversation CSAT rating state stored on a session."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    pending: bool = False
+    """A rating has been requested and is awaiting an answer."""
+    score: Optional[int] = None
+    """Submitted score, 1..5."""
+    comment: Optional[str] = None
+    """Optional free-text comment."""
+    requested_at: Optional[datetime] = Field(None, alias="requestedAt")
+    """When the rating was requested."""
+    responded_at: Optional[datetime] = Field(None, alias="respondedAt")
+    """When the visitor submitted."""
+
+
 class Session(BaseModel):
     """A chat session with a visitor."""
 
@@ -141,6 +158,8 @@ class Session(BaseModel):
     """User phone from pre-chat form (E.164 format: +33612345678)."""
     user_phone_country: Optional[str] = Field(None, alias="userPhoneCountry")
     """User phone country code (ISO: FR, US, etc.)."""
+    csat: Optional[SessionCsat] = None
+    """Post-conversation CSAT rating state."""
 
 
 class Message(BaseModel):
@@ -369,6 +388,27 @@ class IdentifyResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     ok: bool = True
+
+
+class CsatRequest(BaseModel):
+    """Visitor-submitted CSAT rating (POST /csat)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    session_id: str = Field(alias="sessionId")
+    score: int
+    """1..5"""
+    comment: Optional[str] = None
+
+
+class CsatResponse(BaseModel):
+    """Response after submitting a CSAT rating."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    ok: bool = True
+    already_rated: Optional[bool] = Field(None, alias="alreadyRated")
+    """True when a rating was already recorded (idempotent no-op)."""
 
 
 class PresenceResponse(BaseModel):

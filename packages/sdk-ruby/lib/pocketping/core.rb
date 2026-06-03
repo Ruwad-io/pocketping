@@ -99,6 +99,7 @@ module PocketPing
     # @param on_message [Proc, nil] Callback for messages
     # @param on_event [Proc, nil] Callback for custom events
     # @param on_identify [Proc, nil] Callback for user identification
+    # @param on_csat [Proc, nil] Callback when a visitor submits a CSAT rating
     # @param webhook_url [String, nil] Webhook URL for event forwarding
     # @param webhook_secret [String, nil] HMAC secret for webhook signatures
     # @param webhook_timeout [Float] Webhook request timeout (default: 5.0)
@@ -118,6 +119,7 @@ module PocketPing
       on_message: nil,
       on_event: nil,
       on_identify: nil,
+      on_csat: nil,
       webhook_url: nil,
       webhook_secret: nil,
       webhook_timeout: 5.0,
@@ -141,6 +143,7 @@ module PocketPing
       @on_message = on_message
       @on_event_callback = on_event
       @on_identify_callback = on_identify
+      @on_csat_callback = on_csat
 
       @webhook_url = webhook_url
       @webhook_secret = webhook_secret
@@ -687,6 +690,97 @@ module PocketPing
     end
 
     # ─────────────────────────────────────────────────────────────────
+    # CSAT (post-conversation satisfaction rating)
+    # ─────────────────────────────────────────────────────────────────
+
+    # Ask the visitor to rate the conversation. Sets the session's CSAT request
+    # state and pushes a `csat_request` event so the widget shows the rating
+    # card. Typically called from an operator command or after a resolved
+    # conversation.
+    #
+    # @param session_id [String] The session ID
+    # @return [Hash] { ok: true }
+    # @raise [SessionNotFoundError] If the session is not found
+    def request_csat(session_id)
+      session = @storage.get_session(session_id)
+      raise SessionNotFoundError, "Session not found" unless session
+
+      session.csat_pending = true
+      session.csat_requested_at = Time.now.utc
+      @storage.update_session(session)
+
+      broadcast_to_session(
+        session_id,
+        WebSocketEvent.new(
+          type: "csat_request",
+          data: { requestedAt: session.csat_requested_at.iso8601 }
+        )
+      )
+
+      { ok: true }
+    end
+
+    # Handle a visitor's CSAT submission. Stores the score, clears the pending
+    # flag, notifies bridges with a one-liner, fires the `csat_submitted`
+    # webhook, and runs the `on_csat` callback. Idempotent once a rating exists.
+    #
+    # @param request [CsatRequest] The CSAT submission
+    # @return [CsatResponse]
+    # @raise [SessionNotFoundError] If the session is not found
+    # @raise [ValidationError] If the score is not an integer 1..5
+    def handle_csat(request)
+      session = @storage.get_session(request.session_id)
+      raise SessionNotFoundError, "Session not found" unless session
+
+      validate_csat_score!(request.score)
+      return CsatResponse.new(ok: true, already_rated: true) if session.csat_responded_at
+
+      comment = normalize_csat_comment(request.comment)
+
+      session.csat_pending = false
+      session.csat_score = request.score
+      session.csat_comment = comment
+      session.csat_responded_at = Time.now.utc
+      @storage.update_session(session)
+
+      notify_bridges_csat(session, request.score, comment)
+      forward_csat_to_webhook(session, request.score, comment) if @webhook_url
+      @on_csat_callback&.call(session, { score: request.score, comment: comment })
+
+      CsatResponse.new(ok: true)
+    end
+
+    # ─────────────────────────────────────────────────────────────────
+    # Stats
+    # ─────────────────────────────────────────────────────────────────
+
+    # Compute mini support stats over your storage for a time window.
+    # Requires the storage adapter to implement `list_sessions`.
+    #
+    # @param from [Time, nil] Window start (default: 7 days ago)
+    # @param to [Time, nil] Window end (default: now)
+    # @return [SdkStats]
+    # @raise [PocketPing::Error] If the storage cannot list sessions
+    def get_stats(from: nil, to: nil)
+      unless @storage.respond_to?(:list_sessions) &&
+             @storage.method(:list_sessions).owner != Storage::Base
+        raise Error,
+              "get_stats requires Storage#list_sessions. The bundled MemoryStorage " \
+              "implements it; add it to your custom storage adapter to use stats."
+      end
+
+      to ||= Time.now.utc
+      from ||= to - (7 * 24 * 60 * 60)
+
+      sessions = @storage.list_sessions(since: from)
+      entries = sessions.map do |session|
+        { session: session, messages: @storage.get_messages(session.id, limit: 1000) }
+      end
+
+      Stats.compute_stats(entries, from: from, to: to)
+    end
+
+    # ─────────────────────────────────────────────────────────────────
     # Operator Actions
     # ─────────────────────────────────────────────────────────────────
 
@@ -1051,6 +1145,36 @@ module PocketPing
       end
     end
 
+    # Notify bridges of a CSAT rating with a one-line caption.
+    def notify_bridges_csat(session, score, comment)
+      caption = "⭐ #{csat_face(score)} #{score}/5"
+      caption += " — \"#{comment}\"" if comment
+      @bridges.each do |bridge|
+        bridge.notify_disconnect(session, caption)
+      rescue StandardError => e
+        warn "[PocketPing] Bridge #{bridge.name} CSAT notification error: #{e.message}"
+      end
+    end
+
+    # Emoji face for a 1..5 score (matches the widget card and SaaS bridge notif).
+    def csat_face(score)
+      faces = ["😡", "😕", "😐", "🙂", "😍"]
+      faces[score.round.clamp(1, 5) - 1]
+    end
+
+    # Validate that a CSAT score is an integer in 1..5.
+    def validate_csat_score!(score)
+      return if score.is_a?(Integer) && score >= 1 && score <= 5
+
+      raise ValidationError, "CSAT score must be an integer 1-5"
+    end
+
+    # Strip a CSAT comment and coerce a blank/nil comment to nil.
+    def normalize_csat_comment(comment)
+      stripped = comment&.strip
+      stripped unless stripped.nil? || stripped.empty?
+    end
+
     def sync_edit_to_bridges(message, session)
       bridge_ids = stored_bridge_ids(message.id)
       return unless bridge_ids
@@ -1126,6 +1250,24 @@ module PocketPing
       )
 
       forward_to_webhook(event, session)
+    end
+
+    # Fire a `csat_submitted` webhook (same `{ type, data, sentAt }` shape as SaaS).
+    def forward_csat_to_webhook(session, score, comment)
+      return unless @webhook_url
+
+      payload = {
+        type: "csat_submitted",
+        data: {
+          sessionId: session.id,
+          score: score,
+          comment: comment,
+          respondedAt: (session.csat_responded_at || Time.now.utc).iso8601
+        },
+        sentAt: Time.now.utc.iso8601
+      }
+
+      send_webhook(payload)
     end
 
     def send_webhook(payload)

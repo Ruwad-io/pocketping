@@ -7,11 +7,15 @@ namespace PocketPing;
 use PocketPing\AI\AIProviderInterface;
 use PocketPing\Bridges\BridgeInterface;
 use PocketPing\Bridges\BridgeWithEditDeleteInterface;
+use PocketPing\Http\CurlHttpClient;
+use PocketPing\Http\HttpClientInterface;
 use PocketPing\Models\Attachment;
 use PocketPing\Models\AttachmentStatus;
 use PocketPing\Models\BridgeMessageIds;
 use PocketPing\Models\ConnectRequest;
 use PocketPing\Models\ConnectResponse;
+use PocketPing\Models\CsatRequest;
+use PocketPing\Models\CsatResponse;
 use PocketPing\Models\CustomEvent;
 use PocketPing\Models\DeleteMessageRequest;
 use PocketPing\Models\DeleteMessageResponse;
@@ -28,6 +32,7 @@ use PocketPing\Models\Sender;
 use PocketPing\Models\SendMessageRequest;
 use PocketPing\Models\SendMessageResponse;
 use PocketPing\Models\Session;
+use PocketPing\Models\SessionCsat;
 use PocketPing\Models\TrackedElement;
 use PocketPing\Models\TypingRequest;
 use PocketPing\Models\UploadRequest;
@@ -35,10 +40,12 @@ use PocketPing\Models\UploadResponse;
 use PocketPing\Models\VersionCheckResult;
 use PocketPing\Models\VersionWarning;
 use PocketPing\Models\WebSocketEvent;
+use PocketPing\Stats\Stats;
 use PocketPing\Storage\MemoryStorage;
 use PocketPing\Storage\StorageInterface;
 use PocketPing\Storage\StorageWithAttachmentsInterface;
 use PocketPing\Storage\StorageWithBridgeIdsInterface;
+use PocketPing\Storage\StorageWithListSessionsInterface;
 use PocketPing\Utils\IpFilter;
 use PocketPing\Utils\IpFilterConfig;
 use PocketPing\Utils\IpFilterResult;
@@ -121,6 +128,10 @@ class PocketPing
     private string $aiSystemPrompt;
     private int $aiTakeoverDelay;
 
+    private ?string $webhookUrl = null;
+    private ?string $webhookSecret = null;
+    private HttpClientInterface $httpClient;
+
     /**
      * @param StorageInterface|null $storage Storage adapter
      * @param BridgeInterface[] $bridges Notification bridges
@@ -139,6 +150,10 @@ class PocketPing
      * @param AIProviderInterface|null $aiProvider AI provider for offline fallback replies
      * @param string|null $aiSystemPrompt System prompt for AI fallback replies
      * @param int|null $aiTakeoverDelay Seconds offline before AI takes over (default 300)
+     * @param callable(Session, array{score: int, comment: ?string}): void|null $onCsat Callback when a visitor submits a CSAT rating
+     * @param string|null $webhookUrl Webhook URL to forward events (e.g. csat_submitted)
+     * @param string|null $webhookSecret Secret for the HMAC-SHA256 webhook signature
+     * @param HttpClientInterface|null $httpClient HTTP client used for webhook delivery
      */
     public function __construct(
         ?StorageInterface $storage = null,
@@ -168,6 +183,11 @@ class PocketPing
         ?AIProviderInterface $aiProvider = null,
         ?string $aiSystemPrompt = null,
         ?int $aiTakeoverDelay = null,
+        /** @var callable(Session, array{score: int, comment: ?string}): void|null */
+        private $onCsat = null,
+        ?string $webhookUrl = null,
+        ?string $webhookSecret = null,
+        ?HttpClientInterface $httpClient = null,
     ) {
         $this->storage = $storage ?? new MemoryStorage();
         $this->bridges = $bridges;
@@ -199,6 +219,11 @@ class PocketPing
         $this->aiProvider = $aiProvider;
         $this->aiSystemPrompt = $aiSystemPrompt ?? self::DEFAULT_AI_SYSTEM_PROMPT;
         $this->aiTakeoverDelay = $aiTakeoverDelay ?? self::DEFAULT_AI_TAKEOVER_DELAY;
+
+        // Webhook forwarding configuration
+        $this->webhookUrl = $webhookUrl;
+        $this->webhookSecret = $webhookSecret;
+        $this->httpClient = $httpClient ?? new CurlHttpClient();
 
         // Initialize bridges
         foreach ($this->bridges as $bridge) {
@@ -872,6 +897,207 @@ class PocketPing
     public function getSession(string $sessionId): ?Session
     {
         return $this->storage->getSession($sessionId);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // CSAT (Customer Satisfaction)
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Ask the visitor to rate the conversation. Sets the session's CSAT request
+     * and pushes a `csat_request` event so the widget shows the rating card.
+     * Typically called from an operator command or after a resolved conversation.
+     *
+     * @return array{ok: bool}
+     */
+    public function requestCsat(string $sessionId): array
+    {
+        $session = $this->storage->getSession($sessionId);
+        if ($session === null) {
+            throw new \InvalidArgumentException('Session not found');
+        }
+
+        $requestedAt = new \DateTimeImmutable();
+        $session->csat = new SessionCsat(
+            pending: true,
+            score: $session->csat?->score,
+            comment: $session->csat?->comment,
+            requestedAt: $requestedAt,
+            respondedAt: $session->csat?->respondedAt,
+        );
+        $this->storage->updateSession($session);
+
+        $this->broadcastToSession(
+            $sessionId,
+            new WebSocketEvent('csat_request', [
+                'requestedAt' => $requestedAt->format(\DateTimeInterface::ATOM),
+            ])
+        );
+
+        return ['ok' => true];
+    }
+
+    /**
+     * Handle a visitor's CSAT submission (POST /csat). Validates the score,
+     * stores it, clears the pending flag, notifies bridges, fires the
+     * `csat_submitted` webhook, and runs the `onCsat` callback. Idempotent once
+     * a rating exists.
+     *
+     * @param CsatRequest|array<string, mixed> $request
+     */
+    public function handleCsat(CsatRequest|array $request): CsatResponse
+    {
+        $request = is_array($request) ? CsatRequest::fromArray($request) : $request;
+
+        $session = $this->storage->getSession($request->sessionId);
+        if ($session === null) {
+            throw new \InvalidArgumentException('Session not found');
+        }
+
+        if ($request->score < 1 || $request->score > 5) {
+            throw new \InvalidArgumentException('CSAT score must be an integer 1-5');
+        }
+
+        // Idempotent: a rating already exists.
+        if ($session->csat !== null && $session->csat->respondedAt !== null) {
+            return new CsatResponse(ok: true, alreadyRated: true);
+        }
+
+        $comment = $request->comment !== null ? trim($request->comment) : '';
+        $comment = $comment === '' ? null : $comment;
+
+        $respondedAt = new \DateTimeImmutable();
+        $session->csat = new SessionCsat(
+            pending: false,
+            score: $request->score,
+            comment: $comment,
+            requestedAt: $session->csat?->requestedAt,
+            respondedAt: $respondedAt,
+        );
+        $this->storage->updateSession($session);
+
+        $this->notifyBridgesCsat($session, $request->score, $comment);
+        $this->forwardCsatToWebhook($session, $request->score, $comment, $respondedAt);
+
+        if ($this->onCsat !== null) {
+            ($this->onCsat)($session, ['score' => $request->score, 'comment' => $comment]);
+        }
+
+        return new CsatResponse(ok: true);
+    }
+
+    /**
+     * Emoji face for a 1..5 score (matches the widget card and SaaS bridge notif).
+     */
+    private function csatFace(int $score): string
+    {
+        $faces = ['😡', '😕', '😐', '🙂', '😍'];
+        $index = max(1, min(5, $score)) - 1;
+
+        return $faces[$index];
+    }
+
+    /**
+     * Notify bridges of a CSAT rating with a one-line caption.
+     */
+    private function notifyBridgesCsat(Session $session, int $score, ?string $comment): void
+    {
+        $caption = sprintf('⭐ %s %d/5', $this->csatFace($score), $score);
+        if ($comment !== null) {
+            $caption .= sprintf(' — "%s"', $comment);
+        }
+
+        foreach ($this->bridges as $bridge) {
+            try {
+                $bridge->notifyDisconnect($session, $caption);
+            } catch (\Throwable $e) {
+                $this->logger->error('Bridge CSAT notification failed', [
+                    'bridge' => $bridge->getName(),
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Fire a `csat_submitted` webhook (same `{ type, data, sentAt }` shape as SaaS),
+     * HMAC-signed with the configured webhook secret.
+     */
+    private function forwardCsatToWebhook(
+        Session $session,
+        int $score,
+        ?string $comment,
+        \DateTimeInterface $respondedAt,
+    ): void {
+        if ($this->webhookUrl === null) {
+            return;
+        }
+
+        $payload = [
+            'type' => 'csat_submitted',
+            'data' => [
+                'sessionId' => $session->id,
+                'score' => $score,
+                'comment' => $comment,
+                'respondedAt' => $respondedAt->format(\DateTimeInterface::ATOM),
+            ],
+            'sentAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+        ];
+
+        $headers = [];
+        if ($this->webhookSecret !== null) {
+            $body = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $signature = hash_hmac('sha256', $body === false ? '' : $body, $this->webhookSecret);
+            $headers['X-PocketPing-Signature'] = 'sha256=' . $signature;
+        }
+
+        try {
+            $this->httpClient->post($this->webhookUrl, $payload, $headers);
+        } catch (\Throwable $e) {
+            $this->logger->error('CSAT webhook error', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Stats
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Compute mini support stats over your storage for a time window. Requires
+     * the storage adapter to implement listSessions(); the bundled MemoryStorage
+     * does. Defaults to the last 7 days.
+     *
+     * @param \DateTimeInterface|null $from Window start (default: 7 days ago)
+     * @param \DateTimeInterface|null $to Window end (default: now)
+     * @return array<string, mixed>
+     */
+    public function getStats(?\DateTimeInterface $from = null, ?\DateTimeInterface $to = null): array
+    {
+        if (!($this->storage instanceof StorageWithListSessionsInterface)) {
+            throw new \RuntimeException(
+                'getStats requires Storage::listSessions(). The bundled MemoryStorage implements it; '
+                . 'add it (StorageWithListSessionsInterface) to your custom storage adapter to use stats.'
+            );
+        }
+
+        $to = $to !== null ? \DateTimeImmutable::createFromInterface($to) : new \DateTimeImmutable();
+        $from = $from !== null
+            ? \DateTimeImmutable::createFromInterface($from)
+            : $to->sub(new \DateInterval('P7D'));
+
+        $sessions = $this->storage->listSessions($from);
+
+        $entries = [];
+        foreach ($sessions as $session) {
+            $entries[] = [
+                'session' => $session,
+                'messages' => $this->storage->getMessages($session->id, null, 1000),
+            ];
+        }
+
+        return Stats::compute($entries, $from, $to);
     }
 
     // ─────────────────────────────────────────────────────────────────

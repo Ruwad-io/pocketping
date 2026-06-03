@@ -98,6 +98,16 @@ module PocketPing
         nil
       end
 
+      # List sessions, optionally only those created since a given time.
+      # Required by {Client#get_stats}; custom stores that don't implement it
+      # cannot use stats.
+      #
+      # @param since [Time, nil] Only return sessions created at or after this time
+      # @return [Array<Session>] List of sessions
+      def list_sessions(since: nil)
+        raise NotImplementedError, "#{self.class} must implement #list_sessions"
+      end
+
       # Update an existing message (for edit/delete)
       # Optional: defaults to save_message
       #
@@ -292,6 +302,16 @@ module PocketPing
 
           # Return most recent by last_activity
           visitor_sessions.max_by(&:last_activity)
+        end
+      end
+
+      # @see Base#list_sessions
+      def list_sessions(since: nil)
+        @mutex.synchronize do
+          all = @sessions.values
+          next all.dup unless since
+
+          all.select { |s| s.created_at >= since }
         end
       end
 

@@ -18,6 +18,8 @@ from pocketping.models import (
     AttachmentStatus,
     ConnectRequest,
     ConnectResponse,
+    CsatRequest,
+    CsatResponse,
     CustomEvent,
     DeleteMessageRequest,
     DeleteMessageResponse,
@@ -35,6 +37,7 @@ from pocketping.models import (
     SendMessageRequest,
     SendMessageResponse,
     Session,
+    SessionCsat,
     TypingRequest,
     UploadRequest,
     UploadResponse,
@@ -43,6 +46,7 @@ from pocketping.models import (
     VersionWarning,
     WebSocketEvent,
 )
+from pocketping.stats import SdkStats, compute_stats
 from pocketping.storage import BridgeMessageIds, MemoryStorage, Storage
 from pocketping.utils.ip_filter import IpFilterConfig
 
@@ -89,6 +93,7 @@ class PocketPing:
         on_message: Optional[Callable[[Message, Session], Any]] = None,
         on_event: Optional[Callable[[CustomEvent, Session], Any]] = None,
         on_identify: Optional[Callable[[Session], Any]] = None,
+        on_csat: Optional[Callable[[Session, dict], Any]] = None,
         # Webhook configuration
         webhook_url: Optional[str] = None,
         webhook_secret: Optional[str] = None,
@@ -119,6 +124,7 @@ class PocketPing:
         self.on_message = on_message
         self.on_event_callback = on_event
         self.on_identify_callback = on_identify
+        self.on_csat_callback = on_csat
 
         # Webhook config
         self.webhook_url = webhook_url
@@ -584,6 +590,178 @@ class PocketPing:
     async def get_session(self, session_id: str) -> Optional[Session]:
         """Get a session by ID."""
         return await self.storage.get_session(session_id)
+
+    # ─────────────────────────────────────────────────────────────────
+    # CSAT (post-conversation satisfaction rating)
+    # ─────────────────────────────────────────────────────────────────
+
+    async def request_csat(self, session_id: str) -> dict:
+        """Ask the visitor to rate the conversation.
+
+        Sets the session's CSAT request and pushes a ``csat_request`` event so
+        the widget shows the rating card. Typically called from an operator
+        command or after a resolved conversation.
+
+        Raises:
+            ValueError: If the session is not found.
+        """
+        session = await self.storage.get_session(session_id)
+        if not session:
+            raise ValueError("Session not found")
+
+        requested_at = datetime.now(timezone.utc)
+        csat = session.csat or SessionCsat()
+        csat.pending = True
+        csat.requested_at = requested_at
+        session.csat = csat
+        await self.storage.update_session(session)
+
+        await self._broadcast_to_session(
+            session_id,
+            WebSocketEvent(
+                type="csat_request",
+                data={"requestedAt": requested_at.isoformat()},
+            ),
+        )
+        return {"ok": True}
+
+    async def handle_csat(self, request: CsatRequest) -> CsatResponse:
+        """Handle a visitor's CSAT submission (POST /csat).
+
+        Stores the score, clears the pending flag, notifies bridges, fires the
+        ``csat_submitted`` webhook, and runs the ``on_csat`` callback. Idempotent
+        once a rating exists.
+
+        Raises:
+            ValueError: If the session is not found or the score is out of range.
+        """
+        session = await self.storage.get_session(request.session_id)
+        if not session:
+            raise ValueError("Session not found")
+
+        if not isinstance(request.score, int) or isinstance(request.score, bool) or not 1 <= request.score <= 5:
+            raise ValueError("CSAT score must be an integer 1-5")
+
+        if session.csat and session.csat.responded_at:
+            return CsatResponse(ok=True, already_rated=True)
+
+        comment = (request.comment or "").strip() or None
+        responded_at = datetime.now(timezone.utc)
+        csat = session.csat or SessionCsat()
+        csat.pending = False
+        csat.score = request.score
+        csat.comment = comment
+        csat.responded_at = responded_at
+        session.csat = csat
+        await self.storage.update_session(session)
+
+        await self._notify_bridges_csat(session, request.score, comment)
+
+        # Fire the csat_submitted webhook (fire and forget).
+        if self.webhook_url:
+            asyncio.create_task(self._forward_csat_to_webhook(session, request.score, comment))
+
+        # Callback
+        if self.on_csat_callback:
+            result = self.on_csat_callback(session, {"score": request.score, "comment": comment})
+            if asyncio.iscoroutine(result):
+                await result
+
+        return CsatResponse(ok=True)
+
+    @staticmethod
+    def _csat_face(score: int) -> str:
+        """Emoji face for a 1..5 score (matches the widget card and SaaS notif)."""
+        faces = ["😡", "😕", "😐", "🙂", "😍"]
+        return faces[min(5, max(1, round(score))) - 1]
+
+    async def _notify_bridges_csat(self, session: Session, score: int, comment: Optional[str]) -> None:
+        """Notify bridges of a CSAT rating with a one-line caption."""
+        caption = f"⭐ {self._csat_face(score)} {score}/5"
+        if comment:
+            caption += f' — "{comment}"'
+        for bridge in self.bridges:
+            try:
+                await bridge.notify_disconnect(session, caption)
+            except Exception as e:
+                print(f"[PocketPing] Bridge {bridge.name} CSAT notification failed: {e}")
+
+    async def _forward_csat_to_webhook(self, session: Session, score: int, comment: Optional[str]) -> None:
+        """Fire a ``csat_submitted`` webhook (same {type, data, sentAt} shape as SaaS)."""
+        if not self.webhook_url:
+            return
+
+        responded_at = (
+            session.csat.responded_at if session.csat and session.csat.responded_at else datetime.now(timezone.utc)
+        )
+        payload = {
+            "type": "csat_submitted",
+            "data": {
+                "sessionId": session.id,
+                "score": score,
+                "comment": comment,
+                "respondedAt": responded_at.isoformat(),
+            },
+            "sentAt": datetime.now(timezone.utc).isoformat(),
+        }
+
+        body = json.dumps(payload)
+        headers = {"Content-Type": "application/json"}
+
+        if self.webhook_secret:
+            signature = hmac.new(self.webhook_secret.encode(), body.encode(), hashlib.sha256).hexdigest()
+            headers["X-PocketPing-Signature"] = f"sha256={signature}"
+
+        try:
+            client = self._http_client or httpx.AsyncClient(timeout=self.webhook_timeout)
+            response = await client.post(self.webhook_url, content=body, headers=headers)
+
+            if not response.is_success:
+                print(f"[PocketPing] CSAT webhook returned {response.status_code}: {response.text}")
+
+            if not self._http_client:
+                await client.aclose()
+        except httpx.TimeoutException:
+            print(f"[PocketPing] CSAT webhook timed out after {self.webhook_timeout}s")
+        except Exception as e:
+            print(f"[PocketPing] CSAT webhook error: {e}")
+
+    # ─────────────────────────────────────────────────────────────────
+    # Stats
+    # ─────────────────────────────────────────────────────────────────
+
+    async def get_stats(
+        self,
+        from_: Optional[datetime] = None,
+        to: Optional[datetime] = None,
+    ) -> SdkStats:
+        """Compute mini support stats over your storage for a time window.
+
+        Requires the storage adapter to implement ``list_sessions``.
+
+        Args:
+            from_: Window start (default: 7 days ago).
+            to: Window end (default: now).
+
+        Raises:
+            ValueError: If the storage adapter does not implement list_sessions.
+        """
+        if type(self.storage).list_sessions is Storage.list_sessions:
+            raise ValueError(
+                "get_stats requires Storage.list_sessions(). The bundled MemoryStorage "
+                "implements it; add it to your custom storage adapter to use stats."
+            )
+
+        to = to or datetime.now(timezone.utc)
+        from_ = from_ or (to - timedelta(days=7))
+
+        sessions = await self.storage.list_sessions(since=from_)
+        entries: list[tuple[Session, list[Message]]] = []
+        for session in sessions:
+            messages = await self.storage.get_messages(session.id, None, 1000)
+            entries.append((session, messages))
+
+        return compute_stats(entries, from_, to)
 
     # ─────────────────────────────────────────────────────────────────
     # Message Edit/Delete
