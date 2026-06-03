@@ -131,6 +131,7 @@ func main() {
 		fmt.Println("   POST /api/operator/status - Update operator status")
 		fmt.Println("   POST /api/custom-events   - Custom event notification")
 		fmt.Println("   GET  /api/events/stream   - SSE stream of operator events")
+		fmt.Println("   GET  /stats               - Mini support-stats (period=7d|30d)")
 
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			log.Fatalf("Server error: %v", err)

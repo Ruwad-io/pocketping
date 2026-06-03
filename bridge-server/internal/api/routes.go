@@ -29,6 +29,7 @@ type Server struct {
 	eventListeners sync.Map // map[chan types.OutgoingEvent]struct{}
 	bridgeIDs      sync.Map // map[string]*types.BridgeMessageIDs (messageID -> bridgeIDs)
 	messages       sync.Map // map[string]*types.Message (messageID -> message)
+	stats          *statsStore
 }
 
 // NewServer creates a new API server
@@ -36,6 +37,7 @@ func NewServer(bridgeList []bridges.Bridge, cfg *config.Config) *Server {
 	return &Server{
 		bridges: bridgeList,
 		config:  cfg,
+		stats:   newStatsStore(),
 	}
 }
 
@@ -57,6 +59,10 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 
 	// SSE stream (outgoing to app/SDK)
 	mux.HandleFunc("GET /api/events/stream", s.authMiddleware(s.handleSSEStream))
+
+	// Mini support-stats over the in-memory store (same JSON shape as the SaaS
+	// /api/v1/stats and the SDK GetStats).
+	mux.HandleFunc("GET /stats", s.authMiddleware(s.handleStats))
 
 	// Bridge webhooks (incoming from Telegram/Slack/Discord)
 	// These receive operator messages and forward them via SSE/webhook
@@ -519,6 +525,9 @@ func (s *Server) buildReplyQuote(messageID string) string {
 // ─────────────────────────────────────────────────────────────────
 
 func (s *Server) processNewSession(event *types.NewSessionEvent) error {
+	if event.Session != nil {
+		s.stats.recordSession(event.Session.ID, event.Session.CreatedAt)
+	}
 	for _, bridge := range s.bridges {
 		if err := bridge.OnNewSession(event.Session); err != nil {
 			log.Printf("[%s] OnNewSession error: %v", bridge.Name(), err)
@@ -530,6 +539,7 @@ func (s *Server) processNewSession(event *types.NewSessionEvent) error {
 
 func (s *Server) processVisitorMessage(event *types.VisitorMessageEvent) error {
 	s.saveMessage(event.Message)
+	s.recordVisitorMessageStats(event)
 
 	var replyContext *bridges.ReplyContext
 	if event.Message.ReplyTo != "" {
@@ -761,7 +771,31 @@ func (s *Server) processCsatSubmitted(event *types.CsatSubmittedEvent) error {
 		"comment":     event.Comment,
 		"respondedAt": respondedAt,
 	})
+
+	// Record for GET /stats (best-effort; the store is in-memory).
+	respAt, err := time.Parse(time.RFC3339, respondedAt)
+	if err != nil {
+		respAt = time.Now()
+	}
+	s.stats.recordCsat(event.Session.ID, event.Score, respAt)
 	return nil
+}
+
+// recordVisitorMessageStats records a visitor message in the in-memory stats
+// store, resolving the session id (and createdAt, when present) from the event.
+func (s *Server) recordVisitorMessageStats(event *types.VisitorMessageEvent) {
+	if event.Message == nil {
+		return
+	}
+	sessionID := event.Message.SessionID
+	var createdAt time.Time
+	if event.Session != nil {
+		if event.Session.ID != "" {
+			sessionID = event.Session.ID
+		}
+		createdAt = event.Session.CreatedAt
+	}
+	s.stats.recordMessage(sessionID, pocketping.SenderVisitor, event.Message.Timestamp, createdAt)
 }
 
 // emitWebhookEvent forwards an event to the configured events webhook (Zapier,
