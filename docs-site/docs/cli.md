@@ -124,6 +124,31 @@ npx @pocketping/cli doctor
 | ✗ | Error | Invalid or broken configuration |
 | ○ | Skip | Bridge not configured |
 
+### `stats` - Support stats
+
+The `stats` command prints mini support stats (conversations, response rate,
+median first reply, CSAT%) from the management API. It reads `POCKETPING_API_KEY`
+(create one in **Dashboard → Settings → API keys**) and works against the hosted
+SaaS **or** a self-hosted instance via `POCKETPING_API_URL`.
+
+```bash
+export POCKETPING_API_KEY=ppk_xxx
+npx @pocketping/cli stats
+npx @pocketping/cli stats --period 30d
+npx @pocketping/cli stats --project proj_123 --json
+```
+
+**Options:**
+
+| Flag | Meaning |
+|------|---------|
+| `-p, --project <id>` | Restrict to a single project |
+| `--period <window>` | `7d` (default) or `30d` |
+| `--json` | Print raw JSON instead of a table |
+
+It renders the same data as the dashboard panel and the MCP `get_stats` tool —
+one source, many views.
+
 ## Environment Variables
 
 The CLI manages these environment variables in your `.env` file:
