@@ -60,8 +60,12 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	// SSE stream (outgoing to app/SDK)
 	mux.HandleFunc("GET /api/events/stream", s.authMiddleware(s.handleSSEStream))
 
-	// Mini support-stats over the in-memory store (same JSON shape as the SaaS
-	// /api/v1/stats and the SDK GetStats).
+	// Mini support-stats over the in-memory store, in the same JSON shape as the
+	// SaaS /api/v1/stats and the SDK GetStats. Registered at /api/v1/stats — the
+	// path the `pocketping stats` CLI and the MCP client already request — so
+	// pointing POCKETPING_API_URL at this instance works unchanged. /stats is
+	// kept as a convenience alias.
+	mux.HandleFunc("GET /api/v1/stats", s.authMiddleware(s.handleStats))
 	mux.HandleFunc("GET /stats", s.authMiddleware(s.handleStats))
 
 	// Bridge webhooks (incoming from Telegram/Slack/Discord)

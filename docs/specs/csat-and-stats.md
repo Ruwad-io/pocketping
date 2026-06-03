@@ -177,14 +177,16 @@ No charting dependency — render **inline SVG sparklines** (on-brand, ~lines of
      - ✅ **`!csat` operator command**: a minimal operator-command parser
        (`internal/api/commands.go`) intercepts operator messages from a bridge thread;
        `!csat` emits a `csat_request` SSE event for that session (consumed, not relayed).
-     - ✅ **`GET /stats`**: a minimal in-memory session store (`internal/api/stats.go`)
-       records session createdAt, message sender+timestamp, and CSAT score+respondedAt
-       as events flow through the relay, then reuses the SDK's `pocketping.ComputeStats`
-       to serve the **same JSON shape** as the SaaS `/api/v1/stats` and SDK `GetStats`
-       (`?period=7d|30d` or explicit `from`/`to`). The store is in-memory and pruned to
-       the stats window: it is not durable across restarts and only counts conversations
-       the relay has observed since start — the honest limit of stats on a relay with no
-       database.
+     - ✅ **`GET /api/v1/stats`** (alias `/stats`): a minimal in-memory session store
+       (`internal/api/stats.go`) records session createdAt, message sender+timestamp, and
+       CSAT score+respondedAt as events flow through the relay, then reuses the SDK's
+       `pocketping.ComputeStats` to serve the **same JSON shape** as the SaaS
+       `/api/v1/stats` and SDK `GetStats` (`?period=7d|30d` or explicit `from`/`to`).
+       Registered at `/api/v1/stats` — the path the `pocketping stats` CLI and the MCP
+       client already request — so pointing `POCKETPING_API_URL` at the instance works
+       unchanged. The store is in-memory and pruned to the stats window: it is not durable
+       across restarts and only counts conversations the relay has observed since start —
+       the honest limit of stats on a relay with no database.
 
 ## Open questions (for review)
 - CSAT scale: confirm **5-emoji** (vs thumbs)?

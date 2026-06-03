@@ -92,22 +92,25 @@ func TestServer_handleStats_HTTP(t *testing.T) {
 	now := time.Now()
 	seedStats(server.stats, now)
 
-	req := httptest.NewRequest("GET", "/stats?period=7d", nil)
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
+	// Both the canonical CLI/MCP path and the convenience alias must serve stats.
+	for _, path := range []string{"/api/v1/stats?period=7d", "/stats?period=7d"} {
+		req := httptest.NewRequest("GET", path, nil)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	var stats pocketping.SdkStats
-	if err := json.NewDecoder(w.Body).Decode(&stats); err != nil {
-		t.Fatalf("decode stats: %v", err)
-	}
-	if stats.Conversations != 2 || stats.Messages != 3 {
-		t.Errorf("unexpected stats: conversations=%d messages=%d", stats.Conversations, stats.Messages)
-	}
-	if stats.Csat.Responses != 1 {
-		t.Errorf("csat.responses = %d, want 1", stats.Csat.Responses)
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s: expected 200, got %d", path, w.Code)
+		}
+		var stats pocketping.SdkStats
+		if err := json.NewDecoder(w.Body).Decode(&stats); err != nil {
+			t.Fatalf("GET %s: decode stats: %v", path, err)
+		}
+		if stats.Conversations != 2 || stats.Messages != 3 {
+			t.Errorf("GET %s: unexpected stats: conversations=%d messages=%d", path, stats.Conversations, stats.Messages)
+		}
+		if stats.Csat.Responses != 1 {
+			t.Errorf("GET %s: csat.responses = %d, want 1", path, stats.Csat.Responses)
+		}
 	}
 }
 
