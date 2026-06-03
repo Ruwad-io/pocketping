@@ -60,14 +60,9 @@ export function CsatCard({ client, onDone }: Props) {
             title={f.label}
             class={`pp-csat-face ${score === f.score ? 'selected' : ''}`}
             disabled={isSubmitting}
-            onClick={() => {
-              setScore(f.score);
-              // No comment yet → one-tap submit. If they want to comment, the
-              // textarea below stays available until they submit.
-              if (!comment.trim()) {
-                void submit(f.score);
-              }
-            }}
+            // Select only — picking a face reveals the optional comment + Send so
+            // the free-text feedback is always reachable (no instant auto-submit).
+            onClick={() => setScore(f.score)}
           >
             {f.emoji}
           </button>
