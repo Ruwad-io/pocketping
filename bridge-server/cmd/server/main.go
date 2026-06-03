@@ -96,8 +96,8 @@ func main() {
 	if cfg.Discord != nil && cfg.Discord.EnableGateway && cfg.Discord.BotToken != "" {
 		log.Println("[Bridge Server] Starting Discord Gateway for real-time message receiving...")
 		discordGateway = pocketping.NewDiscordGateway(pocketping.DiscordGatewayConfig{
-			BotToken:  cfg.Discord.BotToken,
-			ChannelID: cfg.Discord.ChannelID,
+			BotToken:      cfg.Discord.BotToken,
+			ChannelID:     cfg.Discord.ChannelID,
 			AllowedBotIDs: cfg.TestBotIDs,
 			OnOperatorMessageWithIDs: func(ctx context.Context, sessionID, content, operatorName string, attachments []pocketping.Attachment, replyToBridgeMessageID *int, bridgeMessageID string) {
 				server.RecordOperatorMessage(sessionID, content, operatorName, "discord", attachments, replyToBridgeMessageID, bridgeMessageID)
