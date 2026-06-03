@@ -930,22 +930,43 @@ func TestServer_ConcurrentRequests(t *testing.T) {
 	}
 }
 
-func TestServer_handleEvents_csatSubmitted(t *testing.T) {
-	bridge := newMockBridge("telegram")
+// webhookPayload is the parsed events-webhook body.
+type webhookPayload struct {
+	Type string                 `json:"type"`
+	Data map[string]interface{} `json:"data"`
+}
 
-	// Capture the events webhook payload.
-	var gotType string
-	var gotData map[string]interface{}
-	webhookSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var payload struct {
-			Type string                 `json:"type"`
-			Data map[string]interface{} `json:"data"`
+// newWebhookCapture returns an httptest server that pushes each received payload
+// into the returned channel — a channel avoids the data race between the server's
+// handler goroutine and the test goroutine (CI runs with -race).
+func newWebhookCapture() (*httptest.Server, <-chan webhookPayload) {
+	ch := make(chan webhookPayload, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var p webhookPayload
+		_ = json.NewDecoder(r.Body).Decode(&p)
+		select {
+		case ch <- p:
+		default:
 		}
-		_ = json.NewDecoder(r.Body).Decode(&payload)
-		gotType = payload.Type
-		gotData = payload.Data
 		w.WriteHeader(http.StatusOK)
 	}))
+	return srv, ch
+}
+
+func awaitWebhook(t *testing.T, ch <-chan webhookPayload) webhookPayload {
+	t.Helper()
+	select {
+	case p := <-ch:
+		return p
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the events webhook")
+		return webhookPayload{}
+	}
+}
+
+func TestServer_handleEvents_csatSubmitted(t *testing.T) {
+	bridge := newMockBridge("telegram")
+	webhookSrv, ch := newWebhookCapture()
 	defer webhookSrv.Close()
 
 	cfg := &config.Config{EventsWebhookURL: webhookSrv.URL}
@@ -959,17 +980,44 @@ func TestServer_handleEvents_csatSubmitted(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	if bridge.lastDisconnectMsg != `⭐ 😍 5/5 — "great help"` {
-		t.Errorf("unexpected caption: %q", bridge.lastDisconnectMsg)
+
+	got := awaitWebhook(t, ch)
+	if got.Type != "csat_submitted" {
+		t.Errorf("expected webhook type csat_submitted, got %q", got.Type)
+	}
+	if got.Data == nil || got.Data["sessionId"] != "s1" {
+		t.Errorf("expected webhook data sessionId=s1, got %+v", got.Data)
 	}
 
-	// Webhook is fire-and-forget; give it a moment.
-	time.Sleep(50 * time.Millisecond)
-	if gotType != "csat_submitted" {
-		t.Errorf("expected webhook type csat_submitted, got %q", gotType)
+	bridge.mu.Lock()
+	caption := bridge.lastDisconnectMsg
+	bridge.mu.Unlock()
+	if caption != `⭐ 😍 5/5 — "great help"` {
+		t.Errorf("unexpected caption: %q", caption)
 	}
-	if gotData == nil || gotData["sessionId"] != "s1" {
-		t.Errorf("expected webhook data sessionId=s1, got %+v", gotData)
+}
+
+func TestServer_handleEvents_csatSubmitted_defaultsRespondedAt(t *testing.T) {
+	bridge := newMockBridge("telegram")
+	webhookSrv, ch := newWebhookCapture()
+	defer webhookSrv.Close()
+
+	cfg := &config.Config{EventsWebhookURL: webhookSrv.URL}
+	_, mux := setupTestServer([]bridges.Bridge{bridge}, cfg)
+
+	// respondedAt omitted → the relay must still emit a parseable timestamp.
+	body := `{"type":"csat_submitted","session":{"id":"s1"},"score":4}`
+	req := httptest.NewRequest("POST", "/api/events", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	got := awaitWebhook(t, ch)
+	ts, _ := got.Data["respondedAt"].(string)
+	if ts == "" {
+		t.Fatal("expected a non-empty respondedAt")
+	}
+	if _, err := time.Parse(time.RFC3339, ts); err != nil {
+		t.Errorf("respondedAt %q is not RFC3339: %v", ts, err)
 	}
 }
 
