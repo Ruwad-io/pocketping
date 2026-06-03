@@ -101,6 +101,10 @@ class Bridge(ABC):
         """Called when AI takes over a conversation."""
         pass
 
+    async def notify_disconnect(self, session: "Session", message: str) -> None:
+        """Send a plain one-line notification (e.g. disconnect, CSAT rating)."""
+        pass
+
     async def destroy(self) -> None:
         """Cleanup when bridge is removed."""
         pass
@@ -218,6 +222,13 @@ class CompositeBridge(Bridge):
         for bridge in self._bridges:
             try:
                 await bridge.on_ai_takeover(session, reason)
+            except Exception as e:
+                print(f"[PocketPing] Bridge {bridge.name} error: {e}")
+
+    async def notify_disconnect(self, session: "Session", message: str) -> None:
+        for bridge in self._bridges:
+            try:
+                await bridge.notify_disconnect(session, message)
             except Exception as e:
                 print(f"[PocketPing] Bridge {bridge.name} error: {e}")
 

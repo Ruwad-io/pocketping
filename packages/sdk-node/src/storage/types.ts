@@ -21,6 +21,11 @@ export interface Storage {
   getSessionByVisitorId?(visitorId: string): Promise<Session | null>;
   updateSession(session: Session): Promise<void>;
   deleteSession(sessionId: string): Promise<void>;
+  /**
+   * List sessions, optionally only those created since a date. Required by
+   * `getStats()`; custom stores that don't implement it can't use stats.
+   */
+  listSessions?(opts?: { since?: Date }): Promise<Session[]>;
 
   // Messages
   saveMessage(message: Message): Promise<void>;

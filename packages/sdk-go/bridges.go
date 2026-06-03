@@ -54,6 +54,16 @@ type BridgeWithEditDelete interface {
 	OnMessageDelete(ctx context.Context, sessionID, messageID string, deletedAt time.Time) error
 }
 
+// BridgeWithNotify extends Bridge with a plain one-line notification channel.
+// Implement this interface to surface out-of-band notices (e.g. a CSAT rating)
+// on the bridge platform.
+type BridgeWithNotify interface {
+	Bridge
+
+	// Notify sends a plain one-line message about a session to the bridge.
+	Notify(ctx context.Context, session *Session, message string) error
+}
+
 // BridgeMessageResult contains the result of a bridge operation.
 type BridgeMessageResult struct {
 	// TelegramMessageID is the Telegram message ID.

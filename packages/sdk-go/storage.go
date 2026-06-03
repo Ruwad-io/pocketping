@@ -25,6 +25,16 @@ type Storage interface {
 	CleanupOldSessions(ctx context.Context, olderThan time.Time) (int, error)
 }
 
+// StorageWithListSessions extends Storage with session listing.
+// Required by GetStats; custom stores that don't implement it can't use stats.
+type StorageWithListSessions interface {
+	Storage
+
+	// ListSessions returns sessions, optionally only those created at or after
+	// since. A zero since returns all sessions.
+	ListSessions(ctx context.Context, since *time.Time) ([]*Session, error)
+}
+
 // StorageWithBridgeIDs extends Storage with bridge message ID operations.
 // Implement this interface to support edit/delete synchronization with bridges.
 type StorageWithBridgeIDs interface {
@@ -260,6 +270,22 @@ func (m *MemoryStorage) GetAllSessions(ctx context.Context) ([]*Session, error) 
 	return sessions, nil
 }
 
+// ListSessions returns sessions, optionally only those created at or after
+// since. A nil since returns all sessions.
+func (m *MemoryStorage) ListSessions(ctx context.Context, since *time.Time) ([]*Session, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	sessions := make([]*Session, 0, len(m.sessions))
+	for _, session := range m.sessions {
+		if since != nil && session.CreatedAt.Before(*since) {
+			continue
+		}
+		sessions = append(sessions, session)
+	}
+	return sessions, nil
+}
+
 // GetSessionCount returns the total number of sessions.
 func (m *MemoryStorage) GetSessionCount(ctx context.Context) (int, error) {
 	m.mu.RLock()
@@ -373,6 +399,9 @@ func (m *MemoryStorage) UpdateAttachment(ctx context.Context, attachment *Attach
 
 // Ensure MemoryStorage implements Storage interface
 var _ Storage = (*MemoryStorage)(nil)
+
+// Ensure MemoryStorage implements StorageWithListSessions interface
+var _ StorageWithListSessions = (*MemoryStorage)(nil)
 
 // Ensure MemoryStorage implements StorageWithBridgeIDs interface
 var _ StorageWithBridgeIDs = (*MemoryStorage)(nil)

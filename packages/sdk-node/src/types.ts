@@ -48,6 +48,12 @@ export interface PocketPingConfig {
   /** Callback when a visitor disconnects (leaves the page or goes inactive) */
   onVisitorDisconnect?: (session: Session, duration: number) => void | Promise<void>;
 
+  /** Callback when a visitor submits a CSAT rating (1..5 + optional comment). */
+  onCsat?: (
+    session: Session,
+    rating: { score: number; comment?: string }
+  ) => void | Promise<void>;
+
   // ─────────────────────────────────────────────────────────────────
   // Webhook Configuration (forward events to external services)
   // ─────────────────────────────────────────────────────────────────
@@ -143,6 +149,22 @@ export interface Session {
   userPhone?: string;
   /** User phone country code (ISO: FR, US, etc.) */
   userPhoneCountry?: string;
+  /** Post-conversation CSAT rating state. */
+  csat?: SessionCsat;
+}
+
+/** CSAT rating state stored on a session. */
+export interface SessionCsat {
+  /** A rating has been requested and is awaiting an answer. */
+  pending?: boolean;
+  /** Submitted score, 1..5. */
+  score?: number;
+  /** Optional free-text comment. */
+  comment?: string;
+  /** When the rating was requested. */
+  requestedAt?: Date;
+  /** When the visitor submitted. */
+  respondedAt?: Date;
 }
 
 export interface SessionMetadata {
@@ -396,6 +418,20 @@ export interface VisibilityRequest {
 
 export interface VisibilityResponse {
   ok: boolean;
+}
+
+/** Visitor-submitted CSAT rating (POST /csat). */
+export interface CsatRequest {
+  sessionId: string;
+  /** 1..5 */
+  score: number;
+  comment?: string;
+}
+
+export interface CsatResponse {
+  ok: boolean;
+  /** True when a rating was already recorded (idempotent no-op). */
+  alreadyRated?: boolean;
 }
 
 export interface PresenceResponse {

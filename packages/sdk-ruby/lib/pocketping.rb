@@ -2,6 +2,7 @@
 
 require_relative "pocketping/version"
 require_relative "pocketping/models"
+require_relative "pocketping/stats"
 require_relative "pocketping/storage"
 require_relative "pocketping/bridges"
 require_relative "pocketping/version_checker"

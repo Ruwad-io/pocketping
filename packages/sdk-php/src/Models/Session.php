@@ -22,6 +22,8 @@ final class Session implements \JsonSerializable
         public ?string $userPhone = null,
         /** User phone country code (ISO: FR, US, etc.) */
         public ?string $userPhoneCountry = null,
+        /** Post-conversation CSAT rating state. */
+        public ?SessionCsat $csat = null,
     ) {
     }
 
@@ -62,6 +64,9 @@ final class Session implements \JsonSerializable
                 : null,
             userPhone: isset($data['userPhone']) ? (string) $data['userPhone'] : null,
             userPhoneCountry: isset($data['userPhoneCountry']) ? (string) $data['userPhoneCountry'] : null,
+            csat: isset($data['csat']) && is_array($data['csat'])
+                ? SessionCsat::fromArray($data['csat'])
+                : null,
         );
     }
 
@@ -81,6 +86,7 @@ final class Session implements \JsonSerializable
             'identity' => $this->identity?->toArray(),
             'userPhone' => $this->userPhone,
             'userPhoneCountry' => $this->userPhoneCountry,
+            'csat' => $this->csat?->toArray(),
         ];
     }
 

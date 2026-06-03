@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response, WebSocke
 from pocketping.core import PocketPing
 from pocketping.models import (
     ConnectRequest,
+    CsatRequest,
     ReadRequest,
     SendMessageRequest,
     SessionMetadata,
@@ -227,6 +228,15 @@ def create_router(pp: PocketPing, prefix: str = "") -> APIRouter:
         """Mark messages as read/delivered."""
         response = await pp.handle_read(request)
         return response.model_dump(by_alias=True)
+
+    @router.post("/csat")
+    async def csat(request: CsatRequest):
+        """Submit a CSAT rating."""
+        try:
+            response = await pp.handle_csat(request)
+            return response.model_dump(by_alias=True)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
 
     @router.get("/presence")
     async def presence():

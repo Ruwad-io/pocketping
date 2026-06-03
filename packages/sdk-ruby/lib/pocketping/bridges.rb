@@ -121,6 +121,16 @@ module PocketPing
         # Override in subclass
       end
 
+      # Called to push a plain one-line notification to the bridge channel
+      # (e.g. a visitor disconnect or a CSAT rating summary).
+      #
+      # @param session [Session] The session
+      # @param message [String] The one-line notification text
+      # @return [void]
+      def notify_disconnect(session, message)
+        # Override in subclass
+      end
+
       # Cleanup when bridge is removed
       #
       # @return [void]
@@ -213,6 +223,14 @@ module PocketPing
       def on_identity_update(session)
         @bridges.each do |bridge|
           bridge.on_identity_update(session)
+        rescue StandardError => e
+          warn "[PocketPing] Bridge #{bridge.name} error: #{e.message}"
+        end
+      end
+
+      def notify_disconnect(session, message)
+        @bridges.each do |bridge|
+          bridge.notify_disconnect(session, message)
         rescue StandardError => e
           warn "[PocketPing] Bridge #{bridge.name} error: #{e.message}"
         end

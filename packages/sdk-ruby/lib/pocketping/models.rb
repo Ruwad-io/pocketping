@@ -213,6 +213,18 @@ module PocketPing
     attribute :user_phone, type: String, alias_name: :userPhone
     # User phone country code (ISO: FR, US, etc.)
     attribute :user_phone_country, type: String, alias_name: :userPhoneCountry
+
+    # Post-conversation CSAT rating state.
+    # A rating has been requested and is awaiting an answer.
+    attribute :csat_pending, type: :boolean, alias_name: :csatPending
+    # Submitted score, 1..5.
+    attribute :csat_score, type: Integer, alias_name: :csatScore
+    # Optional free-text comment.
+    attribute :csat_comment, type: String, alias_name: :csatComment
+    # When the rating was requested.
+    attribute :csat_requested_at, type: Time, alias_name: :csatRequestedAt
+    # When the visitor submitted.
+    attribute :csat_responded_at, type: Time, alias_name: :csatRespondedAt
   end
 
   # File attachment in a message
@@ -407,6 +419,21 @@ module PocketPing
   # Response after identifying a user
   class IdentifyResponse < Model
     attribute :ok, type: :boolean, default: true
+  end
+
+  # Visitor-submitted CSAT rating (POST /csat)
+  class CsatRequest < Model
+    attribute :session_id, type: String, alias_name: :sessionId
+    # Score from 1 to 5
+    attribute :score, type: Integer
+    attribute :comment, type: String
+  end
+
+  # Response after a CSAT submission
+  class CsatResponse < Model
+    attribute :ok, type: :boolean, default: true
+    # True when a rating was already recorded (idempotent no-op)
+    attribute :already_rated, type: :boolean, alias_name: :alreadyRated
   end
 
   # Response for presence check

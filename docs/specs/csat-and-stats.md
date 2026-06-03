@@ -159,12 +159,23 @@ No charting dependency — render **inline SVG sparklines** (on-brand, ~lines of
 ---
 
 ## Rollout phases
-1. **CSAT (SaaS)** — schema, widget card, `!csat` + on-disconnect trigger, `/csat`,
-   bridge notif, `csat_submitted` webhook, settings card. (Self-contained, shippable.)
-2. **Stats (SaaS)** — `lib/stats.ts`, `/api/v1/stats`, dashboard panel, `get_stats`
-   MCP tool, `pocketping stats` CLI.
-3. **Self-host parity** — bridge-server `csat_request`/`/csat`/`/stats`; SDK
-   `handleCsat` + `getStats`. (Follow-up; not launch-critical.)
+1. **CSAT (SaaS)** — ✅ shipped. Schema, widget card, `!csat` + on-disconnect
+   trigger, `/csat`, bridge notif, `csat_submitted` webhook, settings card.
+2. **Stats (SaaS)** — ✅ shipped. `lib/stats.ts`, `/api/v1/stats`, dashboard panel,
+   `get_stats` MCP tool, `pocketping stats` CLI.
+3. **Self-host parity** —
+   - **SDKs (Node, Python, Go, PHP, Ruby)** — ✅ shipped. Each gains `requestCsat`
+     (push `csat_request`), `handleCsat` (store + bridge one-liner + `csat_submitted`
+     webhook + `onCsat`), the `csat` widget route, and `getStats({from,to})` over an
+     optional `listSessions` storage method.
+   - **bridge-server** — ⏳ deferred. The Go bridge-server is a **stateless relay**:
+     it stores messages by id only (no sessions, no `createdAt`) and has **no
+     operator-command layer** (`!csat` doesn't exist there yet — see
+     docs-site/operator-commands "Availability"). CSAT-request triggering and
+     `/stats` aggregation therefore need two prerequisites the relay lacks (a command
+     parser + a session store), making this a separate effort rather than a port. The
+     incoming `csat_submitted` relay (notify bridges + forward webhook) can land once
+     the event vocabulary is extended. Tracked as a follow-up.
 
 ## Open questions (for review)
 - CSAT scale: confirm **5-emoji** (vs thumbs)?

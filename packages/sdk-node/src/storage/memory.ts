@@ -41,6 +41,13 @@ export class MemoryStorage implements Storage {
     this.messages.delete(sessionId);
   }
 
+  async listSessions(opts?: { since?: Date }): Promise<Session[]> {
+    const all = Array.from(this.sessions.values());
+    if (!opts?.since) return all;
+    const since = opts.since.getTime();
+    return all.filter((s) => s.createdAt.getTime() >= since);
+  }
+
   async saveMessage(message: Message): Promise<void> {
     const sessionMessages = this.messages.get(message.sessionId) ?? [];
     sessionMessages.push(message);
