@@ -93,6 +93,32 @@ server.registerTool(
 )
 
 server.registerTool(
+  'get_stats',
+  {
+    title: 'Get support stats',
+    description:
+      'Mini support stats for the organization (or one project): conversations + daily sparkline, ' +
+      'messages, response rate, median first-response time, unanswered-now, and CSAT%. ' +
+      'Answers questions like "how is support doing this week?" or "which project has the worst CSAT?".',
+    inputSchema: {
+      projectId: z
+        .string()
+        .optional()
+        .describe('Restrict to a single project (omit for org-wide + per-project breakdown)'),
+      period: z.enum(['7d', '30d']).optional().describe('Time window (default 7d)'),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async (args) => {
+    try {
+      return ok(await client.getStats(args))
+    } catch (e) {
+      return fail(e)
+    }
+  }
+)
+
+server.registerTool(
   'send_reply',
   {
     title: 'Reply to a visitor',

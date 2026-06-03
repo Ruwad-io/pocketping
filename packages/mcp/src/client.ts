@@ -66,4 +66,12 @@ export class PocketPingClient {
       body: JSON.stringify({ content, operatorName }),
     })
   }
+
+  getStats(params: { projectId?: string; period?: string }) {
+    const qs = new URLSearchParams()
+    if (params.projectId) qs.set('projectId', params.projectId)
+    if (params.period) qs.set('period', params.period)
+    const suffix = qs.toString() ? `?${qs.toString()}` : ''
+    return this.request(`/stats${suffix}`)
+  }
 }
