@@ -168,16 +168,25 @@ No charting dependency — render **inline SVG sparklines** (on-brand, ~lines of
      (push `csat_request`), `handleCsat` (store + bridge one-liner + `csat_submitted`
      webhook + `onCsat`), the `csat` widget route, and `getStats({from,to})` over an
      optional `listSessions` storage method.
-   - **bridge-server** — 🟡 partial. The Go bridge-server is a **stateless relay**
-     (messages-by-id only, no sessions/`createdAt`, no operator-command layer).
-     - ✅ **`csat_submitted` relay** shipped: an incoming `csat_submitted` event on
+   - **bridge-server** — ✅ shipped.
+     - ✅ **`csat_submitted` relay**: an incoming `csat_submitted` event on
        `/api/events` notifies the session's bridge thread (`⭐ {face} {score}/5 — "…"`)
        and forwards a `csat_submitted` events-webhook — same notification + payload as
        SaaS/SDK. The `csat_request` outgoing event type is also defined (emittable via
        `EmitEvent` over SSE).
-     - ⏳ **Still deferred**: command-based triggering (`!csat` needs an operator-command
-       parser the relay doesn't have) and `GET /stats` (needs a session store with
-       `createdAt`, which the relay doesn't keep). Both are separate efforts, not ports.
+     - ✅ **`!csat` operator command**: a minimal operator-command parser
+       (`internal/api/commands.go`) intercepts operator messages from a bridge thread;
+       `!csat` emits a `csat_request` SSE event for that session (consumed, not relayed).
+     - ✅ **`GET /api/v1/stats`** (alias `/stats`): a minimal in-memory session store
+       (`internal/api/stats.go`) records session createdAt, message sender+timestamp, and
+       CSAT score+respondedAt as events flow through the relay, then reuses the SDK's
+       `pocketping.ComputeStats` to serve the **same JSON shape** as the SaaS
+       `/api/v1/stats` and SDK `GetStats` (`?period=7d|30d` or explicit `from`/`to`).
+       Registered at `/api/v1/stats` — the path the `pocketping stats` CLI and the MCP
+       client already request — so pointing `POCKETPING_API_URL` at the instance works
+       unchanged. The store is in-memory and pruned to the stats window: it is not durable
+       across restarts and only counts conversations the relay has observed since start —
+       the honest limit of stats on a relay with no database.
 
 ## Open questions (for review)
 - CSAT scale: confirm **5-emoji** (vs thumbs)?

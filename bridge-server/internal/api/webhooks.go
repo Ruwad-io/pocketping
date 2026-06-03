@@ -124,6 +124,10 @@ func (s *Server) RecordOperatorMessage(sessionID, content, operatorName, sourceB
 	}
 	s.EmitEvent(event)
 
+	// Record for GET /stats: an operator reply marks the conversation answered
+	// and feeds first-response-time.
+	s.stats.recordMessage(sessionID, pocketping.SenderOperator, message.Timestamp, time.Time{})
+
 	// Sync to other bridges (cross-bridge sync)
 	s.syncOperatorMessageToBridges(message, sessionID, sourceBridge, operatorName, bridgeAttachments)
 }

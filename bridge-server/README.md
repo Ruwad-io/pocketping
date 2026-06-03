@@ -98,6 +98,7 @@ BRIDGE_TEST_BOT_IDS=SLACK_BOT_ID,DISCORD_BOT_ID
 | POST | `/api/operator/status` | Operator status update |
 | POST | `/api/custom-events` | Custom event notification |
 | GET | `/api/events/stream` | SSE stream for operator events |
+| GET | `/api/v1/stats` | Mini support-stats (`?period=7d\|30d` or `from`/`to`); same JSON as SaaS/SDK, so `pocketping stats` / MCP work against this instance. Also served at `/stats`. |
 
 ## Event Types
 
