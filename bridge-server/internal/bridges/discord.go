@@ -64,12 +64,12 @@ func (b *DiscordBridge) isBotMode() bool {
 
 // discordEmbed represents a Discord embed
 type discordEmbed struct {
-	Title       string                `json:"title,omitempty"`
-	Description string                `json:"description,omitempty"`
-	Color       int                   `json:"color,omitempty"`
-	Fields      []discordEmbedField   `json:"fields,omitempty"`
-	Footer      *discordEmbedFooter   `json:"footer,omitempty"`
-	Timestamp   string                `json:"timestamp,omitempty"`
+	Title       string              `json:"title,omitempty"`
+	Description string              `json:"description,omitempty"`
+	Color       int                 `json:"color,omitempty"`
+	Fields      []discordEmbedField `json:"fields,omitempty"`
+	Footer      *discordEmbedFooter `json:"footer,omitempty"`
+	Timestamp   string              `json:"timestamp,omitempty"`
 }
 
 type discordEmbedField struct {

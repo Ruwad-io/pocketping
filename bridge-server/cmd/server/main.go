@@ -96,8 +96,8 @@ func main() {
 	if cfg.Discord != nil && cfg.Discord.EnableGateway && cfg.Discord.BotToken != "" {
 		log.Println("[Bridge Server] Starting Discord Gateway for real-time message receiving...")
 		discordGateway = pocketping.NewDiscordGateway(pocketping.DiscordGatewayConfig{
-			BotToken:  cfg.Discord.BotToken,
-			ChannelID: cfg.Discord.ChannelID,
+			BotToken:      cfg.Discord.BotToken,
+			ChannelID:     cfg.Discord.ChannelID,
 			AllowedBotIDs: cfg.TestBotIDs,
 			OnOperatorMessageWithIDs: func(ctx context.Context, sessionID, content, operatorName string, attachments []pocketping.Attachment, replyToBridgeMessageID *int, bridgeMessageID string) {
 				server.RecordOperatorMessage(sessionID, content, operatorName, "discord", attachments, replyToBridgeMessageID, bridgeMessageID)
@@ -131,6 +131,7 @@ func main() {
 		fmt.Println("   POST /api/operator/status - Update operator status")
 		fmt.Println("   POST /api/custom-events   - Custom event notification")
 		fmt.Println("   GET  /api/events/stream   - SSE stream of operator events")
+		fmt.Println("   GET  /api/v1/stats        - Mini support-stats (period=7d|30d; also /stats)")
 
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			log.Fatalf("Server error: %v", err)

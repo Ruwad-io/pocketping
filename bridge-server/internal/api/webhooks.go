@@ -23,7 +23,7 @@ func (s *Server) InitWebhooks() {
 		TelegramBotToken: s.getTelegramBotToken(),
 		SlackBotToken:    s.getSlackBotToken(),
 		DiscordBotToken:  s.getDiscordBotToken(),
-		AllowedBotIDs:     s.getAllowedBotIDs(),
+		AllowedBotIDs:    s.getAllowedBotIDs(),
 		OnOperatorMessageWithIDs: func(ctx context.Context, sessionID, content, operatorName, sourceBridge string, attachments []pocketping.Attachment, replyToBridgeMessageID *int, bridgeMessageID string) {
 			s.RecordOperatorMessage(sessionID, content, operatorName, sourceBridge, attachments, replyToBridgeMessageID, bridgeMessageID)
 		},
@@ -131,6 +131,10 @@ func (s *Server) RecordOperatorMessage(sessionID, content, operatorName, sourceB
 		ReplyToBridgeMessageID: replyToBridgeMessageID,
 	}
 	s.EmitEvent(event)
+
+	// Record for GET /stats: an operator reply marks the conversation answered
+	// and feeds first-response-time.
+	s.stats.recordMessage(sessionID, pocketping.SenderOperator, message.Timestamp, time.Time{})
 
 	// Sync to other bridges (cross-bridge sync)
 	s.syncOperatorMessageToBridges(message, sessionID, sourceBridge, operatorName, bridgeAttachments)

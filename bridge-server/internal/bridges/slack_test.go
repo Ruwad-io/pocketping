@@ -494,7 +494,10 @@ func TestSlackBridge_sendMessage_WebhookMode(t *testing.T) {
 	defer server.Close()
 
 	t.Run("webhook returns 'ok' as plain text", func(t *testing.T) {
-		resp, _ := server.Client().Get(server.URL)
+		resp, err := server.Client().Get(server.URL)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
 		defer resp.Body.Close()
 
 		// Webhook mode doesn't return JSON
@@ -579,7 +582,10 @@ func TestSlackBridge_ErrorHandling(t *testing.T) {
 		}))
 		defer server.Close()
 
-		resp, _ := server.Client().Get(server.URL)
+		resp, err := server.Client().Get(server.URL)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
 		defer resp.Body.Close()
 
 		var slackResp slackResponse
@@ -609,9 +615,9 @@ func TestSlackBridge_Timeout(t *testing.T) {
 		ChannelID: "C123456",
 	}
 	bridge, err := NewSlackBridge(cfg)
-		if err != nil {
-			t.Fatalf("NewSlackBridge error: %v", err)
-		}
+	if err != nil {
+		t.Fatalf("NewSlackBridge error: %v", err)
+	}
 
 	if bridge.client.Timeout != 30*time.Second {
 		t.Errorf("expected 30s timeout, got %v", bridge.client.Timeout)
@@ -625,9 +631,9 @@ func TestSlackBridge_UsernameAndIcon(t *testing.T) {
 		IconEmoji:  ":fire:",
 	}
 	bridge, err := NewSlackBridge(cfg)
-		if err != nil {
-			t.Fatalf("NewSlackBridge error: %v", err)
-		}
+	if err != nil {
+		t.Fatalf("NewSlackBridge error: %v", err)
+	}
 
 	if bridge.username != "CustomBot" {
 		t.Errorf("username mismatch")
