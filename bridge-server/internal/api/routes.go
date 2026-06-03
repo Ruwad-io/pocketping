@@ -734,6 +734,13 @@ func (s *Server) processCsatSubmitted(event *types.CsatSubmittedEvent) error {
 		return fmt.Errorf("csat_submitted: score must be 1-5, got %d", event.Score)
 	}
 
+	// Always emit a parseable timestamp — the SDKs/SaaS always supply one, so
+	// automations and stats importers can rely on data.respondedAt.
+	respondedAt := event.RespondedAt
+	if respondedAt == "" {
+		respondedAt = time.Now().UTC().Format(time.RFC3339)
+	}
+
 	caption := fmt.Sprintf("⭐ %s %d/5", csatFace(event.Score), event.Score)
 	if event.Comment != "" {
 		caption = fmt.Sprintf("%s — %q", caption, event.Comment)
@@ -752,7 +759,7 @@ func (s *Server) processCsatSubmitted(event *types.CsatSubmittedEvent) error {
 		"sessionId":   event.Session.ID,
 		"score":       event.Score,
 		"comment":     event.Comment,
-		"respondedAt": event.RespondedAt,
+		"respondedAt": respondedAt,
 	})
 	return nil
 }
