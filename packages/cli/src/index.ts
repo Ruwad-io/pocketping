@@ -5,6 +5,7 @@ import { Command } from 'commander'
 import chalk from 'chalk'
 import { init } from './commands/init.js'
 import { doctor } from './commands/doctor.js'
+import { stats, type StatsOptions } from './commands/stats.js'
 import { banner, COLORS } from './utils/ui.js'
 
 // Read version from package.json at runtime so it always matches the published
@@ -33,6 +34,14 @@ program
   .command('doctor')
   .description('Check that your configured bridges are reachable and healthy')
   .action(() => run(doctor))
+
+program
+  .command('stats')
+  .description('Show support stats (conversations, response rate, CSAT) from the API')
+  .option('-p, --project <id>', 'Restrict to a single project')
+  .option('--period <window>', 'Time window: 7d or 30d (default 7d)')
+  .option('--json', 'Output raw JSON instead of a table')
+  .action((options: StatsOptions) => run(() => stats(options)))
 
 // No sub-command → show the branded help screen instead of silence.
 if (process.argv.length <= 2) {
