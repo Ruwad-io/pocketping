@@ -18,22 +18,23 @@ import (
 
 // mockBridge implements bridges.Bridge for testing
 type mockBridge struct {
-	name               string
-	newSessionCalled   int
-	visitorMsgCalled   int
-	operatorMsgCalled  int
-	typingCalled       int
-	messageReadCalled  int
-	customEventCalled  int
-	identityUpCalled   int
-	aiTakeoverCalled   int
-	msgEditedCalled    int
-	msgDeletedCalled   int
-	lastSession        *types.Session
-	lastMessage        *types.Message
-	eventCallback      bridges.EventCallback
-	returnBridgeIDs    *types.BridgeMessageIDs
-	mu                 sync.Mutex
+	name              string
+	newSessionCalled  int
+	visitorMsgCalled  int
+	operatorMsgCalled int
+	typingCalled      int
+	messageReadCalled int
+	customEventCalled int
+	identityUpCalled  int
+	aiTakeoverCalled  int
+	msgEditedCalled   int
+	msgDeletedCalled  int
+	lastSession       *types.Session
+	lastMessage       *types.Message
+	lastDisconnectMsg string
+	eventCallback     bridges.EventCallback
+	returnBridgeIDs   *types.BridgeMessageIDs
+	mu                sync.Mutex
 }
 
 func newMockBridge(name string) *mockBridge {
@@ -123,6 +124,7 @@ func (m *mockBridge) OnVisitorDisconnect(session *types.Session, message string)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.lastSession = session
+	m.lastDisconnectMsg = message
 	return nil
 }
 
@@ -925,5 +927,121 @@ func TestServer_ConcurrentRequests(t *testing.T) {
 
 	if bridge.newSessionCalled != numRequests {
 		t.Errorf("expected %d calls, got %d", numRequests, bridge.newSessionCalled)
+	}
+}
+
+// webhookPayload is the parsed events-webhook body.
+type webhookPayload struct {
+	Type string                 `json:"type"`
+	Data map[string]interface{} `json:"data"`
+}
+
+// newWebhookCapture returns an httptest server that pushes each received payload
+// into the returned channel — a channel avoids the data race between the server's
+// handler goroutine and the test goroutine (CI runs with -race).
+func newWebhookCapture() (*httptest.Server, <-chan webhookPayload) {
+	ch := make(chan webhookPayload, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var p webhookPayload
+		_ = json.NewDecoder(r.Body).Decode(&p)
+		select {
+		case ch <- p:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	return srv, ch
+}
+
+func awaitWebhook(t *testing.T, ch <-chan webhookPayload) webhookPayload {
+	t.Helper()
+	select {
+	case p := <-ch:
+		return p
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the events webhook")
+		return webhookPayload{}
+	}
+}
+
+func TestServer_handleEvents_csatSubmitted(t *testing.T) {
+	bridge := newMockBridge("telegram")
+	webhookSrv, ch := newWebhookCapture()
+	defer webhookSrv.Close()
+
+	cfg := &config.Config{EventsWebhookURL: webhookSrv.URL}
+	_, mux := setupTestServer([]bridges.Bridge{bridge}, cfg)
+
+	body := `{"type":"csat_submitted","session":{"id":"s1","visitorId":"v1","telegramTopicId":42},"score":5,"comment":"great help","respondedAt":"2026-06-03T10:00:00Z"}`
+	req := httptest.NewRequest("POST", "/api/events", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	got := awaitWebhook(t, ch)
+	if got.Type != "csat_submitted" {
+		t.Errorf("expected webhook type csat_submitted, got %q", got.Type)
+	}
+	if got.Data == nil || got.Data["sessionId"] != "s1" {
+		t.Errorf("expected webhook data sessionId=s1, got %+v", got.Data)
+	}
+
+	bridge.mu.Lock()
+	caption := bridge.lastDisconnectMsg
+	bridge.mu.Unlock()
+	if caption != `⭐ 😍 5/5 — "great help"` {
+		t.Errorf("unexpected caption: %q", caption)
+	}
+}
+
+func TestServer_handleEvents_csatSubmitted_defaultsRespondedAt(t *testing.T) {
+	bridge := newMockBridge("telegram")
+	webhookSrv, ch := newWebhookCapture()
+	defer webhookSrv.Close()
+
+	cfg := &config.Config{EventsWebhookURL: webhookSrv.URL}
+	_, mux := setupTestServer([]bridges.Bridge{bridge}, cfg)
+
+	// respondedAt omitted → the relay must still emit a parseable timestamp.
+	body := `{"type":"csat_submitted","session":{"id":"s1"},"score":4}`
+	req := httptest.NewRequest("POST", "/api/events", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	got := awaitWebhook(t, ch)
+	ts, _ := got.Data["respondedAt"].(string)
+	if ts == "" {
+		t.Fatal("expected a non-empty respondedAt")
+	}
+	if _, err := time.Parse(time.RFC3339, ts); err != nil {
+		t.Errorf("respondedAt %q is not RFC3339: %v", ts, err)
+	}
+}
+
+func TestServer_processCsatSubmitted_validation(t *testing.T) {
+	bridge := newMockBridge("telegram")
+	server, _ := setupTestServer([]bridges.Bridge{bridge}, nil)
+
+	if err := server.processCsatSubmitted(&types.CsatSubmittedEvent{Session: nil, Score: 5}); err == nil {
+		t.Error("expected error for nil session")
+	}
+	sess := &types.Session{ID: "s1"}
+	if err := server.processCsatSubmitted(&types.CsatSubmittedEvent{Session: sess, Score: 0}); err == nil {
+		t.Error("expected error for score 0")
+	}
+	if err := server.processCsatSubmitted(&types.CsatSubmittedEvent{Session: sess, Score: 6}); err == nil {
+		t.Error("expected error for score 6")
+	}
+}
+
+func TestCsatFace(t *testing.T) {
+	cases := map[int]string{1: "😡", 2: "😕", 3: "😐", 4: "🙂", 5: "😍", 0: "😡", 9: "😍"}
+	for score, want := range cases {
+		if got := csatFace(score); got != want {
+			t.Errorf("csatFace(%d) = %q, want %q", score, got, want)
+		}
 	}
 }
