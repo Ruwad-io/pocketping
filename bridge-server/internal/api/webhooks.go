@@ -23,7 +23,7 @@ func (s *Server) InitWebhooks() {
 		TelegramBotToken: s.getTelegramBotToken(),
 		SlackBotToken:    s.getSlackBotToken(),
 		DiscordBotToken:  s.getDiscordBotToken(),
-		AllowedBotIDs:     s.getAllowedBotIDs(),
+		AllowedBotIDs:    s.getAllowedBotIDs(),
 		OnOperatorMessageWithIDs: func(ctx context.Context, sessionID, content, operatorName, sourceBridge string, attachments []pocketping.Attachment, replyToBridgeMessageID *int, bridgeMessageID string) {
 			s.RecordOperatorMessage(sessionID, content, operatorName, sourceBridge, attachments, replyToBridgeMessageID, bridgeMessageID)
 		},

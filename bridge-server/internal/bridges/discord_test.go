@@ -578,9 +578,9 @@ func TestDiscordBridge_Timeout(t *testing.T) {
 		ChannelID: "channel",
 	}
 	bridge, err := NewDiscordBridge(cfg)
-		if err != nil {
-			t.Fatalf("NewDiscordBridge error: %v", err)
-		}
+	if err != nil {
+		t.Fatalf("NewDiscordBridge error: %v", err)
+	}
 
 	if bridge.client.Timeout != 30*time.Second {
 		t.Errorf("expected 30s timeout, got %v", bridge.client.Timeout)
