@@ -61,13 +61,15 @@ or operator. Respond with any `2xx` to acknowledge.
 | `message_read` | Messages are marked read |
 | `identity_update` | A visitor is identified via `PocketPing.identify()` |
 | `visitor_disconnect` | A visitor leaves the page |
-| `csat_submitted` | A visitor submits a satisfaction rating — `data: { sessionId, score, comment, respondedAt }` |
+| `csat_submitted` | A visitor submits a satisfaction rating — `data: { sessionId, score, comment, respondedAt }` *(hosted SaaS + self-host SDK; not the standalone bridge-server yet)* |
 | `custom_event` | A `PocketPing.trigger(name, data)` custom event *(bridge-server only)* |
 | `test` | Sent by the dashboard's **Send test event** button |
 
-All events fire on both the hosted SaaS and the self-hosted bridge-server, except
-`custom_event`, which the bridge-server forwards (the SaaS doesn't ingest custom
-events server-side).
+Most events fire on both the hosted SaaS and the self-hosted bridge-server. The
+exceptions: `custom_event` is forwarded only by the bridge-server (the SaaS doesn't
+ingest custom events server-side); and `csat_submitted` fires on the hosted SaaS and
+from the self-host **SDK**, but the standalone bridge-server doesn't emit it yet
+(CSAT support there is a tracked follow-up).
 
 ## Verifying the signature
 
