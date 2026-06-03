@@ -366,7 +366,8 @@ export type WebSocketEventType =
   | 'event'
   | 'version_warning'
   | 'config_update'
-  | 'screenshot_request';
+  | 'screenshot_request'
+  | 'csat_request';
 
 export interface WebSocketEvent {
   type: WebSocketEventType;

@@ -4,6 +4,7 @@ import type { PocketPingClient } from '../client';
 import type { PocketPingConfig, Message, MessageStatus, Attachment, ReplyToData, PreChatFormConfig } from '../types';
 import { styles } from './styles';
 import { PreChatForm } from './PreChatForm';
+import { CsatCard } from './CsatCard';
 import { renderMarkdown } from '../utils/markdown';
 
 // Format date for message separators (Today, Yesterday, or date)
@@ -75,6 +76,9 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
   // Pre-chat form state
   const [preChatForm, setPreChatForm] = useState<PreChatFormConfig | undefined>(undefined);
   const [preChatSkipped, setPreChatSkipped] = useState(false);
+  // CSAT (post-conversation rating) state
+  const [csatRequested, setCsatRequested] = useState(false);
+  const [csatDone, setCsatDone] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -113,6 +117,11 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
     const unsubConfig = client.on('configUpdate', () => {
       setConfig(client.getConfig());
     });
+    // CSAT: operator (or auto-trigger) asked the visitor to rate the chat.
+    const unsubCsat = client.on('csatRequested', () => {
+      setCsatRequested(true);
+      setCsatDone(false);
+    });
 
     // Initial state
     if (client.isConnected()) {
@@ -133,6 +142,7 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
       unsubConnect();
       unsubPreChat();
       unsubConfig();
+      unsubCsat();
     };
   }, [client]);
 
@@ -947,6 +957,10 @@ export function ChatWidget({ client, config: initialConfig }: Props) {
               <div class="pp-message pp-message-operator pp-typing">
                 <span></span><span></span><span></span>
               </div>
+            )}
+
+            {csatRequested && !csatDone && (
+              <CsatCard client={client} onDone={() => setCsatDone(true)} />
             )}
 
             <div ref={messagesEndRef} />

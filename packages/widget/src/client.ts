@@ -647,6 +647,35 @@ export class PocketPingClient {
   }
 
   /**
+   * Submit a CSAT rating for the current conversation.
+   * @param score - 1..5
+   * @param comment - optional free-text feedback
+   */
+  async submitCsat(score: number, comment?: string): Promise<void> {
+    if (!this.session) {
+      throw new Error('[PocketPing] Not connected');
+    }
+    if (!Number.isInteger(score) || score < 1 || score > 5) {
+      throw new Error('[PocketPing] CSAT score must be an integer 1-5');
+    }
+
+    try {
+      await this.fetch<{ ok: boolean }>('/csat', {
+        method: 'POST',
+        body: JSON.stringify({
+          sessionId: this.session.sessionId,
+          score,
+          comment: comment?.trim() || undefined,
+        }),
+      });
+      this.emit('csatSubmitted', { score, comment });
+    } catch (err) {
+      console.error('[PocketPing] Failed to submit CSAT:', err);
+      throw err;
+    }
+  }
+
+  /**
    * Reset the user identity and optionally start a new session
    * Call on user logout to clear user data
    * @param options - Optional settings: { newSession: boolean }
@@ -1351,6 +1380,16 @@ export class PocketPingClient {
         }
       });
 
+      // Listen for csat_request events (post-conversation rating ask)
+      this.sse.addEventListener('csat_request', (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          this.handleRealtimeEvent(data);
+        } catch (err) {
+          console.error('[PocketPing] Failed to parse SSE csat_request:', err);
+        }
+      });
+
       this.sse.addEventListener('connected', () => {
         // SSE connected event received - connection established
       });
@@ -1599,6 +1638,13 @@ export class PocketPingClient {
           silent?: boolean;
         };
         this.handleScreenshotRequest(screenshotData);
+        break;
+      }
+
+      case 'csat_request': {
+        // Operator (or auto-trigger) asked the visitor to rate the conversation.
+        const csatData = event.data as { requestedAt?: string };
+        this.emit('csatRequested', csatData);
         break;
       }
     }
