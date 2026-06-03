@@ -61,6 +61,7 @@ or operator. Respond with any `2xx` to acknowledge.
 | `message_read` | Messages are marked read |
 | `identity_update` | A visitor is identified via `PocketPing.identify()` |
 | `visitor_disconnect` | A visitor leaves the page |
+| `csat_submitted` | A visitor submits a satisfaction rating — `data: { sessionId, score, comment, respondedAt }` |
 | `custom_event` | A `PocketPing.trigger(name, data)` custom event *(bridge-server only)* |
 | `test` | Sent by the dashboard's **Send test event** button |
 

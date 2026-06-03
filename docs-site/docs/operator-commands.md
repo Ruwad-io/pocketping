@@ -17,6 +17,7 @@ PocketPing and are never forwarded to the visitor.
 |---|---|---|
 | `!screenshot` | `!ss` | Capture the visitor's current screen and post it in the chat |
 | `!screenshotsilent` | `!sss` | Capture the visitor's screen **without** showing it in the widget chat |
+| `!csat` | `!rate` | Ask the visitor to rate the conversation (1–5) |
 | `!help` | `!h`, `!commands` | List the available commands |
 
 :::info Availability
@@ -54,6 +55,33 @@ does so without an on-screen indication. Before you enable it:
   documented reason for silent capture.
 
 PocketPing gives you the switch; using it compliantly is your call as the site owner.
+
+## Customer satisfaction (`!csat`)
+
+Type `!csat` (or `!rate`) in the visitor's thread and the widget shows a compact
+**1–5 emoji rating card** (😡 😕 😐 🙂 😍) with an optional comment. When the visitor
+submits:
+
+- the score lands back in your bridge thread as a one-liner — `⭐ 😍 5/5 — "great help"`;
+- a `csat_submitted` [webhook](./webhooks.md) fires;
+- the rating is readable via the [management API](./api.md) on the session
+  (`csat: { score, comment, at }`).
+
+CSAT also asks **automatically** depending on the per-project trigger:
+
+| Trigger | When the card is shown |
+|---|---|
+| `On disconnect` (default) | When the visitor leaves **and** an operator had replied — never an unanswered visitor, at most once per conversation |
+| `Manual only` | Only when an operator types `!csat` |
+| `Off` | Never auto-ask (`!csat` still works) |
+
+### Turning it on
+
+CSAT is **off by default**. Enable it per project:
+
+**Dashboard → your project → Settings → Customer satisfaction (CSAT).**
+
+The rating uses the industry-standard **CSAT% = ratings ≥ 4 ÷ total**.
 
 ## Adding your own commands (self-hosted)
 
