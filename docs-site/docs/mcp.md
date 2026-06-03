@@ -75,6 +75,7 @@ Self-hosting? Point `POCKETPING_API_URL` at your own instance.
 | `list_projects` | read | List your projects |
 | `list_sessions` | read | List conversations — filter by `projectId`, `status`, `unanswered`, or a search `q` |
 | `get_conversation` | read | Full transcript + visitor details for one session |
+| `get_stats` | read | Mini support stats — conversations, response rate, median first reply, CSAT% (`projectId?`, `period` 7d/30d) |
 | `send_reply` | **write** | Send a real reply to a visitor (widget + all bridges) |
 
 `send_reply` is the only write tool and is marked non-read-only, so well-behaved clients
