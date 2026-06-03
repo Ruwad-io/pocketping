@@ -180,10 +180,21 @@ type VisitorMessageDeletedEvent struct {
 
 // VisitorDisconnectEvent is sent when a visitor leaves the page
 type VisitorDisconnectEvent struct {
-	Type     string `json:"type"`
+	Type     string   `json:"type"`
 	Session  *Session `json:"session"`
-	Duration int    `json:"duration"` // seconds visitor was on the page
-	Reason   string `json:"reason"`   // page_unload, inactivity, manual
+	Duration int      `json:"duration"` // seconds visitor was on the page
+	Reason   string   `json:"reason"`   // page_unload, inactivity, manual
+}
+
+// CsatSubmittedEvent is sent (from the backend/SDK) when a visitor submits a
+// post-conversation CSAT rating. The relay notifies the session's bridge thread
+// and forwards a `csat_submitted` events-webhook, mirroring the SaaS/SDK shape.
+type CsatSubmittedEvent struct {
+	Type        string   `json:"type"`
+	Session     *Session `json:"session"`
+	Score       int      `json:"score"` // 1..5
+	Comment     string   `json:"comment,omitempty"`
+	RespondedAt string   `json:"respondedAt,omitempty"` // ISO-8601
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -248,6 +259,19 @@ type SessionClosedEvent struct {
 }
 
 func (e *SessionClosedEvent) EventType() string { return "session_closed" }
+
+// CsatRequestEvent is sent to the widget (over SSE) to ask the visitor to rate
+// the conversation. The widget shows its rating card on receipt. The trigger
+// (an operator `!csat` command) requires the operator-command layer, which the
+// standalone bridge-server doesn't ship yet — so this is emitted by the backend
+// via EmitEvent for now, with command-based triggering a tracked follow-up.
+type CsatRequestEvent struct {
+	Type        string `json:"type"`
+	SessionID   string `json:"sessionId"`
+	RequestedAt string `json:"requestedAt,omitempty"`
+}
+
+func (e *CsatRequestEvent) EventType() string { return "csat_request" }
 
 // ─────────────────────────────────────────────────────────────────
 // Bridge Message IDs (for edit/delete sync)

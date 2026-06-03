@@ -168,14 +168,16 @@ No charting dependency — render **inline SVG sparklines** (on-brand, ~lines of
      (push `csat_request`), `handleCsat` (store + bridge one-liner + `csat_submitted`
      webhook + `onCsat`), the `csat` widget route, and `getStats({from,to})` over an
      optional `listSessions` storage method.
-   - **bridge-server** — ⏳ deferred. The Go bridge-server is a **stateless relay**:
-     it stores messages by id only (no sessions, no `createdAt`) and has **no
-     operator-command layer** (`!csat` doesn't exist there yet — see
-     docs-site/operator-commands "Availability"). CSAT-request triggering and
-     `/stats` aggregation therefore need two prerequisites the relay lacks (a command
-     parser + a session store), making this a separate effort rather than a port. The
-     incoming `csat_submitted` relay (notify bridges + forward webhook) can land once
-     the event vocabulary is extended. Tracked as a follow-up.
+   - **bridge-server** — 🟡 partial. The Go bridge-server is a **stateless relay**
+     (messages-by-id only, no sessions/`createdAt`, no operator-command layer).
+     - ✅ **`csat_submitted` relay** shipped: an incoming `csat_submitted` event on
+       `/api/events` notifies the session's bridge thread (`⭐ {face} {score}/5 — "…"`)
+       and forwards a `csat_submitted` events-webhook — same notification + payload as
+       SaaS/SDK. The `csat_request` outgoing event type is also defined (emittable via
+       `EmitEvent` over SSE).
+     - ⏳ **Still deferred**: command-based triggering (`!csat` needs an operator-command
+       parser the relay doesn't have) and `GET /stats` (needs a session store with
+       `createdAt`, which the relay doesn't keep). Both are separate efforts, not ports.
 
 ## Open questions (for review)
 - CSAT scale: confirm **5-emoji** (vs thumbs)?

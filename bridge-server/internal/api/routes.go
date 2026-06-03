@@ -198,6 +198,11 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(body, &event); err == nil {
 			handleErr = s.processVisitorMessageDeleted(&event)
 		}
+	case "csat_submitted":
+		var event types.CsatSubmittedEvent
+		if err := json.Unmarshal(body, &event); err == nil {
+			handleErr = s.processCsatSubmitted(&event)
+		}
 	default:
 		http.Error(w, `{"error":"Unknown event type"}`, http.StatusBadRequest)
 		return
@@ -702,6 +707,52 @@ func (s *Server) processDisconnect(event *types.VisitorDisconnectEvent) error {
 		"session":  event.Session,
 		"duration": event.Duration,
 		"reason":   event.Reason,
+	})
+	return nil
+}
+
+// csatFace maps a 1..5 score to an emoji (matches the widget card, the SaaS
+// bridge notification, and the SDKs).
+func csatFace(score int) string {
+	faces := []string{"😡", "😕", "😐", "🙂", "😍"}
+	if score < 1 {
+		score = 1
+	} else if score > 5 {
+		score = 5
+	}
+	return faces[score-1]
+}
+
+// processCsatSubmitted relays a visitor's CSAT rating: it posts a one-line
+// caption to the session's bridge thread and forwards a `csat_submitted` events
+// webhook — the same notification + webhook the SaaS and SDKs emit.
+func (s *Server) processCsatSubmitted(event *types.CsatSubmittedEvent) error {
+	if event.Session == nil {
+		return fmt.Errorf("csat_submitted: session is required")
+	}
+	if event.Score < 1 || event.Score > 5 {
+		return fmt.Errorf("csat_submitted: score must be 1-5, got %d", event.Score)
+	}
+
+	caption := fmt.Sprintf("⭐ %s %d/5", csatFace(event.Score), event.Score)
+	if event.Comment != "" {
+		caption = fmt.Sprintf("%s — %q", caption, event.Comment)
+	}
+
+	// Reuse OnVisitorDisconnect as the plain-text thread channel: every bridge
+	// implements it as "send this message to the session's thread", which is
+	// exactly what the CSAT one-liner needs (no dedicated method required).
+	for _, bridge := range s.bridges {
+		if err := bridge.OnVisitorDisconnect(event.Session, caption); err != nil {
+			log.Printf("[%s] OnVisitorDisconnect (csat) error: %v", bridge.Name(), err)
+		}
+	}
+
+	s.emitWebhookEvent("csat_submitted", map[string]interface{}{
+		"sessionId":   event.Session.ID,
+		"score":       event.Score,
+		"comment":     event.Comment,
+		"respondedAt": event.RespondedAt,
 	})
 	return nil
 }
