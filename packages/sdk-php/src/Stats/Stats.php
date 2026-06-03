@@ -62,7 +62,14 @@ final class Stats
                 $ordered,
                 fn (Message $a, Message $b) => $a->timestamp->getTimestamp() <=> $b->timestamp->getTimestamp()
             );
-            $messages += count($ordered);
+            // Count messages by their own timestamp, not the conversation's — a long-lived
+            // session must not inflate the window with messages sent outside it.
+            foreach ($ordered as $m) {
+                $mts = $m->timestamp->getTimestamp();
+                if ($mts >= $fromTs && $mts <= $toTs) {
+                    $messages++;
+                }
+            }
 
             $firstVisitor = null;
             $firstOperator = null;
@@ -93,7 +100,16 @@ final class Stats
                 $unansweredNow++;
             }
 
-            if ($session->csat !== null && $session->csat->score !== null) {
+            // Count a rating only when it was *submitted* within the window — a score on
+            // an in-window conversation rated later (or before) shouldn't leak in.
+            $respondedAt = $session->csat?->respondedAt;
+            if (
+                $session->csat !== null
+                && $session->csat->score !== null
+                && $respondedAt !== null
+                && $respondedAt->getTimestamp() >= $fromTs
+                && $respondedAt->getTimestamp() <= $toTs
+            ) {
                 $csatScores[] = $session->csat->score;
             }
         }

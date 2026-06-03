@@ -7,7 +7,8 @@ import pytest
 
 from pocketping import PocketPing
 from pocketping.bridges import Bridge
-from pocketping.models import ConnectRequest, CsatRequest, Sender, SendMessageRequest, Session
+from pocketping.models import ConnectRequest, CsatRequest, Message, Sender, SendMessageRequest, Session, SessionCsat
+from pocketping.stats import compute_stats
 from pocketping.storage import Storage
 
 
@@ -132,6 +133,55 @@ class TestGetStats:
         assert stats.csat.average == 5
         assert stats.csat.responses == 1
         assert len(stats.conversations_sparkline) == 7
+
+    def test_messages_outside_window_are_excluded_from_count(self):
+        from_ = datetime(2026, 1, 10)
+        to = datetime(2026, 1, 17)
+        session = Session(id="s1", visitor_id="v1", created_at=datetime(2026, 1, 11))
+        msgs = [
+            # Inside the window.
+            Message(id="m1", session_id="s1", content="hi", sender=Sender.VISITOR, timestamp=datetime(2026, 1, 11)),
+            Message(id="m2", session_id="s1", content="reply", sender=Sender.OPERATOR, timestamp=datetime(2026, 1, 12)),
+            # Sent after the window closes (long-lived session) — must not be counted.
+            Message(id="m3", session_id="s1", content="later", sender=Sender.VISITOR, timestamp=datetime(2026, 1, 20)),
+            # Sent before the window opens — must not be counted.
+            Message(id="m0", session_id="s1", content="early", sender=Sender.VISITOR, timestamp=datetime(2026, 1, 5)),
+        ]
+
+        stats = compute_stats([(session, msgs)], from_, to)
+
+        assert stats.conversations == 1
+        assert stats.messages == 2
+
+    def test_csat_submitted_outside_window_is_excluded_from_responses(self):
+        from_ = datetime(2026, 1, 10)
+        to = datetime(2026, 1, 17)
+        # Conversation created in the window, but the rating was submitted after it closed.
+        late = Session(
+            id="late",
+            visitor_id="v1",
+            created_at=datetime(2026, 1, 11),
+            csat=SessionCsat(score=5, responded_at=datetime(2026, 1, 25)),
+        )
+        # Rating submitted within the window — counted.
+        on_time = Session(
+            id="ontime",
+            visitor_id="v2",
+            created_at=datetime(2026, 1, 12),
+            csat=SessionCsat(score=4, responded_at=datetime(2026, 1, 13)),
+        )
+        # Score set but never responded (responded_at is None) — excluded.
+        unanswered = Session(
+            id="unanswered",
+            visitor_id="v3",
+            created_at=datetime(2026, 1, 12),
+            csat=SessionCsat(score=3, responded_at=None),
+        )
+
+        stats = compute_stats([(late, []), (on_time, []), (unanswered, [])], from_, to)
+
+        assert stats.csat.responses == 1
+        assert stats.csat.average == 4
 
     @pytest.mark.asyncio
     async def test_default_window_is_last_7_days(self):

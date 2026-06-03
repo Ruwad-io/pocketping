@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PocketPing } from '../src/index';
+import { PocketPing, computeStats } from '../src/index';
 import type { Bridge } from '../src/bridges/types';
 import type { Message, Session } from '../src/types';
 
@@ -118,5 +118,58 @@ describe('getStats (SDK)', () => {
     };
     const pp = new PocketPing({ storage: storage as never });
     await expect(pp.getStats()).rejects.toThrow(/listSessions/);
+  });
+});
+
+describe('computeStats windowing', () => {
+  const from = new Date('2026-06-01T00:00:00Z');
+  const to = new Date('2026-06-08T00:00:00Z');
+  const inWindow = new Date('2026-06-04T00:00:00Z');
+  const beforeWindow = new Date('2026-05-20T00:00:00Z');
+  const afterWindow = new Date('2026-06-20T00:00:00Z');
+
+  function session(over: Partial<Session>): Session {
+    return {
+      id: 's',
+      visitorId: 'v',
+      createdAt: inWindow,
+      lastActivity: inWindow,
+      operatorOnline: false,
+      aiActive: false,
+      ...over,
+    } as Session;
+  }
+  function msg(sender: Message['sender'], timestamp: Date): Message {
+    return { id: 'm', sessionId: 's', content: 'x', sender, timestamp } as Message;
+  }
+
+  it('counts messages by their own timestamp, not the conversation window', () => {
+    const stats = computeStats(
+      [
+        {
+          session: session({}),
+          messages: [msg('visitor', inWindow), msg('operator', afterWindow)],
+        },
+      ],
+      { from, to }
+    );
+    expect(stats.messages).toBe(1); // the afterWindow operator message is excluded
+  });
+
+  it('counts a rating only when submitted within the window', () => {
+    const counted = computeStats(
+      [{ session: session({ csat: { score: 5, respondedAt: inWindow } }), messages: [] }],
+      { from, to }
+    );
+    expect(counted.csat.responses).toBe(1);
+
+    const excluded = computeStats(
+      [
+        { session: session({ csat: { score: 5, respondedAt: afterWindow } }), messages: [] },
+        { session: session({ csat: { score: 1, respondedAt: beforeWindow } }), messages: [] },
+      ],
+      { from, to }
+    );
+    expect(excluded.csat.responses).toBe(0);
   });
 });

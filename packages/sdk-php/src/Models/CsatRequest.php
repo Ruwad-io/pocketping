@@ -28,9 +28,19 @@ final class CsatRequest implements \JsonSerializable
      */
     public static function fromArray(array $data): self
     {
+        $rawScore = $data['score'] ?? throw new \InvalidArgumentException('CsatRequest requires score');
+
+        // Reject fractional / non-integer scores before casting — the API promises an
+        // integer 1-5, and a silent (int) cast would truncate e.g. 3.9 to 3.
+        if (!is_int($rawScore)) {
+            if (!is_numeric($rawScore) || (float) $rawScore !== floor((float) $rawScore)) {
+                throw new \InvalidArgumentException('CSAT score must be an integer 1-5');
+            }
+        }
+
         return new self(
             sessionId: (string) ($data['sessionId'] ?? throw new \InvalidArgumentException('CsatRequest requires sessionId')),
-            score: (int) ($data['score'] ?? throw new \InvalidArgumentException('CsatRequest requires score')),
+            score: (int) $rawScore,
             comment: isset($data['comment']) ? (string) $data['comment'] : null,
         );
     }

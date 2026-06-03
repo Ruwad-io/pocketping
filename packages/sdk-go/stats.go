@@ -105,7 +105,15 @@ func ComputeStats(entries []StatsEntry, from, to time.Time) SdkStats {
 		sort.SliceStable(ordered, func(i, j int) bool {
 			return ordered[i].Timestamp.Before(ordered[j].Timestamp)
 		})
-		messages += len(ordered)
+		// Count messages by their own timestamp, not the conversation's — a
+		// long-lived session must not inflate the window with messages sent
+		// outside it. Equal endpoints are included.
+		for i := range ordered {
+			ts := ordered[i].Timestamp
+			if !ts.Before(from) && !ts.After(to) {
+				messages++
+			}
+		}
 
 		var firstVisitor, firstOperator *time.Time
 		for i := range ordered {
@@ -135,8 +143,14 @@ func ComputeStats(entries []StatsEntry, from, to time.Time) SdkStats {
 			}
 		}
 
-		if session.Csat != nil && session.Csat.Score != nil {
-			csatScores = append(csatScores, *session.Csat.Score)
+		// Count a rating only when it was *submitted* within the window — a score
+		// on an in-window conversation rated later (or before) shouldn't leak in.
+		// Equal endpoints are included.
+		if session.Csat != nil && session.Csat.Score != nil && session.Csat.RespondedAt != nil {
+			respondedAt := *session.Csat.RespondedAt
+			if !respondedAt.Before(from) && !respondedAt.After(to) {
+				csatScores = append(csatScores, *session.Csat.Score)
+			}
 		}
 	}
 

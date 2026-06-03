@@ -70,7 +70,11 @@ export function computeStats(
     if (idx >= 0 && idx < days) buckets[idx] += 1;
 
     const ordered = [...msgs].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-    messages += ordered.length;
+    // Count messages by their own timestamp, not the conversation's — a long-lived
+    // session must not inflate the window with messages sent outside it.
+    messages += ordered.filter(
+      (m) => m.timestamp.getTime() >= from.getTime() && m.timestamp.getTime() <= to.getTime()
+    ).length;
 
     let firstVisitor: Date | null = null;
     let firstOperator: Date | null = null;
@@ -88,7 +92,17 @@ export function computeStats(
     const last = ordered[ordered.length - 1];
     if (last && last.sender === 'visitor') unansweredNow += 1;
 
-    if (session.csat?.score != null) csatScores.push(session.csat.score);
+    // Count a rating only when it was *submitted* within the window — a score on
+    // an in-window conversation rated later (or before) shouldn't leak in.
+    const respondedAt = session.csat?.respondedAt?.getTime();
+    if (
+      session.csat?.score != null &&
+      respondedAt != null &&
+      respondedAt >= from.getTime() &&
+      respondedAt <= to.getTime()
+    ) {
+      csatScores.push(session.csat.score);
+    }
   }
 
   return {

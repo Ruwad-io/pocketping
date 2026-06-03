@@ -59,13 +59,15 @@ module PocketPing
       end
 
       # Fold one in-window conversation (already sorted by timestamp).
-      def add(session, ordered, from)
+      def add(session, ordered, from, to)
         @conversations += 1
-        @messages += ordered.length
+        # Count messages by their own timestamp, not the conversation's — a long-lived
+        # session must not inflate the window with messages sent outside it.
+        @messages += ordered.count { |m| m.timestamp.between?(from, to) }
         bump_bucket(session.created_at, from)
         record_response_time(ordered)
         @unanswered_now += 1 if ordered.last&.sender == Sender::VISITOR
-        @csat_scores << session.csat_score unless session.csat_score.nil?
+        record_csat(session, from, to)
       end
 
       # Share of conversations with >=1 operator/AI reply (0..1).
@@ -74,6 +76,16 @@ module PocketPing
       end
 
       private
+
+      # Count a rating only when it was *submitted* within the window — a score on
+      # an in-window conversation rated later (or before) shouldn't leak in.
+      def record_csat(session, from, to)
+        responded_at = session.csat_responded_at
+        return if session.csat_score.nil? || responded_at.nil?
+        return unless responded_at.between?(from, to)
+
+        @csat_scores << session.csat_score
+      end
 
       def bump_bucket(created, from)
         idx = ((created - from) / DAY_SECONDS).floor
@@ -120,7 +132,7 @@ module PocketPing
         session = entry[:session]
         next if session.created_at < from || session.created_at > to
 
-        acc.add(session, (entry[:messages] || []).sort_by(&:timestamp), from)
+        acc.add(session, (entry[:messages] || []).sort_by(&:timestamp), from, to)
       end
 
       SdkStats.new(

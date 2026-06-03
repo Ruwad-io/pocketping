@@ -141,6 +141,25 @@ class CsatTest extends TestCase
         $this->pp->handleCsat(new CsatRequest(sessionId: $sessionId, score: 6));
     }
 
+    public function testHandleCsatRejectsFractionalScore(): void
+    {
+        $sessionId = $this->newSession();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/1-5/');
+        // 3.9 must be rejected outright, not silently truncated to 3.
+        $this->pp->handleCsat(['sessionId' => $sessionId, 'score' => 3.9]);
+    }
+
+    public function testHandleCsatRejectsNonNumericScore(): void
+    {
+        $sessionId = $this->newSession();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/1-5/');
+        $this->pp->handleCsat(['sessionId' => $sessionId, 'score' => 'good']);
+    }
+
     public function testHandleCsatIsIdempotentOnceRated(): void
     {
         $sessionId = $this->newSession();

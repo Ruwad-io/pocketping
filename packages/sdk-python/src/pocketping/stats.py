@@ -92,7 +92,7 @@ def compute_stats(
             buckets[idx] += 1
 
         ordered = sorted(msgs, key=lambda m: m.timestamp)
-        messages += len(ordered)
+        messages += sum(1 for m in ordered if from_ <= m.timestamp <= to)
 
         first_visitor: Optional[datetime] = None
         first_operator: Optional[datetime] = None
@@ -113,7 +113,9 @@ def compute_stats(
             unanswered_now += 1
 
         if session.csat and session.csat.score is not None:
-            csat_scores.append(session.csat.score)
+            responded_at = session.csat.responded_at
+            if responded_at is not None and from_ <= responded_at <= to:
+                csat_scores.append(session.csat.score)
 
     responses = len(csat_scores)
     return SdkStats(
