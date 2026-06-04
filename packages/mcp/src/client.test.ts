@@ -70,6 +70,21 @@ describe('PocketPingClient', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('https://app.pocketping.io/api/v1/stats')
   })
 
+  it('GETs a single project, url-encoding the id', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ project: { id: 'p1' } }))
+    await client.getProject('p/1')
+    expect(fetchMock.mock.calls[0][0]).toBe('https://app.pocketping.io/api/v1/projects/p%2F1')
+  })
+
+  it('PATCHes project settings as a JSON body', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ project: { id: 'p1', botHeuristicsEnabled: false } }))
+    await client.updateProject('p1', { botHeuristicsEnabled: false })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://app.pocketping.io/api/v1/projects/p1')
+    expect(init.method).toBe('PATCH')
+    expect(JSON.parse(init.body as string)).toEqual({ botHeuristicsEnabled: false })
+  })
+
   it('throws the API error message on non-2xx', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ error: 'Session not found' }, false, 404))
     await expect(client.getConversation('nope')).rejects.toThrow('Session not found')
