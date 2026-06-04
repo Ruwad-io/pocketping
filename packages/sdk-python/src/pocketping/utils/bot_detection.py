@@ -101,6 +101,11 @@ def is_datacenter_ip(ip: str) -> bool:
         parsed = ipaddress.ip_address(ip)
     except ValueError:
         return False
+    # Normalize IPv4-mapped IPv6 (e.g. ::ffff:34.72.176.129) to its IPv4 form so
+    # mapped datacenter clients are still matched against the IPv4 ranges.
+    mapped = getattr(parsed, "ipv4_mapped", None)
+    if mapped is not None:
+        parsed = mapped
     for net in _DATACENTER_NETS:
         if parsed.version == net.version and parsed in net:
             return True

@@ -39,6 +39,10 @@ class TestIsDatacenterIp:
     def test_hetzner_ipv6(self):
         assert is_datacenter_ip("2a01:4f8::1") is True
 
+    def test_ipv4_mapped_ipv6(self):
+        # ::ffff:<ipv4> must be matched against the IPv4 datacenter ranges.
+        assert is_datacenter_ip("::ffff:34.72.176.129") is True
+
     def test_bracketed_ipv6_is_stripped(self):
         assert is_datacenter_ip("[2a01:4f8::1]") is True
 
