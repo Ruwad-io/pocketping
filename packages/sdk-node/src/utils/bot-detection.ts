@@ -102,8 +102,15 @@ export const DATACENTER_V6_PREFIXES: string[] = [
   '2600:1f', // AWS
   '2a05:d0', // AWS (eu)
   '2001:41d0', // OVH
+  // Hetzner 2a01:4f8::/29 spans the second hextet 4f8..4ff (parity with the Go CIDR).
   '2a01:4f8', // Hetzner
   '2a01:4f9', // Hetzner
+  '2a01:4fa', // Hetzner
+  '2a01:4fb', // Hetzner
+  '2a01:4fc', // Hetzner
+  '2a01:4fd', // Hetzner
+  '2a01:4fe', // Hetzner
+  '2a01:4ff', // Hetzner
   '2604:a880', // DigitalOcean
   '2a03:b0c0', // DigitalOcean
   '2607:f8b0', // Google
@@ -178,11 +185,15 @@ function ipv4InCidr(ipInt: number, cidr: string): boolean {
 /** Returns true when the IP belongs to a known datacenter / cloud range. */
 export function isDatacenterIp(ip: string | null | undefined): boolean {
   if (!ip || ip === 'unknown') return false;
-  const trimmed = ip.trim().toLowerCase();
+  let trimmed = ip.trim().toLowerCase().replace(/^\[|\]$/g, '');
 
-  if (trimmed.includes(':')) {
-    const normalized = trimmed.replace(/^\[|\]$/g, '');
-    return DATACENTER_V6_PREFIXES.some((p) => normalized.startsWith(p));
+  // IPv4-mapped IPv6 (e.g. ::ffff:34.72.176.129) — match the embedded IPv4 so
+  // mapped datacenter clients (common from socket.remoteAddress) aren't missed.
+  const mapped = trimmed.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+  if (mapped) {
+    trimmed = mapped[1];
+  } else if (trimmed.includes(':')) {
+    return DATACENTER_V6_PREFIXES.some((p) => trimmed.startsWith(p));
   }
 
   const ipInt = ipv4ToInt(trimmed);

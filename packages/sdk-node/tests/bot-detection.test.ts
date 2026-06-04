@@ -18,6 +18,8 @@ describe('bot-detection', () => {
     it('flags known datacenter IPv6 addresses', () => {
       expect(isDatacenterIp('2001:41d0:350:1400::1')).toBe(true); // OVH
       expect(isDatacenterIp('[2a01:4f8::1]')).toBe(true); // Hetzner, bracketed
+      expect(isDatacenterIp('2a01:4ff::1')).toBe(true); // Hetzner /29 upper bound
+      expect(isDatacenterIp('::ffff:34.72.176.129')).toBe(true); // IPv4-mapped IPv6
     });
 
     it('does not flag residential / unknown / garbage IPs', () => {
