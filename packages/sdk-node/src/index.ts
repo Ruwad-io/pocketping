@@ -14,6 +14,8 @@ export {
   PocketPing,
   UPLOAD_URL_TTL_SECONDS,
 } from './pocketping';
+export type { SdkStats } from './stats';
+export { computeStats } from './stats';
 export { MemoryStorage } from './storage/memory';
 export type { BridgeMessageIds, Storage } from './storage/types';
 export type {
@@ -47,20 +49,17 @@ export type {
   VisibilityResponse,
   WebhookPayload,
 } from './types';
-export type { SdkStats } from './stats';
-export { computeStats } from './stats';
-export type {
-  OperatorAttachment,
-  OperatorMessageCallback,
-  OperatorMessageDeleteCallback,
-  OperatorMessageEditCallback,
-  WebhookConfig,
-} from './webhooks';
-// Webhook handlers for incoming operator messages
-export { WebhookHandler } from './webhooks';
+// Heuristic bot detection (datacenter IP / hosting ASN / headless UA)
+export type { BotReason, BotSignal, BotVerdict } from './utils/bot-detection';
+export {
+  detectBot,
+  isDatacenterIp,
+  isHeadlessUserAgent,
+  isHostingOrg,
+} from './utils/bot-detection';
 // IP Filtering utilities
 export type { IpFilterConfig, IpFilterLogEvent, IpFilterMode } from './utils/ip-filter';
-export { checkIpFilter, ipMatchesCidr, ipMatchesAny } from './utils/ip-filter';
+export { checkIpFilter, ipMatchesAny, ipMatchesCidr } from './utils/ip-filter';
 // User-Agent Filtering utilities
 export type {
   UaFilterConfig,
@@ -75,3 +74,12 @@ export {
   isBot,
   matchesAnyPattern,
 } from './utils/user-agent-filter';
+export type {
+  OperatorAttachment,
+  OperatorMessageCallback,
+  OperatorMessageDeleteCallback,
+  OperatorMessageEditCallback,
+  WebhookConfig,
+} from './webhooks';
+// Webhook handlers for incoming operator messages
+export { WebhookHandler } from './webhooks';
