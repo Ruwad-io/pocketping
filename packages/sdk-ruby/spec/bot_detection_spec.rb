@@ -28,6 +28,10 @@ RSpec.describe PocketPing::BotDetection do
       expect(described_class.datacenter_ip?("2a01:4f8::1")).to be true
     end
 
+    it "flags an IPv4-mapped IPv6 datacenter address" do
+      expect(described_class.datacenter_ip?("::ffff:34.72.176.129")).to be true
+    end
+
     it "does not flag a residential IPv4" do
       expect(described_class.datacenter_ip?("203.0.113.7")).to be false
     end
@@ -119,6 +123,12 @@ RSpec.describe PocketPing::BotDetection do
   describe ".detect_bot" do
     it "flags a datacenter IP with datacenter_ip reason" do
       verdict = described_class.detect_bot(ip: "34.72.176.129", user_agent: "Mozilla/5.0", org: nil)
+      expect(verdict.is_bot).to be true
+      expect(verdict.reason).to eq("datacenter_ip")
+    end
+
+    it "works when the optional org is omitted" do
+      verdict = described_class.detect_bot(ip: "34.72.176.129", user_agent: "Mozilla/5.0")
       expect(verdict.is_bot).to be true
       expect(verdict.reason).to eq("datacenter_ip")
     end

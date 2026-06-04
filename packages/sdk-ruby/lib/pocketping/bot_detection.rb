@@ -115,6 +115,10 @@ module PocketPing
         end
         return false if parsed.nil?
 
+        # Normalize IPv4-mapped IPv6 (e.g. ::ffff:34.72.176.129) to its IPv4 form
+        # so mapped datacenter clients are matched against the IPv4 ranges.
+        parsed = parsed.native if parsed.respond_to?(:ipv4_mapped?) && parsed.ipv4_mapped?
+
         DATACENTER_NETS.any? { |net| net.include?(parsed) }
       end
 
@@ -148,7 +152,7 @@ module PocketPing
       # @param user_agent [String, nil] The client User-Agent
       # @param org [String, nil] The ASN org name, when available
       # @return [BotVerdict]
-      def detect_bot(ip:, user_agent:, org:)
+      def detect_bot(ip:, user_agent:, org: nil)
         return BotVerdict.new(is_bot: true, reason: "datacenter_ip") if datacenter_ip?(ip)
         return BotVerdict.new(is_bot: true, reason: "hosting_asn") if hosting_org?(org)
         return BotVerdict.new(is_bot: true, reason: "headless_ua") if headless_user_agent?(user_agent)
