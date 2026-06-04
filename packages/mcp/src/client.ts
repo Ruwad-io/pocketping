@@ -39,6 +39,17 @@ export class PocketPingClient {
     return this.request('/projects')
   }
 
+  getProject(projectId: string) {
+    return this.request(`/projects/${encodeURIComponent(projectId)}`)
+  }
+
+  updateProject(projectId: string, settings: Record<string, boolean>) {
+    return this.request(`/projects/${encodeURIComponent(projectId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(settings),
+    })
+  }
+
   listSessions(params: {
     projectId?: string
     status?: string

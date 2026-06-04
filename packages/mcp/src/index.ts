@@ -51,6 +51,66 @@ server.registerTool(
 )
 
 server.registerTool(
+  'get_project',
+  {
+    title: 'Get project settings',
+    description:
+      "Read a project's operational settings — the anti-bot / notification toggles " +
+      '(botHeuristicsEnabled, telegram/discord/slack/hubspotNotifyPresence), plus ' +
+      'uaFilterEnabled, ipFilterEnabled and csatEnabled.',
+    inputSchema: { projectId: z.string().describe('The project id') },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async ({ projectId }) => {
+    try {
+      return ok(await client.getProject(projectId))
+    } catch (e) {
+      return fail(e)
+    }
+  }
+)
+
+server.registerTool(
+  'update_project',
+  {
+    title: 'Update project settings',
+    description:
+      "Update a project's operational toggles. Only the fields you pass are changed. Use to " +
+      'enable/disable bot heuristics (botHeuristicsEnabled — skips operator notifications for ' +
+      'datacenter/headless visitors), per-bridge arrival notifications (*NotifyPresence), ' +
+      'UA/IP filtering, or CSAT.',
+    inputSchema: {
+      projectId: z.string().describe('The project id'),
+      botHeuristicsEnabled: z
+        .boolean()
+        .optional()
+        .describe('Skip operator notifications for datacenter/headless (bot) visitors'),
+      telegramNotifyPresence: z
+        .boolean()
+        .optional()
+        .describe('Notify on Telegram when a visitor arrives'),
+      discordNotifyPresence: z.boolean().optional().describe('Notify on Discord when a visitor arrives'),
+      slackNotifyPresence: z.boolean().optional().describe('Notify on Slack when a visitor arrives'),
+      hubspotNotifyPresence: z.boolean().optional().describe('Notify on HubSpot when a visitor arrives'),
+      uaFilterEnabled: z.boolean().optional().describe('Enable User-Agent filtering'),
+      ipFilterEnabled: z.boolean().optional().describe('Enable IP filtering'),
+      csatEnabled: z.boolean().optional().describe('Enable post-conversation CSAT ratings'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  },
+  async ({ projectId, ...settings }) => {
+    try {
+      const payload = Object.fromEntries(
+        Object.entries(settings).filter(([, v]) => v !== undefined)
+      ) as Record<string, boolean>
+      return ok(await client.updateProject(projectId, payload))
+    } catch (e) {
+      return fail(e)
+    }
+  }
+)
+
+server.registerTool(
   'list_sessions',
   {
     title: 'List conversations',

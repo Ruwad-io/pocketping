@@ -40,6 +40,9 @@ Self-hosting? Point the server at your instance with `POCKETPING_API_URL`
 | `list_projects` | List your projects |
 | `list_sessions` | List conversations — filter by project, status, `unanswered`, or a search `q` |
 | `get_conversation` | Full transcript + visitor details for one session |
+| `get_stats` | Mini support stats (conversations, response rate, CSAT%, …) |
+| `get_project` | Read a project's settings (anti-bot / notification toggles, filters, CSAT) |
+| `update_project` | **Update** a project's toggles — bot heuristics, `*NotifyPresence`, UA/IP filters, CSAT |
 | `send_reply` | **Send a real reply to a visitor** (widget + all bridges) |
 
 ## Prompts
