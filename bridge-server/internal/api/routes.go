@@ -532,6 +532,17 @@ func (s *Server) processNewSession(event *types.NewSessionEvent) error {
 	if event.Session != nil {
 		s.stats.recordSession(event.Session.ID, event.Session.CreatedAt)
 	}
+
+	// Heuristic bot detection (non-blocking): datacenter/cloud IP or headless UA.
+	// These bots spoof real-browser UAs so UA filtering misses them. We skip the
+	// bridge notification so operators aren't pinged by bot traffic; the session
+	// is still recorded and the events webhook still fires.
+	if s.isBotSession(event.Session) {
+		log.Printf("[API] Skipping bridge notification for bot session %s", sessionID(event.Session))
+		s.emitWebhookEvent("new_session", map[string]interface{}{"session": event.Session, "isBot": true})
+		return nil
+	}
+
 	for _, bridge := range s.bridges {
 		if err := bridge.OnNewSession(event.Session); err != nil {
 			log.Printf("[%s] OnNewSession error: %v", bridge.Name(), err)
@@ -539,6 +550,26 @@ func (s *Server) processNewSession(event *types.NewSessionEvent) error {
 	}
 	s.emitWebhookEvent("new_session", map[string]interface{}{"session": event.Session})
 	return nil
+}
+
+// isBotSession reports whether a new session looks like a bot (datacenter/cloud
+// IP or headless UA), when bot heuristics are enabled. Mirrors the SaaS gating.
+func (s *Server) isBotSession(session *types.Session) bool {
+	if session == nil || !s.config.BotHeuristicsEnabled || session.Metadata == nil {
+		return false
+	}
+	return pocketping.DetectBot(pocketping.BotSignal{
+		IP:        session.Metadata.IP,
+		UserAgent: session.Metadata.UserAgent,
+	}).IsBot
+}
+
+// sessionID returns a session's id (nil-safe) for logging.
+func sessionID(session *types.Session) string {
+	if session == nil {
+		return ""
+	}
+	return session.ID
 }
 
 func (s *Server) processVisitorMessage(event *types.VisitorMessageEvent) error {

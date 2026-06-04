@@ -58,6 +58,11 @@ type Config struct {
 
 	// User-Agent Filtering
 	UaFilter *pocketping.UaFilterConfig
+
+	// BotHeuristicsEnabled flags datacenter/cloud-IP and headless-UA connections
+	// as bots and skips the new_session bridge notification for them (default
+	// true). Set BOT_HEURISTICS_ENABLED=false to disable.
+	BotHeuristicsEnabled bool
 }
 
 // Load reads configuration from environment variables
@@ -70,11 +75,12 @@ func Load() *Config {
 	}
 
 	cfg := &Config{
-		Port:                port,
-		APIKey:              os.Getenv("API_KEY"),
-		BackendWebhookURL:   os.Getenv("BACKEND_WEBHOOK_URL"),
-		EventsWebhookURL:    os.Getenv("EVENTS_WEBHOOK_URL"),
-		EventsWebhookSecret: os.Getenv("EVENTS_WEBHOOK_SECRET"),
+		Port:                 port,
+		APIKey:               os.Getenv("API_KEY"),
+		BackendWebhookURL:    os.Getenv("BACKEND_WEBHOOK_URL"),
+		EventsWebhookURL:     os.Getenv("EVENTS_WEBHOOK_URL"),
+		EventsWebhookSecret:  os.Getenv("EVENTS_WEBHOOK_SECRET"),
+		BotHeuristicsEnabled: os.Getenv("BOT_HEURISTICS_ENABLED") != "false" && os.Getenv("BOT_HEURISTICS_ENABLED") != "0",
 	}
 
 	if ids := os.Getenv("BRIDGE_TEST_BOT_IDS"); ids != "" {

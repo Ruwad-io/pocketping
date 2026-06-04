@@ -1045,3 +1045,39 @@ func TestCsatFace(t *testing.T) {
 		}
 	}
 }
+
+func TestProcessNewSession_botGating(t *testing.T) {
+	newEvent := func(ip string) *types.NewSessionEvent {
+		return &types.NewSessionEvent{
+			Type:    "new_session",
+			Session: &types.Session{ID: "s1", Metadata: &types.SessionMetadata{IP: ip, UserAgent: "Mozilla/5.0 Chrome/120"}},
+		}
+	}
+
+	t.Run("datacenter IP is treated as bot, no bridge notification", func(t *testing.T) {
+		bridge := newMockBridge("telegram")
+		server, _ := setupTestServer([]bridges.Bridge{bridge}, &config.Config{BotHeuristicsEnabled: true})
+		_ = server.processNewSession(newEvent("34.72.176.129")) // GCP
+		if bridge.newSessionCalled != 0 {
+			t.Errorf("expected bot session to skip OnNewSession, called %d", bridge.newSessionCalled)
+		}
+	})
+
+	t.Run("residential IP notifies bridges", func(t *testing.T) {
+		bridge := newMockBridge("telegram")
+		server, _ := setupTestServer([]bridges.Bridge{bridge}, &config.Config{BotHeuristicsEnabled: true})
+		_ = server.processNewSession(newEvent("86.247.12.34"))
+		if bridge.newSessionCalled != 1 {
+			t.Errorf("expected human session to notify once, called %d", bridge.newSessionCalled)
+		}
+	})
+
+	t.Run("disabled heuristics notifies even datacenter IP", func(t *testing.T) {
+		bridge := newMockBridge("telegram")
+		server, _ := setupTestServer([]bridges.Bridge{bridge}, &config.Config{BotHeuristicsEnabled: false})
+		_ = server.processNewSession(newEvent("34.72.176.129"))
+		if bridge.newSessionCalled != 1 {
+			t.Errorf("expected notification when heuristics disabled, called %d", bridge.newSessionCalled)
+		}
+	})
+}
